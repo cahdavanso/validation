@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Validação de Planilhas</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <script src="https://code.iconify.design/1/1.0.7/iconify.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+</head>
+<body class="dark-mode"> <div class="background-overlay"></div>
+
+    <main class="main-content-container">
+
+        <header class="header-container">
+            <h1 class="main-title">Sistema de Validação de Planilhas</h1>
+            <p class="subtitle-header">Valide e processe planilhas de convênios com precisão, segurança e velocidade incomparáveis</p>
+
+            <button id="theme-toggle" class="theme-toggle-button" aria-label="Alternar Modo Claro/Escuro">
+                <span class="iconify" data-icon="lucide:sun" id="theme-icon"></span>
+            </button>
+        </header>
+
+        <section class="info-cards-section">
+            <div class="info-card">
+                <span class="iconify card-icon" data-icon="lucide:zap"></span>
+                <h3>Extremamente Rápido</h3>
+                <p>Processamento otimizado com resultados em segundos</p>
+            </div>
+            <div class="info-card">
+                <span class="iconify card-icon" data-icon="lucide:lock"></span>
+                <h3>Seguro e Privado</h3>
+                <p>Seus dados são protegidos com criptografia de ponta</p>
+            </div>
+            <div class="info-card">
+                <span class="iconify card-icon" data-icon="lucide:bot-message-square"></span>
+                <h3>Potencializado por IA</h3>
+                <p>Validação inteligente com precisão incomparável</p>
+            </div>
+        </section>
+
+        <section class="form-section-card">
+
+            <div id="convenio-selection-area">
+                <label for="select-convenio-button" class="form-label">
+                    <span class="iconify" data-icon="lucide:hand-pointing"></span>
+                    Selecione o Convênio
+                </label>
+                <div class="custom-select-container">
+                    <button id="select-convenio-button" class="select-button">
+                        <span id="selected-convenio-text">Clique para Selecionar o Convênio</span>
+                        <span class="iconify" data-icon="lucide:chevron-down"></span>
+                    </button>
+                    <div id="convenio-dropdown" class="dropdown-content">
+                        <div class="search-box">
+                            <span class="iconify" data-icon="lucide:search"></span>
+                            <input type="text" id="convenio-search" placeholder="Buscar convênio...">
+                        </div>
+                        <ul id="convenio-list" class="list-options">
+                            </ul>
+                    </div>
+                </div>
+            </div>
+
+            <form id="upload-form" class="upload-area-form hidden">
+                <div class="upload-fields-grid">
+                    </div>
+
+                <div class="submit-button-container">
+                    <button type="submit" id="submit-validation" class="gradient-button" disabled>
+                        <span class="iconify" data-icon="lucide:upload-cloud"></span>
+                        Iniciar Validação e Processamento
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <footer class="system-footer">
+            Sistema preparado para integração com backend Python via API REST
+            <br>
+            <span class="muted-text">Suporta FastAPI, Flask, Django e qualquer framework compatível</span>
+        </footer>
+
+    </main>
+
+    <script src="scripts/app.js"></script>
+</body>
+</html>

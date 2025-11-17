@@ -1,1 +1,1 @@
-O pregrama tem como objetivo facilitar o nosso processo de Lançamento de cartões.
+O programa tem como objetivo facilitar o nosso processo de Lançamento de cartões.
