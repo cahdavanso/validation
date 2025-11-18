@@ -10,63 +10,41 @@ rejeitados = ['/']
 
 
 class CONSIGFACIL:
-    def __init__(self, portal_file_list, convenio, credbase, funcao, conciliacao,andamento_list, caminho, liquidados= None, historico_refin=None, tutela=None):
+    # O construtor agora recebe DataFrames (ou None), não caminhos/listas de caminhos
+    def __init__(self, portal_file_list, convenio, credbase, funcao, conciliacao, andamento_list, caminho, liquidados=None, historico_refin=None, tutela=None):
 
-        # isso é apenas para caso seja um arquivo de averbação
-        if isinstance(portal_file_list, str):
-            self.averbados = pd.read_excel(portal_file_list)
+        # A API FastAPI já leu, unificou e tratou a codificação. 
+        # Aqui, apenas atribuímos o DataFrame ou None.
 
-        elif isinstance(portal_file_list, list):
-            averbados_unificados = [
-                pd.read_excel(arquivo) for arquivo in portal_file_list
-            ]
-            self.averbados = pd.concat(averbados_unificados, ignore_index=True)
+        # Averbados (portal_file_list)
+        self.averbados = portal_file_list
+        if self.averbados is None:
+            self.averbados = pd.DataFrame()
+            
+        if 'Valor da reserva' not in self.averbados.columns:
+            self.averbados['Valor da reserva'] = 0.0
 
-        # Parcela de Averbados já serão floats
-        self.averbados['Valor da reserva'] = pd.to_numeric(self.averbados['Valor da reserva'], errors="coerce")
+        # Credbase
+        self.creds_unificados = credbase
+        if self.creds_unificados is None:
+            self.creds_unificados = pd.DataFrame()
 
-        # Isso é apenas para caso o credbase seja um arquivo apenas
-        if isinstance(credbase, str):  # Caso seja apenas um arquivo
-            self.creds_unificados = pd.read_csv(credbase, encoding="ISO-8859-1", sep=";", on_bad_lines="skip")
-
-        elif isinstance(credbase, list):  # Caso seja lista de arquivos
-            lista_df = []
-            for cred in credbase:
-                try:
-                    df = pd.read_csv(
-                        cred,
-                        encoding="utf-8-sig",  # tenta UTF-8 com BOM
-                        sep=";",
-                        on_bad_lines="skip",
-                        low_memory=False
-                    )
-                except UnicodeDecodeError:
-                    df = pd.read_csv(
-                        cred,
-                        encoding="ISO-8859-1",  # se falhar, tenta latin1
-                        sep=";",
-                        on_bad_lines="skip",
-                        low_memory=False
-                    )
-                lista_df.append(df)
-            self.creds_unificados = pd.concat(lista_df, ignore_index=True)
-
-        # Isso é apenas caso venha um arquivo de andamentos
-        if isinstance(andamento_list, str):
-            self.andamento = pd.read_csv(andamento_list, encoding="ISO-8859-1", sep=";", on_bad_lines="skip")
-        elif isinstance(andamento_list, list):
-            andamentos_unidos = [
-                pd.read_csv(anda, encoding="ISO-8859-1", sep=";", on_bad_lines="skip")
-                for anda in andamento_list
-            ]
-
-            self.andamento = pd.concat(andamentos_unidos, ignore_index=True)
+        # Andamento
+        self.andamento = andamento_list
+        if self.andamento is None:
+            self.andamento = pd.DataFrame()
 
 
         self.convenio = convenio
 
-        self.funcao_bruto = pd.read_csv(funcao, encoding='ISO-8859-1', sep=';', on_bad_lines='skip')
+        # Função
+        self.funcao_bruto = funcao
+        if self.funcao_bruto is None:
+            self.funcao_bruto = pd.DataFrame()
 
+
+        # Conciliação
+        # Mantive a criação do conciliacao_falso para garantir que o código não quebre se for None
         conciliacao_falso = pd.DataFrame(columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25','RECEBIDO GERAL'])
         conciliacao_falso['CONTRATOS'] = 123
         conciliacao_falso['CPF'] = '123.456'
@@ -76,21 +54,24 @@ class CONSIGFACIL:
         conciliacao_falso['ST JUL 25'] = 'DESCONTO TOTAL'
         conciliacao_falso['RECEBIDO GERAL'] = 0
 
-        self.conciliacao = pd.read_excel(conciliacao) if conciliacao else conciliacao_falso
+        self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
 
-        self.liquidados_file = pd.read_excel(liquidados) if liquidados else None
+        # Liquidados
+        self.liquidados_file = liquidados if liquidados is not None else None
 
         if self.liquidados_file is not None:
             # Certificando que o tipo dos contratos do Operações Liquidadas
             self.liquidados_file['Nº OPERAÇÃO'] = self.liquidados_file['Nº OPERAÇÃO'].astype(str)
 
-        self.tutela = pd.read_excel(tutela) if tutela else None
-        self.caminho = caminho
+        # Tutela (Liminar)
+        self.tutela = tutela if tutela is not None else None
+        self.caminho = caminho # Caminho de saída
 
-        self.historico = pd.read_excel(historico_refin) if historico_refin else None
+        # Histórico de Refins
+        self.historico = historico_refin if historico_refin is not None else None
 
-        # self.creds_unificados = pd.concat(credbases_unidos, ignore_index=True)
         self.tratamento_funcao()
+# (O restante da classe CONSIGFACIL permanece INALTERADO)
 
     def unificacao_creds(self):
 
