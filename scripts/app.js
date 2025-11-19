@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     const UPLOAD_FIELDS = [
-        "CREDBASE AKRK E DIG", "FUNÇÃO", "CONCILIAÇÃO", "LIMINAR", "LIQUIDADOS",
+        "CREDBASE AKRK E DIG", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS",
         "ANDAMENTO", "AVERBADOS", "HISTÓRICO DE REFINS"
     ];
 
