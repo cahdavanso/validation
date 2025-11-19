@@ -288,16 +288,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const sendFilesToBackend = async () => {
-        // ... (lógica de envio) ...
         const formData = new FormData();
         formData.append('convenio', selectedConvenio);
 
+        // Adiciona todos os arquivos ao FormData
         for (const [fieldId, files] of Object.entries(fileDataMap)) {
             files.forEach((file) => {
                 formData.append(fieldId, file, file.name); 
             });
         }
         
+        // As linhas de console.log abaixo são úteis para depuração,
+        // mas não são estritamente necessárias para o funcionamento.
         console.log("--- Conteúdo do FormData para /validar ---");
         for (let [key, value] of formData.entries()) {
             if (value instanceof File) {
@@ -310,8 +312,25 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const API_URL = 'http://localhost:8000/validar'; 
 
-        // --- SIMULAÇÃO DE API ---
-        return new Promise(resolve => setTimeout(resolve, 1500)); 
+        // --- CÓDIGO REAL DA API (USANDO fetch) ---
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            body: formData
+        });
+        
+        // Verifica se a resposta foi um erro HTTP
+        if (!response.ok) {
+            let errorDetail = `Erro HTTP: ${response.status} ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                errorDetail = errorData.detail || errorDetail;
+            } catch (e) {
+                // Falha ao ler JSON (ex: resposta HTML de erro)
+            }
+            throw new Error(`Falha na validação: ${errorDetail}`);
+        }
+        
+        return response.json(); // Retorna a resposta JSON do FastAPI
     };
     
     updateSubmitButtonState();

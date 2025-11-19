@@ -5,6 +5,8 @@ from datetime import datetime
 import re
 import numpy as np
 import chardet
+import logging
+import os
 
 rejeitados = ['/']
 
@@ -35,6 +37,8 @@ class CONSIGFACIL:
             self.andamento = pd.DataFrame()
 
 
+# Dentro de python/Consigfacil.py, a partir da linha que define 'self.convenio = convenio'
+
         self.convenio = convenio
 
         # Função
@@ -44,33 +48,48 @@ class CONSIGFACIL:
 
 
         # Conciliação
-        # Mantive a criação do conciliacao_falso para garantir que o código não quebre se for None
-        conciliacao_falso = pd.DataFrame(columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25','RECEBIDO GERAL'])
-        conciliacao_falso['CONTRATOS'] = 123
-        conciliacao_falso['CPF'] = '123.456'
-        conciliacao_falso['PRESTAÇÃO'] = 10
-        conciliacao_falso['PRAZO'] = 96
-        conciliacao_falso['D8 JUN 25'] = 10
-        conciliacao_falso['ST JUL 25'] = 'DESCONTO TOTAL'
-        conciliacao_falso['RECEBIDO GERAL'] = 0
+        # CORREÇÃO: Inicializa como DataFrame vazio se for None
+        self.conciliacao = conciliacao
+        if self.conciliacao is None:
+            self.conciliacao = pd.DataFrame()
 
-        self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
 
         # Liquidados
-        self.liquidados_file = liquidados if liquidados is not None else None
+        self.liquidados_file = liquidados
+        if self.liquidados_file is None:
+            self.liquidados_file = pd.DataFrame()
 
-        if self.liquidados_file is not None:
+        # Ajuste para garantir que a coluna e o DataFrame existam antes de usar .astype(str)
+        if not self.liquidados_file.empty and 'Nº OPERAÇÃO' in self.liquidados_file.columns:
             # Certificando que o tipo dos contratos do Operações Liquidadas
             self.liquidados_file['Nº OPERAÇÃO'] = self.liquidados_file['Nº OPERAÇÃO'].astype(str)
 
         # Tutela (Liminar)
-        self.tutela = tutela if tutela is not None else None
+        self.tutela = tutela if tutela is not None else pd.DataFrame()
         self.caminho = caminho # Caminho de saída
 
+        # NOVO CÓDIGO DE DEBUG CRÍTICO - PROVA DE EXECUÇÃO
+        ''' try:
+                # Cria um arquivo simples usando o caminho de saída
+                pd.DataFrame([{'Status': 'CLASSE CONSIGFACIL INICIADA'}]).to_excel(
+                    os.path.join(self.caminho, '01_CLASSE_CONSIGFACIL_INICIADA.xlsx'),
+                    index=False
+                )
+                logging.info("INFO: Arquivo 01_CLASSE_CONSIGFACIL_INICIADA.xlsx escrito com sucesso.")
+            except Exception as e:
+                logging.error(f"ERRO DE DEBUG: Falha ao escrever 01_CLASSE_CONSIGFACIL_INICIADA: {e}")
+    '''
         # Histórico de Refins
-        self.historico = historico_refin if historico_refin is not None else None
+        self.historico = historico_refin if historico_refin is not None else pd.DataFrame()
+
+        self.averbados.to_excel(fr'{self.caminho}\averbados_bayeux_teste.xlsx', index=False)
+        self.creds_unificados.to_excel(fr'{self.caminho}\creds_unificados_teste.xlsx', index=False)
+        self.funcao_bruto.to_excel(fr'{self.caminho}\funcao_bruto.xlsx', index=False)
+        self.andamento.to_excel(fr'{self.caminho}\andamento_teste.xlsx', index=False)
+        self.conciliacao.to_excel(fr'{self.caminho}\conciliacao_teste.xlsx', index=False)
 
         self.tratamento_funcao()
+    
 # (O restante da classe CONSIGFACIL permanece INALTERADO)
 
     def unificacao_creds(self):
@@ -95,14 +114,29 @@ class CONSIGFACIL:
 
         crebase_reduzido.to_excel(fr'{self.caminho}\CREDBASE UNIFICADO.xlsx', index=False)
 
-        # print(self.creds_unificados)
+        # logging.info(self.creds_unificados)
 
         return crebase_reduzido
 
+# python/Consigfacil.py (Substitua a partir de def tratamento_funcao(self):)
 
     def tratamento_funcao(self):
         funcao = self.funcao_bruto
 
+        # 1. NORMALIZAÇÃO DE COLUNAS (CORREÇÃO para NR_OPER com ESPAÇOS/CARACTERES INVISÍVEIS)
+        if not funcao.empty:
+            funcao.columns = funcao.columns.str.strip().str.replace('ï»¿', '')
+
+        # Se o arquivo 'FUNÇÃO' estava vazio/ausente.
+        if funcao.empty:
+            logging.warning("ATENÇÃO: DataFrame 'funcao' estava vazio. Gerando Placeholder e Finalizando Tratamento.")
+            # Salva um placeholder para provar o sucesso e sai.
+            pd.DataFrame([{'Status': 'Arquivo FUNCAO estava vazio. Placeholder gerado'}]).to_excel(
+                os.path.join(self.caminho, 'FUNÇÃO_INTERMEDIÁRIO_PLACEHOLDER.xlsx'),
+                index=False
+            )
+            return # <--- ESSENCIAL: Sai da função para evitar o crash.
+        
         # print(cred_unificado['Esteira'].unique())
 
         if 'ï»¿NR_OPER' in funcao.columns:
@@ -131,6 +165,9 @@ class CONSIGFACIL:
             funcao.insert(10, 'OBS', '', True)
 
         # Concat de CPF + PARCELA
+        # CORREÇÃO: Força VLR_PARC para string ANTES de usar .str accessor
+        funcao['VLR_PARC'] = funcao['VLR_PARC'].astype(str)
+        
         funcao['VLR_PARC'] = funcao['VLR_PARC'].str.replace('.', '', regex=False)
         funcao['VLR_PARC'] = funcao['VLR_PARC'].str.replace(',', '.', regex=False)
         funcao['VLR_PARC'] = pd.to_numeric(funcao['VLR_PARC'], errors='coerce').fillna(0)
@@ -154,7 +191,7 @@ class CONSIGFACIL:
                        '02.03 AGUARDANDO PROCESSAMENTO CARTÃO', 'INTEGRADO', 'RISCO DA OPERAÇÃO - ÓBITO', 'RISCO DA OPERAÇÂO-DEMAIS SITUAÇÕES',
                        '10.7 CONTRATO NÃO AVERBADO - AGUARDANDO RESOLUÇÃO', '11.1 CONTRATO FÍSICO ENVIADO AO BANCO ',
                        '11.PROBLEMAS DE AVERBAÇÃO', '15.0\tRISCO DA OPERAÇÂO-DEMAIS SITUAÇÕES',
-                       '15.0	RISCO DA OPERAÇÂO-DEMAIS SITUAÇÕES', '14.0 RISCO DA OPERAÇÃO - ÓBITO',
+                       '15.0	RISCO DA OPERAÇÂO-DEMAIS SITUAÇÕESS', '14.0 RISCO DA OPERAÇÃO - ÓBITO',
                        '07.4 ENVIA CESSAO FUNDO', '08.0 LIBERACAO TROCO', '07.1 AGUARDANDO AVERBACAO',
                        '11.PROBLEMAS DE AVERBACAO', '07.2 AGUARDANDO DESAVERBACAO IF',
                        '07.5 AGUARDANDO DESAVERBACAO BENEFICIO', '10.7.0 INGRESSAR COM PROCESSO OU AÇÃO JURIDICO',
@@ -177,6 +214,12 @@ class CONSIGFACIL:
                 # <-- CORREÇÃO 2: Garantido que o .map é chamado na coluna ['CONCAT'] e não no DataFrame 'funcao'
                 funcao['CONTSE SEMI TRABALHADO'] = funcao['CONCAT'].map(contse_concat_semi_cred)
                 funcao['CONTSE SEMI TRABALHADO'] = funcao['CONTSE SEMI TRABALHADO'].fillna(0)
+        
+        # Se cred_semi não foi definido (porque 'Esteira' estava faltando), definimos como vazio
+        else:
+             cred_semi = pd.DataFrame()
+
+
         # print(funcao['CONTSE SEMI TRABALHADO'])
 
         # Contse Local
@@ -191,7 +234,7 @@ class CONSIGFACIL:
 
         except Exception as e :
             op_liq = pd.DataFrame(columns=['Nº OPERAÇÃO'])
-            print(f"Planilha de Operações Liquidadas está vazia {e}")
+            logging.error(f"ERRO: Planilha de Operações Liquidadas está vazia {e}")
 
 
         funcao['OP_LIQ'] = funcao['OP_LIQ'].fillna('')
@@ -236,25 +279,13 @@ class CONSIGFACIL:
 
         # Atualiza o DataFrame com novos nomes
         conciliacao_tratado.columns = cols
-        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64').astype(str)
+        # Apenas converte se o DataFrame não estiver vazio para evitar erro de .astype('Int64') em DF vazio
+        if not conciliacao_tratado.empty:
+            conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64', errors='ignore').astype(str)
 
         contratos_conciliacao = pd.DataFrame()
 
-        '''Precisei fazer um Dataframe separado porque por algum motivo ele não conseguia usar os contratos como índice,
-           e puxar os mesmos contratos... Eu poderia criar uma coluna de contratos dentro da propria conciliacao mas resolvi
-           criar um DataFrame novo só com essas colunas já que é tudo que vamos precisar delas'''
-
-        contratos_conciliacao['CONTRATO'] = conciliacao_tratado['CONTRATOS']
-        contratos_conciliacao['CONTRATO PUXAR'] = conciliacao_tratado['CONTRATOS']
-        funcao['CONTRATO CONCILIACAO'] = funcao['NR_OPER_EDITADO'].map(contratos_conciliacao.set_index('CONTRATO')['CONTRATO PUXAR'].to_dict())
-        # Precisei transformar os códigos da coluna "CONTRATO CONCILIACAO" em número, mas para isso precisei transformar os vazios em 0
-        # funcao['CONTRATO CONCILIACAO'] = pd.to_numeric(funcao['CONTRATO CONCILIACAO'], errors='coerce').fillna(0).astype(int)
-
-        # Agora preciso transformar os zeros em NaN
-        funcao.loc[funcao['CONTRATO CONCILIACAO'] == 0, 'CONTRATO CONCILIACAO'] = np.nan
-
-        # E de NaN para vazio mesmo... Quem sabe assim ele reconhece o número de contrato. PS: Não era esse o problema
-        funcao['CONTRATO CONCILIACAO'] = funcao['CONTRATO CONCILIACAO'].fillna('')
+        # ... (criação do contratos_conciliacao)
 
         # Criar coluna auxiliar (1 = preenchido, 0 = vazio)
         funcao['has_conciliacao'] = funcao['CONTRATO CONCILIACAO'].notna() & (funcao['CONTRATO CONCILIACAO'] != '')
@@ -272,8 +303,26 @@ class CONSIGFACIL:
             ):
                 funcao.loc[idx, 'OBS'] = ''
 
+# python/Consigfacil.py (Bloco de salvamento do FUNÇÃO INTERMEDIARIO)
+
         # FUNÇÃO INTERMEDIARIO
-        funcao.to_excel(fr'{self.caminho}\FUNÇÃO INTERMEDIÁRIO.xlsx', index=False)
+        logging.info(f"DEBUG: FUNCAO INTERMEDIARIO - Linhas a salvar: {len(funcao)}")
+        
+        if not funcao.empty:
+            funcao.to_excel(fr'{self.caminho}\FUNÇÃO INTERMEDIÁRIO.xlsx', index=False) 
+        else:
+            # O arquivo está vazio, criamos um placeholder e SAÍMOS da função
+            
+            # Usamos um placeholder para provar que a função foi acessada.
+            pd.DataFrame([{'Status': 'Arquivo FUNCAO estava vazio. Placeholder gerado'}]).to_excel(
+                os.path.join(self.caminho, 'FUNÇÃO_INTERMEDIÁRIO_PLACEHOLDER.xlsx'),
+                index=False
+            )
+            logging.warning("ATENÇÃO: FUNÇÃO INTERMEDIÁRIO estava vazio. Gerado Placeholder e ENCERRANDO TRATAMENTO.")
+            
+            # ESSENCIAL: Sai da função para evitar o crash no KeyError: 'OBS'
+            return 
+        # FIM DO BLOCO CORRIGIDO
 
         funcao_tratado = funcao[funcao['OBS'] == '']
         self.unificacao_cred_funcao(cred_semi, funcao_tratado)
@@ -370,7 +419,7 @@ class CONSIGFACIL:
 
 
         # Encontra o índice da primeira ocorrência de "CONTRATO" e altera
-        # print(f'primeira coluna de conciliação {conciliacao_tratado.columns[0]}')
+        # logging.info(f'primeira coluna de conciliação {conciliacao_tratado.columns[0]}')
         conciliacao_tratado.rename(columns={conciliacao_tratado.columns[0]: 'CONTRATOS'}, inplace=True)
 
         cols = list(conciliacao_tratado.columns)
@@ -387,9 +436,9 @@ class CONSIGFACIL:
         colunas_d8 = conciliacao_tratado.filter(like='D8 ').columns
         for col in colunas_d8:
             tipos = conciliacao_tratado[col].apply(type).value_counts()
-            '''print(f"Coluna {col}:")
-            print(tipos)
-            print()'''
+            '''logging.info(f"Coluna {col}:")
+            logging.info(tipos)
+            logging.info()'''
         conciliacao_tratado[colunas_d8] = conciliacao_tratado[colunas_d8].apply(pd.to_numeric, errors='coerce')
 
         soma_d8 = conciliacao_tratado.filter(like='D8 ').sum(axis=1)
@@ -412,8 +461,8 @@ class CONSIGFACIL:
         # Puxar o último status para o credbase
         status = conciliacao_tratado.filter(like='ST ')
         status_name = status.columns[-1]
-        '''print(f'Tipo do contrato no cred: {type(cred_copy.loc[1, 'Codigo_Credbase'])}')
-        print(f'Tipo do contrato da conciliação: {type(conciliacao_tratado.loc[1, 'CONTRATOS'])}')'''
+        '''logging.info(f'Tipo do contrato no cred: {type(cred_copy.loc[1, 'Codigo_Credbase'])}')
+        logging.info(f'Tipo do contrato da conciliação: {type(conciliacao_tratado.loc[1, 'CONTRATOS'])}')'''
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
         # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
@@ -422,7 +471,7 @@ class CONSIGFACIL:
         conciliacao_tratado.to_excel(fr'{self.caminho}\Conciliacao_TESTE.xlsx', index=False)
 
 
-        # print(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
+        # logging.info(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
 
         # Puxar o saldo para o credbase
         cred_copy.loc[:, 'Saldo'] = cred_copy['Codigo_Credbase'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
@@ -507,7 +556,7 @@ class CONSIGFACIL:
             andam_file['Valor da Parcela'] = andam_file['Valor da Parcela'].str.replace(".", '')
             andam_file['Valor da Parcela'] = andam_file['Valor da Parcela'].str.replace(",", '.')
             andam_file['Valor da Parcela'] = pd.to_numeric(andam_file['Valor da Parcela'], errors='coerce')
-            # print(f'Modalidade e Parcela do Código 407337: {andam_file.loc[andam_file['Código'] == 407337, ['Modalidade', 'Valor da Parcela']]}')
+            # logging.info(f'Modalidade e Parcela do Código 407337: {andam_file.loc[andam_file['Código'] == 407337, ['Modalidade', 'Valor da Parcela']]}')
 
         # 4. Tira casos que são previdencia e igual a 20, 40, 60
         andam_file_sem_prev_seguro = andam_file[~(((andam_file['Modalidade'] == 'Previdência') | (
@@ -516,10 +565,10 @@ class CONSIGFACIL:
                         andam_file['Valor da Parcela'] == 40)
                                                      | (andam_file['Valor da Parcela'] == 60)))]
 
-        # print(andam_file_sem_prev_seguro['Serviço'].unique())
+        # logging.info(andam_file_sem_prev_seguro['Serviço'].unique())
 
-        '''print(f'Andamento completo: {len(andam_file)}')
-        print(f'Andamento sem previdência: {len(andam_file_sem_prev_seguro)}')'''
+        '''logging.info(f'Andamento completo: {len(andam_file)}')
+        logging.info(f'Andamento sem previdência: {len(andam_file_sem_prev_seguro)}')'''
 
         # Para cada linha no arquivo de andamentos, verifica todas as colunas de contrato
         for _, row in andam_file_sem_prev_seguro.iterrows():
@@ -569,7 +618,7 @@ class CONSIGFACIL:
     def trata_cod_and(self, andamentos):
         # PUXA OS ARQUIVOS À SEREM TRATADOS
         data_averbados = andamentos
-        # print(data_averbados.columns)
+        # logging.info(data_averbados.columns)
 
         # SUBSTITUIMOS CARACTER POR NADA
         contrato_editado = data_averbados['Código na instituição'].astype(str).apply(
@@ -676,9 +725,15 @@ class CONSIGFACIL:
         # Verifica Amortização em Bancos quitados depois de tirar tipo e tabela cartão
         condicoes_6 = cred_amor['Banco(s) quitado(s)'].str.contains('AMOR', na=False)
         cred_amor['Banco(s) quitado(s)'] = cred_amor['Banco(s) quitado(s)']
+
         cred_amor = cred_amor[condicoes_6]
         credbase_trabalhado = pd.concat([cred_tipo, cred_amor, cred_tipo_ben, cred_tab_cart], ignore_index=True)
 
+# <<< NOVO PONTO DE DEBUG >>>
+        logging.info(f"DEBUG: Linhas após a primeira concatenação: {len(credbase_trabalhado)}")
+        # Salvamos o arquivo para inspeção visual do que sobrou
+        credbase_trabalhado.to_excel(os.path.join(self.caminho, '02_APOS_CONCATENACAO_FILTROS.xlsx'), index=False)
+        # <<< FIM NOVO PONTO DE DEBUG >>>
 
         # Seleciona a consignatária correta
         '''if consignataria == 'CIASPREV':
@@ -810,7 +865,7 @@ class CONSIGFACIL:
 
             # Mask contratos
             mask_contratos_liminar = credbase_trabalhado['Codigo_Credbase'].astype(str).isin(liminares['CONTRATO'].astype(str))
-            # print(mask_contratos_liminar.value_counts())
+            # logging.info(mask_contratos_liminar.value_counts())
 
             # Verifica se a chave está em liminares
             mask_liminar = credbase_trabalhado['CHAVE'].isin(liminares['CHAVE'])
@@ -828,8 +883,8 @@ class CONSIGFACIL:
         credbase_trabalhado.to_excel(fr'{self.caminho}\TESTE CREDBASE TRABALHADO.xlsx', index=False)
 
         # Tira os NÃO do credbase trabalhado
-        mask_nao = credbase_trabalhado['OBS'].fillna('').str.strip().isin(["NÃO", "NÃO - LIMINAR"])
-        credbase_trabalhado = credbase_trabalhado.loc[~mask_nao].copy()
+        '''mask_nao = credbase_trabalhado['OBS'].fillna('').str.strip().isin(["NÃO", "NÃO - LIMINAR"])
+        credbase_trabalhado = credbase_trabalhado.loc[~mask_nao].copy()'''
 
         # Aqui o contrato não aparece
 
@@ -989,7 +1044,7 @@ class CONSIGFACIL:
             credbase_trabalhado['Tabela'] = nova_coluna_tabela
 
             credbase_trabalhado['Valor a lançar'] = nova_coluna_valor_lancar
-            # print(credbase_trabalhado['Valor a lançar'].dtype)
+            # logging.info(credbase_trabalhado['Valor a lançar'].dtype)
 
             # Junta a coluna de PRODUTO do função junto à coluna Tipo do Credbase
             credbase_trabalhado['Tipo'] = nova_coluna_produto
@@ -1041,10 +1096,10 @@ class CONSIGFACIL:
             # Marca OBS = NÃO onde a chave bateu
             credbase_trabalhado.loc[mask_liminar, 'OBS'] = 'NÃO'
 
-        # print(df_refin)
+        # logging.info(df_refin)
 
         # Tira os NÃO do credbase trabalhado DE NOVO... PRAGA
-        credbase_trabalhado = credbase_trabalhado[credbase_trabalhado['OBS'] != "NÃO"]
+        #credbase_trabalhado = credbase_trabalhado[credbase_trabalhado['OBS'] != "NÃO"]
 
 
         # ==================================== ADICIONA PECULIOS NO FUNÇÃO =============================================
@@ -1062,21 +1117,42 @@ class CONSIGFACIL:
             'Valor a lançar'
         ] += 20
 
-
         # ==============================================================================================================
 
+
         # ================================= ADICIONA PECULIOS NOS CONTRATOS CREDBASE ===================================
+       
         mask = (credbase_trabalhado['Codigo_Credbase'].str.len() <= 6) & \
                (credbase_trabalhado['Banco'] == 'BANCO HP')
 
         credbase_trabalhado.loc[mask, 'Valor a lançar'] += 20
         # ==============================================================================================================
 
+
+        # ==================================== ADICIONA PECULIOS NO FUNÇÃO =============================================
+        # ... (código de Peculios)
+
+        # NOVO CÓDIGO DE DEBUG
+        logging.info(f"\n--- DEBUG FINAL ---")
+        logging.info(f"CREDBASE TRABALHADO (Final) Linhas a salvar: {len(credbase_trabalhado)}")
+        if credbase_trabalhado.empty:
+            logging.info(f"ATENÇÃO: O DataFrame CREDBASE TRABALHADO está vazio após filtros. Arquivo não será útil.")
+            
+        # ==============================================================================================================
+
+# NOVO CÓDIGO DE DEBUG (Usando logging.info)
+        logging.info(f"\n--- DEBUG FINAL ---")
+        logging.info(f"CREDBASE TRABALHADO (Final) Linhas a salvar: {len(credbase_trabalhado)}")
+        if credbase_trabalhado.empty:
+            logging.warning(f"ATENÇÃO: O DataFrame CREDBASE TRABALHADO está vazio após filtros. Arquivos não serão úteis.")
+            
+        # ==============================================================================================================
+
         # Transforma em xlsx
         credbase_trabalhado.to_excel(fr'{self.caminho}\CREDBASE TRABALHADO {self.convenio} AUTOMATIZADO {str(datetime.now().month).zfill(2)}{datetime.now().year}.xlsx', index=False)
-        # print(len(credbase_trabalhado))
+        # logging.info(len(credbase_trabalhado))
 
-            # print(df_refin)
+            # logging.info(df_refin)
 
 
         # refin()
@@ -1143,7 +1219,7 @@ class CONSIGFACIL:
         # SOMASE
         soma_condicional_dict_averb = credbase.groupby('CPF')['Valor a lançar'].sum().to_dict()
         averbado_novo['SOMASE CRED'] = averbado_novo['CPF'].map(soma_condicional_dict_averb)
-        # print(type(averbado_novo.loc[0, 'SOMASE']))
+        # logging.info(type(averbado_novo.loc[0, 'SOMASE']))
         averbado_novo['SOMASE CRED'] = averbado_novo['SOMASE CRED'].fillna(0)
 
 
@@ -1155,6 +1231,7 @@ class CONSIGFACIL:
         # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
         averbado_novo['Valor da reserva'] = pd.to_numeric(averbado_novo['Valor da reserva'], errors='coerce').fillna(0)
         averbado_novo['SOMASE CRED'] = pd.to_numeric(averbado_novo['SOMASE CRED'], errors='coerce').fillna(0)
+        logging.info(f'Inicio da apuração')
 
         # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
         # da ordem atual do DataFrame. Se precisar de uma ordem específica,
@@ -1163,25 +1240,30 @@ class CONSIGFACIL:
         # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
         # Esta é a "mágica" que substitui a necessidade de um loop.
         averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF')['Valor da reserva'].cumsum()
+        logging.info('averbado_novo')
 
         # 2. Calcula o valor que JÁ FOI ALOCADO para as linhas ANTERIORES.
         # É a soma acumulada até a linha atual, menos o valor da própria linha.
         alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Valor da reserva']
+        logging.info(f'alocado_anteriormente')
 
         # 3. Calcula o saldo restante do SOMASE ANTES de processar a linha atual.
         saldo_restante = averbado_novo['SOMASE CRED'] - alocado_anteriormente
+        logging.info(f'saldo_restante')
 
         # 4. O valor a lançar é o MÍNIMO entre o que a reserva da linha pede e o saldo que ainda temos.
         # Usamos .clip(0) para garantir que o saldo não seja negativo (se já estourou, é 0).
         valor_a_lancar = np.minimum(averbado_novo['Valor da reserva'], saldo_restante.clip(0))
+        logging.info(f'valor a lançar')
 
         # 5. Atribui o resultado final arredondado às colunas.
         averbado_novo['VALOR A LANÇAR'] = valor_a_lancar.round(2)
+        logging.info(f'averbado novo de novo')
         # averbado_novo['VALOR ATRIBUIDO'] = valor_a_lancar.round(2)
 
         # 6. Preenche a coluna OBS para linhas que não receberam nada.
         averbado_novo.loc[averbado_novo['VALOR A LANÇAR'] == 0, 'OBS'] = 'NÃO'
-
+        logging.info('averbado_novo de novo')
         # 7. (Opcional) Remove a coluna auxiliar que criamos.
         # averbado_novo = averbado_novo.drop(columns=['SOMA ACUMULADA DA RESERVA'])
 

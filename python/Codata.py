@@ -8,59 +8,48 @@ import tabula
 rejeitados = ['/']
 
 class CODATA:
-    def __init__(self, portal_file_list, convenio, credbase, funcao, consignataria, conciliacao,liquidados,andamento_list, caminho, tutela=None, orbital=None):
-        # isso é apenas para caso seja um arquivo de averbação
-        if isinstance(portal_file_list, str):
-            self.averbados = pd.read_excel(portal_file_list)
-        elif isinstance(portal_file_list, list):
-            averbados_unificados = [
-                pd.read_excel(arquivo) for arquivo in portal_file_list
-            ]
-            self.averbados = pd.concat(averbados_unificados, ignore_index=True)
+# Dentro de python/Codata.py
 
-        # Isso é apenas para caso o credbase seja um arquivo apenas
-        if isinstance(credbase, str):  # Caso seja apenas um arquivo
-            self.creds_unficados = pd.read_csv(credbase, encoding="ISO-8859-1", sep=";", on_bad_lines="skip")
+    def __init__(self, portal_file_list, convenio, credbase, funcao, consignataria, conciliacao, liquidados, andamento_list, caminho, tutela=None, orbital=None):
 
-        elif isinstance(credbase, list):  # Caso seja lista de arquivos
-            lista_df = [
-                pd.read_csv(cred, encoding="ISO-8859-1", sep=";", on_bad_lines="skip", low_memory=False)
-                for cred in credbase
-            ]
-            self.creds_unficados = pd.concat(lista_df, ignore_index=True)
+        # A API FastAPI já leu, unificou e tratou a codificação. 
+        # Aqui, apenas atribuímos o DataFrame ou inicializamos como vazio se for None.
+        
+        # Averbados (portal_file_list)
+        self.averbados = portal_file_list if portal_file_list is not None else pd.DataFrame()
 
-        # Isso é apenas caso venha um arquivo de andamentos
-        if isinstance(andamento_list, str):
-            self.andamento = pd.read_excel(andamento_list)
-        elif isinstance(andamento_list, list):
-            andamentos_unidos = [
-                pd.read_excel(anda)
-                for anda in andamento_list
-            ]
+        # Credbase
+        self.creds_unficados = credbase if credbase is not None else pd.DataFrame()
 
-            self.andamento = pd.concat(andamentos_unidos, ignore_index=True)
+        # Andamento
+        self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
 
         self.convenio = convenio
-
         self.consignataria = consignataria
 
-        self.funcao_bruto = pd.read_csv(funcao, encoding='ISO-8859-1', sep=';', on_bad_lines='skip')
+        # Função (funcao_bruto) - CORREÇÃO: Trata None para evitar pd.read_csv(None, ...)
+        self.funcao_bruto = funcao if funcao is not None else pd.DataFrame()
 
-        self.conciliacao = pd.read_excel(conciliacao)
+        # Conciliação - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
+        self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()
 
-        self.liquidados_file = pd.read_excel(liquidados)
+        # Liquidados - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
+        self.liquidados_file = liquidados if liquidados is not None else pd.DataFrame()
 
-        if len(self.liquidados_file) > 0:
+        # Lógica de validação do arquivo liquidados
+        if not self.liquidados_file.empty:
             # Certificando que o tipo dos contratos do Operações Liquidadas
-            self.liquidados_file['Nº OPERAÇÃO'] = self.liquidados_file['Nº OPERAÇÃO'].astype(str)
-
-        self.tutela = pd.read_excel(tutela) if tutela else None
+            if 'Nº OPERAÇÃO' in self.liquidados_file.columns:
+                self.liquidados_file['Nº OPERAÇÃO'] = self.liquidados_file['Nº OPERAÇÃO'].astype(str)
+        
+        # Tutela (Liminar) - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
+        self.tutela = tutela if tutela is not None else pd.DataFrame()
         self.caminho = caminho
 
-        # Orbitall
-        self.orbital = pd.read_excel(orbital) if orbital else None
-
-        # self.creds_unficados = pd.concat(credbases_unidos, ignore_index=True)
+        # Orbitall - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
+        self.orbital = orbital if orbital is not None else pd.DataFrame()
+        
+        # Chama a primeira função da cadeia de processamento
         self.tratamento_funcao()
 
     def tratamento_funcao(self):
