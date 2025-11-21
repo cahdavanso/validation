@@ -1,454 +1,352 @@
-from symtable import Class
-
 import pandas as pd
 import numpy as np
-import xlrd
-import openpyxl
 from datetime import datetime
-import tabula
-from pandas.io.formats.style import Styler
-import jinja2
-
 import warnings
+import os
+
+# Ignora avisos de versões futuras do Pandas para manter o log limpo
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-
 class INSS:
-    def __init__ (self, orbital_file, funcao_file, arq_averbados, casos_capital,op_liquidados, conciliacao, tutela, caminho):
-        self.orbital = pd.read_excel(orbital_file)
-        self.funcao_bruto = pd.read_csv(funcao_file, encoding="ISO-8859-1", sep=";", on_bad_lines="skip")
-        self.averbados = pd.read_excel(arq_averbados)
-        self.casos_capital = pd.read_excel(casos_capital)
-        self.op_liq = pd.read_excel(op_liquidados)
-        self.conciliacao = pd.read_excel(conciliacao)
-        self.tutela = pd.read_excel(tutela)
+    def __init__(self, portal_file_list, funcao, conciliacao, liquidados, caminho, tutela=None, orbital=None, casos_capital=None):
+        
+        # --- ADAPTAÇÃO: Recebendo DataFrames do server.py ---
+        
+        # Orbital
+        self.orbital = orbital if orbital is not None else pd.DataFrame()
+        
+        # Função
+        self.funcao_bruto = funcao if funcao is not None else pd.DataFrame()
+        
+        # Averbados (portal_file_list)
+        self.averbados = portal_file_list if portal_file_list is not None else pd.DataFrame()
+        
+        # Casos Capital
+        self.casos_capital = casos_capital if casos_capital is not None else pd.DataFrame()
+        
+        # Liquidados (Operações Liquidadas)
+        self.op_liq = liquidados if liquidados is not None else pd.DataFrame()
+        
+        # Conciliação
+        self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()
+        
+        # Tutela (Liminar)
+        self.tutela = tutela if tutela is not None else pd.DataFrame()
+        
         self.caminho = caminho
 
-        self.tratamento_funcao()
+        # Inicia o processamento
+        if not self.funcao_bruto.empty:
+            self.tratamento_funcao()
+        else:
+            print("ERRO: O arquivo 'FUNÇÃO' está vazio ou não foi enviado. O processamento não pode continuar.")
 
     def trata_conciliacao(self):
-        conciliacao_tratado = self.conciliacao
+        conciliacao_tratado = self.conciliacao.copy()
+        
+        if conciliacao_tratado.empty:
+            return pd.DataFrame()
 
-        # Encontra o índice da primeira ocorrência de "CONTRATO" e altera
-        '''for i, c in enumerate(cols):
-            if c == "CONTRATO" and c != "CONTRATOS":
-                cols[i] = "CONTRATOS"  # só a primeira vez
-                break
-            else:
-                break'''
+        # Renomeia a primeira coluna para CONTRATOS
         conciliacao_tratado.rename(columns={conciliacao_tratado.columns[0]: 'CONTRATOS'}, inplace=True)
-        print(f'primeira coluna de conciliação {conciliacao_tratado.columns[0]}')
-        # Converte para lista de colunas
+        
+        # Padroniza colunas
         cols = list(conciliacao_tratado.columns)
         conciliacao_tratado.columns = cols
+        
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype(str)
         conciliacao_tratado = conciliacao_tratado.drop_duplicates(subset='CONTRATOS')
-        # Atualiza o DataFrame com novos nomes
 
-
-        conciliacao_tratado = conciliacao_tratado
-
-        # 1. Selecionar colunas com "d8" no nome e somar por linha (axis=1)
-        # "D8 " precisa ficar com espaço para que a coluna "CONVENIO D8" não atrapalhe na hora da soma
+        # Selecionar colunas com "d8" no nome (Regex)
         colunas_d8 = conciliacao_tratado.filter(regex=r'^(?!.*PRODUTO)D8').columns
-        for col in colunas_d8:
-            tipos = conciliacao_tratado[col].apply(type).value_counts()
-            '''print(f"Coluna {col}:")
-            print(tipos)
-            print()'''
+        
+        # Converte para numérico
         conciliacao_tratado[colunas_d8] = conciliacao_tratado[colunas_d8].apply(pd.to_numeric, errors='coerce')
 
-        soma_d8 = conciliacao_tratado.filter(regex=r'^(?!.*PRODUTO)D8').sum(axis=1)
+        soma_d8 = conciliacao_tratado[colunas_d8].sum(axis=1)
 
-        # 2. Calcular prestação * prazo
+        # Conversão segura para cálculos
+        conciliacao_tratado['PRESTAÇÃO'] = pd.to_numeric(conciliacao_tratado['PRESTAÇÃO'], errors='coerce').fillna(0)
+        conciliacao_tratado['PRAZO'] = pd.to_numeric(conciliacao_tratado['PRAZO'], errors='coerce').fillna(0)
+        conciliacao_tratado['RECEBIDO GERAL'] = pd.to_numeric(conciliacao_tratado['RECEBIDO GERAL'], errors='coerce').fillna(0)
+
+        # Cálculos
         prestacao_vezes_prazo = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']
-
-        # 3. Calcular o resultado final
         conciliacao_tratado['Pago'] = soma_d8 - prestacao_vezes_prazo
         conciliacao_tratado['Saldo'] = conciliacao_tratado['Pago'] + conciliacao_tratado['RECEBIDO GERAL']
 
         return conciliacao_tratado
 
     def tratamento_funcao(self):
-        funcao = self.funcao_bruto
+        funcao = self.funcao_bruto.copy()
 
-        # print(cred_unificado['Esteira'].unique())
-
-        # Por algum motivo a coluna de NR_OPER vem com esse bug no nome
-        if 'ï»¿NR_OPER' in funcao.columns:
+        # Normaliza nomes de colunas
+        funcao.columns = funcao.columns.str.strip().str.replace('ï»¿', '')
+        
+        if 'NR_OPER' not in funcao.columns and 'ï»¿NR_OPER' in funcao.columns:
             funcao = funcao.rename(columns={'ï»¿NR_OPER': 'NR_OPER'})
 
-        # Alterar o tipo do número de contrato do Função para String e da parcela para float
-        funcao['NR_OPER'] = funcao['NR_OPER'].astype(str)
-        # funcao['VLR_PARC'] = pd.to_numeric(funcao['VLR_PARC'], errors="coerce")
+        if 'NR_OPER' not in funcao.columns:
+            print("ERRO CRÍTICO: Coluna NR_OPER não encontrada no arquivo Função.")
+            return
 
+        # Tratamento NR_OPER
+        funcao['NR_OPER'] = funcao['NR_OPER'].astype(str)
+        
         codigo_editado = funcao['NR_OPER'].replace(r"\D", "", regex=True)
         funcao.insert(1, 'NR_OPER_EDITADO', codigo_editado, True)
         funcao['NR_OPER_EDITADO'] = funcao['NR_OPER_EDITADO'].str.slice(0, 9)
-
         funcao['NR_OPER_EDITADO'] = funcao['NR_OPER_EDITADO'].astype(str)
 
-        # <-- CORREÇÃO: A linha "funcao.insert(3, 'CONCAT', '', True)" foi REMOVIDA daqui.
-
-        # Insere as outras colunas vazias
-        funcao.insert(8, 'CASOS CAPITAL', '', True)
-        funcao.insert(9, 'OP_LIQ', '', True)
-        funcao.insert(10, 'CONTRATO CONCILIACAO', '', True)
-        funcao.insert(11, 'STATUS CONCILIACAO', '', True)
-        funcao.insert(12, 'LIMINAR', '', True)
-        funcao.insert(13, 'Saldo', '', True)
-        funcao.insert(14, 'SITUAÇÃO', '', True)
-        funcao.insert(15, 'Valor Averbado Reajustado', True)
+        # Insere colunas vazias se não existirem
+        cols_to_add = [
+            'CASOS CAPITAL', 'OP_LIQ', 'CONTRATO CONCILIACAO', 'STATUS CONCILIACAO', 
+            'LIMINAR', 'Saldo', 'SITUAÇÃO', 'Valor Averbado Reajustado'
+        ]
+        for col in cols_to_add:
+            if col not in funcao.columns:
+                funcao[col] = ''
+                
         if 'Análise' not in funcao.columns:
             funcao.insert(2, 'Análise', '', True)
 
         funcao['Análise'] = funcao['Análise'].fillna('')
         funcao['SITUAÇÃO'] = funcao['SITUAÇÃO'].fillna('')
 
-        # Concat de CPF + PARCELA
-        funcao['VLR_PARC'] = funcao['VLR_PARC'].str.replace('.', '', regex=False)
-        funcao['VLR_PARC'] = funcao['VLR_PARC'].str.replace(',', '.', regex=False)
-        funcao['VLR_PARC'] = pd.to_numeric(funcao['VLR_PARC'], errors='coerce').fillna(0)
+        # Tratamento VLR_PARC
+        if 'VLR_PARC' in funcao.columns:
+            funcao['VLR_PARC'] = funcao['VLR_PARC'].astype(str).str.replace('.', '', regex=False)
+            funcao['VLR_PARC'] = funcao['VLR_PARC'].str.replace(',', '.', regex=False)
+            funcao['VLR_PARC'] = pd.to_numeric(funcao['VLR_PARC'], errors='coerce').fillna(0)
 
         # OP LIQUIDADO
-        try:
-            op_liq = self.op_liq
-            n_operacao_liq = op_liq
-            n_operacao_liq['Número Operação'] = op_liq['Nº OPERAÇÃO']
+        if not self.op_liq.empty and 'Nº OPERAÇÃO' in self.op_liq.columns:
+            self.op_liq['Nº OPERAÇÃO'] = self.op_liq['Nº OPERAÇÃO'].astype(str)
             funcao['OP_LIQ'] = funcao['NR_OPER'].map(
-                n_operacao_liq.set_index('Nº OPERAÇÃO')['Número Operação'].to_dict())
-
-        except Exception as e:
-            op_liq = pd.DataFrame(columns=['Nº OPERAÇÃO'])
-            print(f"Planilha de Operações Liquidadas está vazia {e}")
-
-
+                self.op_liq.set_index('Nº OPERAÇÃO')['Número Operação'].to_dict() if 'Número Operação' in self.op_liq.columns else self.op_liq.set_index('Nº OPERAÇÃO').index.to_series().to_dict()
+            )
+        
         funcao['OP_LIQ'] = funcao['OP_LIQ'].fillna('')
 
-        # Condição 2: Coluna 'PRODUTO' contém 'EMPRESTIMO' ou 'BENS DURAVEIS'
-        # segue sua lógica original para CAPITAL
-
-        # print(f'Produtos de INSS: {funcao['PRODUTO'].unique()}')
-
+        # Máscaras de Produto (Logica Original)
         mask_produto_orbital = (
                 funcao['PRODUTO'].str.contains('000061 - CARTÃO PLÁSTICO', na=False)
                 | funcao['PRODUTO'].str.contains('000094 - CARTÃO PLÁSTICO - RE', na=False)
                 | funcao['PRODUTO'].str.contains('CARTÃ\x83O PLÃ\x81STICO - RE', na=False)
-                | funcao['PRODUTO'].str.contains('000061 - CARTÃ\x83O PLÃ\x81STICO')
+                | funcao['PRODUTO'].str.contains('000061 - CARTÃ\x83O PLÃ\x81STICO', na=False)
         )
-        mask_produto_complementar = (funcao['PRODUTO'].str.contains('000012 - DIG INSS REP LEGAL', na=False)
-                                     | funcao['PRODUTO'].str.contains('000015 - DIG INSS', na=False)
-                                     | funcao['PRODUTO'].str.contains('000106 - CARTÃO TS', na=False)
-                                     | funcao['PRODUTO'].str.contains('CARTÃ\x83O TS', na=False)
-                                     | funcao['PRODUTO'].str.contains('000098 - DIG INSS 30%', na=False)
-                                     | funcao['PRODUTO'].str.contains('000104 - CARTAO SEGURO - A VISTA', na=False)
-                                     | funcao['PRODUTO'].str.contains('000105 - CARTAO - SEG PARC', na=False))
-
-
-        #
-
-        # Máscara final
-        # mask_final = mask_produto_orbital | mask_produto_complementar
-
-        # print(funcao['Análise'][funcao['Análise'] == "NÃO"])
+        mask_produto_complementar = (
+                funcao['PRODUTO'].str.contains('000012 - DIG INSS REP LEGAL', na=False)
+                | funcao['PRODUTO'].str.contains('000015 - DIG INSS', na=False)
+                | funcao['PRODUTO'].str.contains('000106 - CARTÃO TS', na=False)
+                | funcao['PRODUTO'].str.contains('CARTÃ\x83O TS', na=False)
+                | funcao['PRODUTO'].str.contains('000098 - DIG INSS 30%', na=False)
+                | funcao['PRODUTO'].str.contains('000104 - CARTAO SEGURO - A VISTA', na=False)
+                | funcao['PRODUTO'].str.contains('000105 - CARTAO - SEG PARC', na=False)
+        )
 
         # CASOS CAPITAL
-        casos_patrick = self.casos_capital
-        casos_capital = casos_patrick
-        casos_capital['Numero Operacao'] = casos_patrick['NR. OPER.']
-        funcao['CASOS CAPITAL'] = funcao['NR_OPER'].map(casos_capital.set_index('NR. OPER.')['Numero Operacao'].to_dict())
-
+        if not self.casos_capital.empty and 'NR. OPER.' in self.casos_capital.columns:
+            self.casos_capital['NR. OPER.'] = self.casos_capital['NR. OPER.'].astype(str)
+            # Se não tiver a coluna 'Numero Operacao' explícita, usa o próprio 'NR. OPER.' como valor
+            self.casos_capital['Numero Operacao'] = self.casos_capital['NR. OPER.']
+            
+            funcao['CASOS CAPITAL'] = funcao['NR_OPER'].map(
+                self.casos_capital.set_index('NR. OPER.')['Numero Operacao'].to_dict()
+            )
         funcao['CASOS CAPITAL'] = funcao['CASOS CAPITAL'].fillna('')
-
-        capital_mask = funcao['CASOS CAPITAL'] != ''
-
 
         # CONCILIAÇÃO
         conciliacao_tratado = self.trata_conciliacao()
 
-        print('Arquivo de Conciliação, analisado\n\n')
+        if not conciliacao_tratado.empty:
+            # Criando DF auxiliar para mapeamento
+            contratos_conciliacao = pd.DataFrame()
+            contratos_conciliacao['CONTRATO'] = conciliacao_tratado['CONTRATOS']
+            contratos_conciliacao['CONTRATO PUXAR'] = conciliacao_tratado['CONTRATOS'] # Para ter valor não nulo
+            
+            funcao['CONTRATO CONCILIACAO'] = funcao['NR_OPER_EDITADO'].map(
+                contratos_conciliacao.set_index('CONTRATO')['CONTRATO PUXAR'].to_dict()
+            )
+            funcao['CONTRATO CONCILIACAO'] = funcao['CONTRATO CONCILIACAO'].fillna('')
 
-        # Converte para lista de colunas
-        cols = list(conciliacao_tratado.columns)
+            # Criar coluna auxiliar (1 = preenchido, 0 = vazio)
+            funcao['has_conciliacao'] = funcao['CONTRATO CONCILIACAO'].notna() & (funcao['CONTRATO CONCILIACAO'] != '')
 
-        # Encontra o índice da primeira ocorrência de "CONTRATO" e altera
-        for i, c in enumerate(cols):
-            if c == "CONTRATO" and c != "CONTRATOS":
-                cols[i] = "CONTRATOS"  # só a primeira vez
-                break
-            else:
-                break
+            # Ordenar
+            funcao = funcao.sort_values(by="has_conciliacao", ascending=False).drop(columns="has_conciliacao")
 
-        # Atualiza o DataFrame com novos nomes
-        conciliacao_tratado.columns = cols
-        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64').astype(str)
+            # Puxar status e saldo
+            status_cols = conciliacao_tratado.filter(like='ST ')
+            if not status_cols.empty:
+                status_name = status_cols.columns[-1]
+                funcao['STATUS CONCILIACAO'] = funcao['NR_OPER_EDITADO'].map(
+                    conciliacao_tratado.set_index('CONTRATOS')[status_name].to_dict()
+                )
 
-        contratos_conciliacao = pd.DataFrame()
+            funcao['Saldo'] = funcao['NR_OPER_EDITADO'].map(
+                conciliacao_tratado.set_index('CONTRATOS')['Saldo'].to_dict()
+            )
 
-        '''Precisei fazer um Dataframe separado porque por algum motivo ele não conseguia usar os contratos como índice,
-           e puxar os mesmos contratos... Eu poderia criar uma coluna de contratos dentro da propria conciliacao mas resolvi
-           criar um DataFrame novo só com essas colunas já que é tudo que vamos precisar delas'''
-
-        contratos_conciliacao['CONTRATO'] = conciliacao_tratado['CONTRATOS']
-        contratos_conciliacao['CONTRATO PUXAR'] = conciliacao_tratado['CONTRATOS']
-        funcao['CONTRATO CONCILIACAO'] = funcao['NR_OPER_EDITADO'].map(
-            contratos_conciliacao.set_index('CONTRATO')['CONTRATO PUXAR'].to_dict())
-        # Precisei transformar os códigos da coluna "CONTRATO CONCILIACAO" em número, mas para isso precisei transformar os vazios em 0
-        # funcao['CONTRATO CONCILIACAO'] = pd.to_numeric(funcao['CONTRATO CONCILIACAO'], errors='coerce').fillna(0).astype(int)
-
-        # Agora preciso transformar os zeros em NaN
-        funcao.loc[funcao['CONTRATO CONCILIACAO'] == 0, 'CONTRATO CONCILIACAO'] = np.nan
-
-        # E de NaN para vazio mesmo... Quem sabe assim ele reconhece o número de contrato. PS: Não era esse o problema
-        funcao['CONTRATO CONCILIACAO'] = funcao['CONTRATO CONCILIACAO'].fillna('')
-
-        # Criar coluna auxiliar (1 = preenchido, 0 = vazio)
-        funcao['has_conciliacao'] = funcao['CONTRATO CONCILIACAO'].notna() & (funcao['CONTRATO CONCILIACAO'] != '')
-
-        # Ordenar colocando os contratos da conciliação preenchidos primeiro
-        funcao = funcao.sort_values(by="has_conciliacao", ascending=False).drop(columns="has_conciliacao")
-
-        # Puxar o último status para o credbase
-        status = conciliacao_tratado.filter(like='ST ')
-        status_name = status.columns[-1]
-
-        funcao.loc[:, 'STATUS CONCILIACAO'] = funcao['NR_OPER_EDITADO'].map(
-            conciliacao_tratado.set_index('CONTRATOS')[status_name]).to_dict()
-
-        print('Status da Conciliação, analisado\n\n')
-
-        # print(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
-
-        # Puxar o saldo para o credbase
-        funcao.loc[:, 'Saldo'] = funcao['NR_OPER_EDITADO'].map(
-            conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
-
-        # Garante que a coluna de status seja tratada como texto, e em minúsculas para facilitar comparações
-        status_cred = funcao['STATUS CONCILIACAO'].fillna('')
-
-
-        # Cria uma condição booleana para os casos onde a observação deve ser "NÃO"
-        condicao_status = (
-            # status_cred.str.contains('SUSPENSO') |
-                status_cred.str.contains('QUITADO') |
-                status_cred.str.contains('TERMINO DE CONTRATO') |
-                status_cred.str.contains('LIQUIDADO') |
-                status_cred.str.contains('CANCELADO') |
-                status_cred.str.contains('FUTURO')
-            # status_cred.str.contains('JUDICIAL')
-        )
-
-        '''condicao_saldo = funcao['Saldo'].fillna(float(-1.0)) >= 0.01
-
-        # Aplica a condição: se qualquer uma for verdadeira, OBS = 'NÃO'; caso contrário, OBS = ''
-        funcao['Análise'] = np.where(condicao_saldo, 'NÃO', '')'''
-
+        # Lógica de Análise
         def obs_situacao(row):
-            '''Função que junta "NÃO" com o motivo (versão corrigida)'''
-
-            # Garante que situacao seja uma string e remove espaços extras
             situacao = str(row['SITUAÇÃO']).strip()
-
-            if situacao not in ['0 - Ativo', 'Ativo', '']:
+            if situacao not in ['0 - Ativo', 'Ativo', 'nan', '']:
                 return f'NÃO - {situacao}'
             elif situacao in ['0 - Ativo', 'Ativo']:
                 return 'LANÇAR'
-            else:  # Este else agora só será acionado por um texto realmente vazio ('')
+            else:
                 return row['Análise']
 
-        averbados = self.averbados
-        averbados['NR_OPER_EDITADO'] = averbados['NR_OPER_EDITADO'].astype(str)
-
-        # Adiciona o que é Situação Ativo e o Valor Averbado Reajustado
-        funcao['SITUAÇÃO'] = funcao['NR_OPER_EDITADO'].map(averbados.set_index("NR_OPER_EDITADO")['SITUAÇÃO'].to_dict())
-        print('SITUAÇÃO do Arquivo de Averbados, analisado\n\n')
-
-        funcao['Valor Averbado Reajustado'] = funcao['NR_OPER_EDITADO'].map(
-            averbados.set_index("NR_OPER_EDITADO")['MARGEM REAJUSTADA'].to_dict())
-        print('Valor Averbado Reajustado, analisado\n\n')
+        if not self.averbados.empty:
+            averbados = self.averbados.copy()
+            if 'NR_OPER_EDITADO' in averbados.columns:
+                averbados['NR_OPER_EDITADO'] = averbados['NR_OPER_EDITADO'].astype(str)
+                
+                if 'SITUAÇÃO' in averbados.columns:
+                    funcao['SITUAÇÃO'] = funcao['NR_OPER_EDITADO'].map(averbados.set_index("NR_OPER_EDITADO")['SITUAÇÃO'].to_dict())
+                
+                if 'MARGEM REAJUSTADA' in averbados.columns:
+                    funcao['Valor Averbado Reajustado'] = funcao['NR_OPER_EDITADO'].map(
+                        averbados.set_index("NR_OPER_EDITADO")['MARGEM REAJUSTADA'].to_dict())
 
         funcao['Análise'] = funcao.apply(obs_situacao, axis=1)
         funcao['Análise'] = funcao['Análise'].replace('NÃO - nan', '')
 
-        # ====================================== TUTELA LIMINAR ==================================================
-
-        # Agora tem essa droga de tutela também
-        # Dicionário de mapeamento: cada banco "oficial" -> lista de possíveis nomes no credbase
-        liminares = self.tutela
-        if liminares is not None:
+        # LIMINAR
+        if not self.tutela.empty and 'CPF' in self.tutela.columns:
+            liminares = self.tutela
             mask_liminar = funcao['CPF'].isin(liminares['CPF'])
-            funcao['LIMINAR'] = funcao['CPF'].map(liminares.set_index("CPF")["CONTRATO"].to_dict())
+            if "CONTRATO" in liminares.columns:
+                funcao['LIMINAR'] = funcao['CPF'].map(liminares.set_index("CPF")["CONTRATO"].to_dict())
             funcao.loc[mask_liminar, 'Análise'] = 'NÃO - LIMINAR'
 
-        # ==================================== FIM TUTELA LIMINAR ====================================================
-
-        print('LIMINAR, analisado\n\n')
-
-        # Procura os Liquidados
-        # Condição 1: A coluna 'LIMINAR' está vazia (ou era nula)
+        # Lógicas Finais de Análise
         condicao_liminar = (funcao['LIMINAR'].fillna('') == '')
-
-        # Condição 2: A coluna 'OP_LIQ' TEM um valor (não está vazia e não era nula)
         condicao_op_liq = (funcao['OP_LIQ'].fillna('') != '')
-
-        # Aplicando a lógica combinada
         funcao.loc[condicao_liminar & condicao_op_liq, 'Análise'] = 'NÃO - LIQUIDADO'
 
-        print('Operações Liquidadas, analisado\n\n')
+        funcao.loc[(funcao['Análise'] == '') & (funcao['CASOS CAPITAL'] != ''), 'Análise'] = 'NÃO LANÇAR - ENVIADO CAPITAL'
 
-        # MASK CASOS CAPITAL
-        funcao.loc[
-            (funcao['Análise'] == '') & (funcao['CASOS CAPITAL'] != ''), 'Análise'] = 'NÃO LANÇAR - ENVIADO CAPITAL'
-
-        # SALDO POSITIVO
-        mask_positivo = (funcao['Saldo'] >= 0) & (funcao['NR_OPER'].str.startswith('600'))
+        mask_positivo = (pd.to_numeric(funcao['Saldo'], errors='coerce').fillna(-1) >= 0) & (funcao['NR_OPER'].str.startswith('600', na=False))
         funcao.loc[((funcao['LIMINAR'] == '') | (funcao['OP_LIQ'] == '')) & mask_positivo, 'Análise'] = "NÃO - SALDO"
-        print('Saldo da Conciliação, analisado\n\n')
-        # Agora, aplique o 'NÃO' nos locais corretos usando a máscara
+
         funcao.loc[((funcao['LIMINAR'] == '') | (funcao['OP_LIQ'] == '')) & mask_produto_orbital, 'Análise'] = 'NÃO LANÇAR - ORBITAL'
-        print('ORBITAL, analisado\n\n')
-
+        
         funcao.loc[((funcao['LIMINAR'] == '') | (funcao['OP_LIQ'] == '')) & (funcao['Análise'] == '') & mask_produto_complementar, 'Análise'] = 'NÃO LANÇAR - COMPLEMENTAR'
-        print('COMPLEMENTAR, analisado\n\n')
 
-        # Preenche vazio em Análise
         funcao.loc[funcao['Análise'] == '', 'Análise'] = 'NÃO LANÇAR - COMPLEMENTAR EXTRA'
 
-        # FUNÇÃO INTERMEDIARIO
-        funcao.to_excel(fr'{self.caminho}\FUNÇÃO INTERMEDIÁRIO.xlsx', index=False)
+        # Salva arquivos
+        funcao.to_excel(os.path.join(self.caminho, 'FUNÇÃO INTERMEDIÁRIO.xlsx'), index=False)
 
-        # FUNÇÃO SÓ O QUE É LANÇAR
         funcao_tratado = funcao[funcao['Análise'] == 'LANÇAR'].copy()
-        print('Separando apenas os casos a serem lançados...\n\n')
-
-        # print(funcao_tratado.columns)
-
-        # COMPLEMENTARES
+        
         valores_desejados = ['NÃO LANÇAR - COMPLEMENTAR', 'NÃO LANÇAR - COMPLEMENTAR EXTRA']
-        funcao_complementos = funcao[funcao['Análise'].isin(valores_desejados)]
+        funcao_complementos = funcao[funcao['Análise'].isin(valores_desejados)].copy()
 
-        funcao_tratado.to_excel(fr'{self.caminho}\FUNCAO COM NÃO.xlsx', index=False)
+        funcao_tratado.to_excel(os.path.join(self.caminho, 'FUNCAO COM NÃO.xlsx'), index=False)
 
         self.trata_funcao_final(funcao_tratado, funcao_complementos)
 
-
     def trata_funcao_final(self, funcao, funcao_complementos):
-
-        # Complementares
         complementares = funcao_complementos.copy()
 
-        # Separar só as colunas corretas
-        funcao = funcao[['NR_OPER', 'NR_OPER_EDITADO', 'Análise', 'CPF', 'MATRICULA','CLIENTE', 'DT_BASE',
-                         'VLR_PARC', 'Saldo', 'SITUAÇÃO', 'Valor Averbado Reajustado', 'PRODUTO','ORIGEM_4']].copy()
-        '''funcao = funcao[['NR.PROP.', 'NR. OPER.', 'NR. OP. ', 'MOVIMENTAÇÃO', 'OBSERVAÇÃO', 'CPF', 'Matricula', 'CLIENTE',
-                         'VLR_PARC', 'SITUAÇÃO INSS', 'VL RESERVADO AJUSTADO INSS']]'''
+        # Seleciona apenas colunas que existem no DF para evitar erro
+        cols_target = ['NR_OPER', 'NR_OPER_EDITADO', 'Análise', 'CPF', 'MATRICULA','CLIENTE', 'DT_BASE',
+                         'VLR_PARC', 'Saldo', 'SITUAÇÃO', 'Valor Averbado Reajustado', 'PRODUTO','ORIGEM_4']
+        cols_existentes = [c for c in cols_target if c in funcao.columns]
+        funcao = funcao[cols_existentes].copy()
 
-
-        # Faz uma cópia do valor original, para controle
         funcao["VLR_PARC_ORIGINAL"] = funcao["VLR_PARC"]
-
-        # Nova coluna para anotar quanto foi usado do "banco" de 30%
         funcao["VALOR_COMPLEMENTADO"] = 0.0
-        funcao["STATUS_COMPLEMENTO"] = ""  # Total, Parcial, Nenhum
-        funcao.insert(9, "VALOR A LANÇAR", '', True)
+        funcao["STATUS_COMPLEMENTO"] = "" 
+        funcao.insert(len(funcao.columns), "VALOR A LANÇAR", '')
 
-        # Soma dos valores de Complementar e Orbital
-        soma_complementar = complementares.groupby('CPF')['VLR_PARC'].sum().reset_index(name="SOMA_COMPLEMENTAR")
-        soma_orbital = self.orbital.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum().reset_index(name="SOMA_ORBITAL")
+        # Somas (com verificação se DFs não estão vazios)
+        if not complementares.empty:
+            soma_complementar = complementares.groupby('CPF')['VLR_PARC'].sum().reset_index(name="SOMA_COMPLEMENTAR")
+        else:
+            soma_complementar = pd.DataFrame(columns=['CPF', 'SOMA_COMPLEMENTAR'])
 
-        # Renomeia a coluna para que o merge funcione
-        soma_orbital = soma_orbital.rename(columns={"CPF/CNPJ": "CPF"})
+        if not self.orbital.empty:
+            soma_orbital = self.orbital.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum().reset_index(name="SOMA_ORBITAL")
+            soma_orbital = soma_orbital.rename(columns={"CPF/CNPJ": "CPF"})
+        else:
+            soma_orbital = pd.DataFrame(columns=['CPF', 'SOMA_ORBITAL'])
 
-        # Junta os dados com a planilha principal
+        # Merge
         funcao_final = funcao.merge(soma_complementar, on="CPF", how="left")
         funcao_final = funcao_final.merge(soma_orbital, on="CPF", how="left")
 
-        # Preenche os NaN com zero (caso algum CPF não esteja em uma das duas planilhas)
         funcao_final["SOMA_COMPLEMENTAR"] = funcao_final["SOMA_COMPLEMENTAR"].fillna(0)
         funcao_final["SOMA_ORBITAL"] = funcao_final["SOMA_ORBITAL"].fillna(0)
-
-        # Calcula a soma total
         funcao_final["SOMA SOMASE"] = funcao_final["SOMA_COMPLEMENTAR"] + funcao_final["SOMA_ORBITAL"]
 
-        # Remove colunas do Arquivo
         funcao_final = funcao_final.drop(columns=["SOMA_COMPLEMENTAR", "SOMA_ORBITAL"])
-
         funcao = funcao_final
 
-        print(funcao[['Valor Averbado Reajustado', 'VLR_PARC']].dtypes)
-
-        # 1. Converta as colunas para um formato numérico.
-        #    Use os parâmetros 'decimal' e 'thousands' se seus dados usarem vírgula para decimal e ponto para milhar.
-        #    'errors='coerce'' é muito útil: se ele não conseguir converter um valor, ele o transformará em NaN (nulo).
-
+        # Conversão Numérica
         colunas_para_converter = ['Valor Averbado Reajustado', 'VLR_PARC']
         for coluna in colunas_para_converter:
-            # Ajuste os parâmetros decimal e milhar, conforme seus dados
-            funcao[coluna] = pd.to_numeric(funcao[coluna], errors='coerce')
+            if coluna in funcao.columns:
+                funcao[coluna] = pd.to_numeric(funcao[coluna], errors='coerce').fillna(0)
 
-        # Preencha quaisquer valores que não puderam ser convertidos com 0 (ou outra estratégia que preferir)
-        funcao[colunas_para_converter] = funcao[colunas_para_converter].fillna(0)
-
-        # Calcula o "espaço" disponível em cada linha para receber um complemento.
-        # .clip(0) garante que o resultado não seja negativo.
-        funcao['ESPACO_PARA_COMPLEMENTO'] = (funcao['Valor Averbado Reajustado'] - funcao['VLR_PARC']).clip(0)
-        print('Espaço Para Complemento, criado...\n\n')
-
-        # a. Soma acumulada dos "pedidos" de complemento para cada CPF
+        # Lógica Vetorizada de Complemento
+        funcao['ESPACO_PARA_COMPLEMENTO'] = (funcao['Valor Averbado Reajustado'] - funcao['VLR_PARC']).clip(lower=0)
+        
         funcao['CUM_PEDIDO_COMPLEMENTO'] = funcao.groupby('CPF')['ESPACO_PARA_COMPLEMENTO'].cumsum()
-        print('Espaço Para Complemento Acumulado, criado... \n\n')
-
-        # b. Quanto já foi alocado para as linhas ANTERIORES do mesmo CPF
+        
         alocado_anteriormente = funcao['CUM_PEDIDO_COMPLEMENTO'] - funcao['ESPACO_PARA_COMPLEMENTO']
-        print('Acumulado Anteriormente, criado...\n\n')
-
-        # c. Saldo restante do SOMA SOMASE disponível para a linha ATUAL
+        
         saldo_restante_complemento = funcao['SOMA SOMASE'] - alocado_anteriormente
-        print('Saldo Restante, calculado...')
-
-        # d. O complemento REAL a ser adicionado é o MENOR entre o que a linha PODE RECEBER e o que nós TEMOS DE SALDO
-        funcao['COMPLEMENTO_REAL'] = np.minimum(funcao['ESPACO_PARA_COMPLEMENTO'], saldo_restante_complemento.clip(0))
-        print('Complemento Real, criado...\n\n')
-
+        
+        funcao['COMPLEMENTO_REAL'] = np.minimum(funcao['ESPACO_PARA_COMPLEMENTO'], saldo_restante_complemento.clip(lower=0))
+        
         funcao['PARCELA COMPLEMENTO REAL'] = funcao['VLR_PARC'] + funcao['COMPLEMENTO_REAL']
-        print('Parcela Complemento Real, calculado...\n\n')
-
+        
         funcao['VALOR A LANÇAR'] = np.minimum(funcao['PARCELA COMPLEMENTO REAL'], funcao['Valor Averbado Reajustado'])
-        print('Valor a Lançar, alocado...\n\n')
 
-        print('Salvando Função tratado...')
-        # Exporta os resultados
-        funcao.to_excel(fr"{self.caminho}\LANÇAMENTO DE INSS TRATADO.xlsx", index=False)
+        # Salva arquivo final
+        funcao.to_excel(os.path.join(self.caminho, "LANÇAMENTO DE INSS TRATADO.xlsx"), index=False)
 
         self.arquivo_lancamento(funcao)
 
-
     def arquivo_lancamento(self, funcao_tratado):
-        """
-            Versão refatorada da função, utilizando pd.merge para mais eficiência e legibilidade.
-            """
         print('Preparando arquivo de lançamento...')
+        
+        if self.averbados.empty:
+            print("Aviso: Arquivo Averbados vazio. Pulando geração de lançamento final.")
+            return
 
-        # 1. Prepara os DataFrames para a junção (merge)
         funcao = funcao_tratado.copy()
         averbados = self.averbados.copy()
 
-        # Garante que as chaves de junção sejam do mesmo tipo (string)
-        funcao['NR_OPER_CURTO'] = funcao['NR_OPER'].astype(str).str.slice(0, 9)
-        averbados['NR_OPER_EDITADO'] = averbados['NR_OPER_EDITADO'].astype(str)
+        # Prepara chaves
+        if 'NR_OPER' in funcao.columns:
+            funcao['NR_OPER_CURTO'] = funcao['NR_OPER'].astype(str).str.slice(0, 9)
+        else:
+            funcao['NR_OPER_CURTO'] = ''
+            
+        if 'NR_OPER_EDITADO' in averbados.columns:
+            averbados['NR_OPER_EDITADO'] = averbados['NR_OPER_EDITADO'].astype(str)
 
-        # 2. Usa pd.merge para buscar 'EMPREGADOR' e 'MATRÍCULA' de uma só vez
-        # Isso substitui todo o processo de .map()
+        # Verifica colunas necessárias no averbados
+        cols_averbados = ['NR_OPER_EDITADO']
+        if 'EMPREGADOR' in averbados.columns: cols_averbados.append('EMPREGADOR')
+        else: averbados['EMPREGADOR'] = ''
+        
+        if 'MATRÍCULA' in averbados.columns: cols_averbados.append('MATRÍCULA')
+        else: averbados['MATRÍCULA'] = ''
+
         df_final = pd.merge(
             left=funcao,
-            right=averbados[['NR_OPER_EDITADO', 'EMPREGADOR', 'MATRÍCULA']],
+            right=averbados[cols_averbados],
             left_on='NR_OPER_CURTO',
             right_on='NR_OPER_EDITADO',
-            how='left'  # 'left' garante que nenhuma linha de 'funcao' seja perdida
+            how='left'
         )
 
-        # 3. Cria o DataFrame de lançamento com os nomes de coluna corretos
-        # Selecionando e renomeando as colunas necessárias em um único passo
         inclusao_desconto = df_final.rename(columns={
             'NR_OPER': 'NR. OPER.',
             'CPF': 'CPF',
@@ -459,18 +357,23 @@ class INSS:
             'MATRÍCULA': 'MATRICULA/BENEFÍCIO'
         })
 
-        # 4. Ajusta os tipos de dados e valores finais
-        inclusao_desconto['VLR.PARC'] = inclusao_desconto['VLR.PARC'].astype(str).str.replace(',', '.').astype(float)
+        # Garante colunas finais
+        for col in ['NR. OPER.', 'CPF', 'CLIENTE', 'VLR.PARC', 'EMPREGADOR', 'PROPOSTA', 'MATRICULA/BENEFÍCIO']:
+            if col not in inclusao_desconto.columns:
+                inclusao_desconto[col] = ''
+
+        inclusao_desconto['VLR.PARC'] = inclusao_desconto['VLR.PARC'].astype(str).str.replace(',', '.', regex=False)
+        # Converte para float seguro
+        inclusao_desconto['VLR.PARC'] = pd.to_numeric(inclusao_desconto['VLR.PARC'], errors='coerce')
+        
         inclusao_desconto['PRAZO'] = ''
 
-        # 5. Seleciona apenas as colunas na ordem desejada
         colunas_finais = ['NR. OPER.', 'CPF', 'CLIENTE', 'VLR.PARC', 'EMPREGADOR', 'PROPOSTA',
                           'MATRICULA/BENEFÍCIO', 'PRAZO']
         inclusao_desconto = inclusao_desconto[colunas_finais]
 
-        # 6. Gera o nome do arquivo com data e hora para evitar sobreposição
         timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
-        caminho_arquivo = fr'{self.caminho}\INSS_INCLUIR_DESCONTO_CARTÃO_{timestamp}.xlsx'
+        caminho_arquivo = os.path.join(self.caminho, f'INSS_INCLUIR_DESCONTO_CARTÃO_{timestamp}.xlsx')
 
         inclusao_desconto.to_excel(caminho_arquivo, index=False)
         print(f'Arquivo de lançamento salvo em: {caminho_arquivo}')

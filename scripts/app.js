@@ -1,21 +1,25 @@
 document.addEventListener('DOMContentLoaded', () => {
     // ----------------------------------------------------
-    // Dados e Variáveis
+    // CONFIGURAÇÃO DE DADOS
     // ----------------------------------------------------
-    const CONVENIOS = [
-        "CÂMARA DE TERESÓPOLIS", "GOV. DA PARAIBA", "GOV. DO MARANHÃO", "GOV. MINAS GERAIS",
-        "GOV. PIAUI", "GOV. RIO GRANDE DO NORTE", "GOV. SANTA CATARINA", "INSS",
-        "PREF. BAYEUX", "PREF. CAJAMAR", "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE",
-        "PREF. CUIABÁ", "PREF. DE PORTO VELHO", "PREF. IMPERATRIZ MA", "PREF. ITU",
-        "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE", "PREF. MARABÁ", "PREF. NITERÓI",
-        "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE", "PREF. SANTA RITA",
-        "PREF. TERESINA"
+    
+    // Grupos de Convênios
+    const CONVENIOS_CODATA = ["GOV. DA PARAIBA"];
+    const CONVENIOS_INSS = ["INSS"];
+    const CONVENIOS_CONSIGFACIL = [
+        "GOV. DO MARANHÃO", "GOV. PIAUI", "PREF. BAYEUX", "PREF. CAJAMAR",
+        "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. DE PORTO VELHO",
+        "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
+        "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
+        "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. MINAS GERAIS", 
+        "GOV. RIO GRANDE DO NORTE", "GOV. SANTA CATARINA"
     ];
 
-    const UPLOAD_FIELDS = [
-        "CREDBASE", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS",
-        "ANDAMENTO", "AVERBADOS", "HISTÓRICO DE REFINS", "ORBITAL", "CASOS CAPITAL"
-    ];
+    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL].sort();
+
+    const FIELDS_CONSIGFACIL = ["CREDBASE AKRK E DIG", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS", "ANDAMENTO", "AVERBADOS", "HISTORICO DE REFINS"];
+    const FIELDS_CODATA = ["CREDBASE AKRK E DIG", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS", "ANDAMENTO", "AVERBADOS", "ORBITAL"];
+    const FIELDS_INSS = ["FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS", "AVERBADOS", "ORBITAL", "CASOS_CAPITAL"];
 
     const fileDataMap = {}; 
     
@@ -26,7 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const convenioList = document.getElementById('convenio-list');
     const selectedConvenioText = document.getElementById('selected-convenio-text');
     
-    // --- NOVOS ELEMENTOS DE CONSIGNATÁRIA ---
     const consignatariaArea = document.getElementById('consignataria-selection-area');
     const selectConsigButton = document.getElementById('select-consignataria-button');
     const dropdownConsigContent = document.getElementById('consignataria-dropdown');
@@ -36,257 +39,229 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadForm = document.getElementById('upload-form');
     const uploadFieldsGrid = uploadForm ? uploadForm.querySelector('.upload-fields-grid') : null;
     const submitButton = document.getElementById('submit-validation');
+    
+    // Console Elements
+    const consoleContainer = document.getElementById('system-console');
+
     const themeToggleButton = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
 
     let selectedConvenio = null;
     let selectedConsignataria = null;
 
-    if (!uploadFieldsGrid) {
-        console.error("Erro FATAL: Container de upload não encontrado.");
-        return;
-    }
+    if (!uploadFieldsGrid) return;
 
-    // ----------------------------------------------------
-    // Lógica de Tema
-    // ----------------------------------------------------
-    const enableLightMode = () => {
-        document.body.classList.remove('dark-mode');
-        document.body.classList.add('light-mode');
-        themeIcon.setAttribute('data-icon', 'lucide:moon');
-        localStorage.setItem('theme', 'light');
-    };
-    const enableDarkMode = () => {
-        document.body.classList.remove('light-mode');
-        document.body.classList.add('dark-mode');
-        themeIcon.setAttribute('data-icon', 'lucide:sun');
-        localStorage.setItem('theme', 'dark');
-    };
+    // --- Tema ---
     const initializeTheme = () => {
         const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'light') enableLightMode();
-        else enableDarkMode();
+        if (savedTheme === 'light') {
+            document.body.classList.add('light-mode');
+            document.body.classList.remove('dark-mode');
+            themeIcon.setAttribute('data-icon', 'lucide:moon');
+        } else {
+            document.body.classList.add('dark-mode');
+            document.body.classList.remove('light-mode');
+            themeIcon.setAttribute('data-icon', 'lucide:sun');
+        }
     };
     initializeTheme();
     themeToggleButton.addEventListener('click', () => {
-        if (document.body.classList.contains('dark-mode')) enableLightMode();
-        else enableDarkMode();
+        document.body.classList.toggle('dark-mode');
+        document.body.classList.toggle('light-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        themeIcon.setAttribute('data-icon', isDark ? 'lucide:sun' : 'lucide:moon');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
     });
 
-    // ----------------------------------------------------
-    // Dropdown Pesquisável (Convênios)
-    // ----------------------------------------------------
+    // --- FUNCAO DE LOG DO CONSOLE (NOVO) ---
+    const logToConsole = (message, type = 'info') => {
+        // Garante que o console esteja visível
+        consoleContainer.style.display = 'block';
+
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('pt-BR', { hour12: false });
+        
+        const line = document.createElement('div');
+        line.classList.add('log-line');
+        
+        let typeClass = 'log-info';
+        if (type === 'success') typeClass = 'log-success';
+        if (type === 'error') typeClass = 'log-error';
+        if (type === 'warning') typeClass = 'log-warning';
+        if (type === 'system') typeClass = 'log-system';
+
+        line.innerHTML = `
+            <span class="log-timestamp">[${timeString}]</span>
+            <span class="log-content ${typeClass}">${message}</span>
+        `;
+        
+        consoleContainer.appendChild(line);
+        consoleContainer.scrollTop = consoleContainer.scrollHeight; // Auto-scroll para o final
+    };
+
+    const clearConsole = () => {
+        consoleContainer.innerHTML = '';
+        consoleContainer.style.display = 'none';
+    };
+
+    // --- Dropdowns ---
     const renderConvenios = (list) => {
         convenioList.innerHTML = '';
-        if (list.length === 0) {
-            convenioList.innerHTML = `<li style="padding: 10px 15px; color: var(--color-text-muted);">Nenhum convênio encontrado.</li>`;
-            return;
-        }
         list.forEach(convenio => {
-            const listItem = document.createElement('li');
-            listItem.textContent = convenio;
-            listItem.setAttribute('data-value', convenio);
-            listItem.addEventListener('click', () => handleConvenioSelection(convenio));
-            convenioList.appendChild(listItem);
+            const li = document.createElement('li');
+            li.textContent = convenio;
+            li.setAttribute('data-value', convenio);
+            li.addEventListener('click', () => handleConvenioSelection(convenio));
+            convenioList.appendChild(li);
         });
     };
-    renderConvenios(CONVENIOS);
+    renderConvenios(ALL_CONVENIOS);
 
-    selectButton.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const isCurrentlyOpen = dropdownContent.classList.toggle('show');
-        selectButton.classList.toggle('open');
-        if (isCurrentlyOpen) convenioSearch.focus();
+    selectButton.addEventListener('click', (e) => { e.stopPropagation(); dropdownContent.classList.toggle('show'); });
+    convenioSearch.addEventListener('input', (e) => {
+        const query = e.target.value.toUpperCase();
+        renderConvenios(ALL_CONVENIOS.filter(c => c.toUpperCase().includes(query)));
     });
 
-    convenioSearch.addEventListener('input', (event) => {
-        const query = event.target.value.toUpperCase();
-        const filtered = CONVENIOS.filter(c => c.toUpperCase().includes(query));
-        renderConvenios(filtered);
-    });
-
-    // ----------------------------------------------------
-    // Lógica de Consignatária (Dropdown Novo)
-    // ----------------------------------------------------
     if (selectConsigButton) {
-        selectConsigButton.addEventListener('click', (e) => {
-            e.stopPropagation();
-            dropdownConsigContent.classList.toggle('show');
-            selectConsigButton.classList.toggle('open');
-        });
-
-        consignatariaOptions.forEach(option => {
-            option.addEventListener('click', () => {
-                selectedConsignataria = option.getAttribute('data-value');
-                selectedConsigText.textContent = option.textContent;
-                
+        selectConsigButton.addEventListener('click', (e) => { e.stopPropagation(); dropdownConsigContent.classList.toggle('show'); });
+        consignatariaOptions.forEach(opt => {
+            opt.addEventListener('click', () => {
+                selectedConsignataria = opt.getAttribute('data-value');
+                selectedConsigText.textContent = opt.textContent;
                 dropdownConsigContent.classList.remove('show');
-                selectConsigButton.classList.remove('open');
-                
                 updateSubmitButtonState();
             });
         });
     }
 
-    // Fecha dropdowns ao clicar fora
-    document.addEventListener('click', (event) => {
-        if (!selectButton.contains(event.target) && !dropdownContent.contains(event.target)) {
-            dropdownContent.classList.remove('show');
-            selectButton.classList.remove('open');
-        }
-        if (selectConsigButton && !selectConsigButton.contains(event.target) && !dropdownConsigContent.contains(event.target)) {
-            dropdownConsigContent.classList.remove('show');
-            selectConsigButton.classList.remove('open');
-        }
+    document.addEventListener('click', () => {
+        dropdownContent.classList.remove('show');
+        if (dropdownConsigContent) dropdownConsigContent.classList.remove('show');
     });
 
-    /**
-     * FUNÇÃO PRINCIPAL: Seleção de Convênio com Lógica Condicional
-     */
+    // --- Lógica de Seleção ---
     const handleConvenioSelection = (convenio) => {
         selectedConvenio = convenio;
         selectedConvenioText.textContent = convenio;
         dropdownContent.classList.remove('show');
-        selectButton.classList.remove('open');
-
-        // --- LÓGICA CONDICIONAL PARA GOV. DA PARAIBA ---
-        if (convenio === "GOV. DA PARAIBA") {
-            consignatariaArea.classList.remove('hidden');
-            // Reseta a seleção para forçar o usuário a escolher
-            selectedConsignataria = null;
-            selectedConsigText.textContent = "Clique para Selecionar";
-        } else {
-            consignatariaArea.classList.add('hidden');
-            selectedConsignataria = null;
-        }
-
-        // Mostra a área de upload
-        if (uploadForm.classList.contains('hidden')) {
-            uploadForm.classList.remove('hidden');
-        }
         
-        renderUploadFields(); 
+        // Reset
+        consignatariaArea.classList.add('hidden');
+        selectedConsignataria = null;
+        selectedConsigText.textContent = "Clique para Selecionar";
+        for (const key in fileDataMap) delete fileDataMap[key];
+        clearConsole(); // Limpa console anterior
+
+        let currentFields = [];
+        if (CONVENIOS_CODATA.includes(convenio)) {
+            consignatariaArea.classList.remove('hidden');
+            currentFields = FIELDS_CODATA;
+        } else if (CONVENIOS_INSS.includes(convenio)) {
+            currentFields = FIELDS_INSS;
+        } else {
+            currentFields = FIELDS_CONSIGFACIL;
+        }
+
+        uploadForm.classList.remove('hidden');
+        renderUploadFields(currentFields); 
         updateSubmitButtonState();
     };
 
-    // ----------------------------------------------------
-    // Campos de Upload
-    // ----------------------------------------------------
-    const renderUploadFields = () => {
+    // --- Upload Fields ---
+    const renderUploadFields = (fieldsList) => {
         uploadFieldsGrid.innerHTML = '';
-        UPLOAD_FIELDS.forEach(field => {
+        fieldsList.forEach(field => {
             const fieldId = field.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
-            const fieldHTML = `
+            const html = `
                 <div class="upload-group">
                     <label class="form-label">${field}</label>
                     <div class="upload-box" id="drop-area-${fieldId}">
                         <span class="iconify upload-icon" data-icon="lucide:file-text"></span>
-                        <p class="upload-text-main">Arraste seu arquivo aqui</p>
-                        <p class="upload-text-subtle">ou clique para selecionar</p>
-                        <p class="file-info" id="file-info-${fieldId}">Formatos aceitos: CSV, XLSX, XLS</p>
+                        <p class="upload-text-main">Arraste aqui</p>
+                        <p class="file-info" id="file-info-${fieldId}">.CSV, .XLSX</p>
                         <input type="file" multiple accept=".csv, .xlsx, .xls" data-field-id="${fieldId}" id="input-${fieldId}" name="${fieldId}">
                     </div>
-                </div>
-            `;
-            uploadFieldsGrid.insertAdjacentHTML('beforeend', fieldHTML);
+                </div>`;
+            uploadFieldsGrid.insertAdjacentHTML('beforeend', html);
             setupFileHandlers(fieldId);
         });
     };
 
     const setupFileHandlers = (fieldId) => {
         const dropArea = document.getElementById(`drop-area-${fieldId}`);
-        const fileInput = document.getElementById(`input-${fieldId}`);
-        const fileInfoElement = document.getElementById(`file-info-${fieldId}`);
+        const input = document.getElementById(`input-${fieldId}`);
+        const info = document.getElementById(`file-info-${fieldId}`);
+        if (!dropArea) return;
 
-        if (!dropArea || !fileInput) return;
-
-        dropArea.addEventListener('click', (event) => {
-            if (!event.target.closest('input[type="file"]')) {
-                fileInput.click();
-            }
+        dropArea.addEventListener('click', (e) => { if(e.target !== input) input.click(); });
+        input.addEventListener('change', (e) => handleFileProcess(e.target.files, fieldId, info));
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
+            dropArea.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); });
         });
-
-        fileInput.addEventListener('change', (event) => {
-            handleFileProcess(event.target.files, fieldId, fileInfoElement);
-        });
-
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false);
-        });
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropArea.addEventListener(eventName, () => dropArea.classList.add('dragover'), false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, () => dropArea.classList.remove('dragover'), false);
-        });
-
-        dropArea.addEventListener('drop', (event) => {
-            const dt = event.dataTransfer;
-            handleFileProcess(dt.files, fieldId, fileInfoElement);
-        }, false);
+        dropArea.addEventListener('dragover', () => dropArea.classList.add('dragover'));
+        dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+        dropArea.addEventListener('drop', (e) => handleFileProcess(e.dataTransfer.files, fieldId, info));
     };
 
-    const handleFileProcess = (files, fieldId, infoElement) => {
-        const validFiles = Array.from(files);
-        if (validFiles.length > 0) {
-            fileDataMap[fieldId] = validFiles;
-            const names = validFiles.map(f => f.name).join(', ');
-            const totalSize = (validFiles.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024)).toFixed(2);
-            infoElement.textContent = `Arquivos: ${validFiles.length} (${totalSize} MB). ${names}`;
-            infoElement.classList.remove('error');
+    const handleFileProcess = (files, fieldId, info) => {
+        if (files.length > 0) {
+            fileDataMap[fieldId] = Array.from(files);
+            const size = (Array.from(files).reduce((a, b) => a + b.size, 0) / 1024 / 1024).toFixed(2);
+            info.textContent = `${files.length} arq. (${size} MB)`;
+            info.classList.remove('error');
         } else {
             delete fileDataMap[fieldId];
-            infoElement.textContent = `Formatos aceitos: CSV, XLSX, XLS`; 
-            infoElement.classList.remove('error');
+            info.textContent = '.CSV, .XLSX';
         }
         updateSubmitButtonState();
     };
 
     const updateSubmitButtonState = () => {
         const hasFiles = Object.keys(fileDataMap).length > 0;
-        let isConfigValid = !!selectedConvenio;
-
-        // Validação extra para Paraíba: Exige Consignatária
-        if (selectedConvenio === "GOV. DA PARAIBA") {
-            if (!selectedConsignataria) {
-                isConfigValid = false;
-            }
-        }
-
-        submitButton.disabled = !hasFiles || !isConfigValid;
+        let valid = !!selectedConvenio;
+        if (selectedConvenio && CONVENIOS_CODATA.includes(selectedConvenio) && !selectedConsignataria) valid = false;
+        submitButton.disabled = !hasFiles || !valid;
     };
 
     // ----------------------------------------------------
-    // Submissão
+    // SUBMISSÃO COM CONSOLE VISUAL
     // ----------------------------------------------------
     uploadForm.addEventListener('submit', async (event) => {
         event.preventDefault();
-
-        if (Object.keys(fileDataMap).length === 0) {
-            alert('Por favor, selecione pelo menos um arquivo.');
-            return;
-        }
-
+        
+        // 1. Prepara Interface
         submitButton.disabled = true;
-        submitButton.textContent = 'Enviando...';
+        submitButton.innerHTML = '<span class="iconify icon-spin" data-icon="lucide:loader-2"></span> Processando...';
+        clearConsole();
+        
+        // 2. Logs Iniciais
+        logToConsole(`Iniciando validação para: ${selectedConvenio}`, 'system');
+        if (selectedConsignataria) logToConsole(`Consignatária selecionada: ${selectedConsignataria}`, 'info');
+        
+        const totalFiles = Object.values(fileDataMap).reduce((acc, val) => acc + val.length, 0);
+        logToConsole(`Preparando ${totalFiles} arquivos para upload...`, 'info');
 
         try {
+            // 3. Envio
             await sendFilesToBackend();
             
-            submitButton.textContent = 'Sucesso!';
+            // 4. Sucesso
+            submitButton.innerHTML = '<span class="iconify" data-icon="lucide:check"></span> Sucesso!';
             submitButton.classList.add('success');
+            
             setTimeout(() => {
-                submitButton.textContent = 'Iniciar Validação e Processamento';
+                submitButton.innerHTML = '<span class="iconify" data-icon="lucide:upload-cloud"></span> Iniciar Validação';
                 submitButton.classList.remove('success');
                 submitButton.disabled = false;
-            }, 3000);
+            }, 4000);
 
         } catch (error) {
-            console.error('Erro:', error);
-            alert(`Erro: ${error.message}`);
-            submitButton.textContent = 'Tente Novamente';
+            // 5. Erro
+            console.error(error);
+            logToConsole(`FALHA NO PROCESSO: ${error.message}`, 'error');
+            submitButton.innerHTML = '<span class="iconify" data-icon="lucide:alert-triangle"></span> Erro';
             submitButton.disabled = false;
         }
     });
@@ -294,32 +269,48 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendFilesToBackend = async () => {
         const formData = new FormData();
         formData.append('convenio', selectedConvenio);
+        if (selectedConsignataria) formData.append('consignataria', selectedConsignataria);
 
-        // Envia consignatária apenas se foi selecionada (importante para o backend)
-        if (selectedConsignataria) {
-            formData.append('consignataria', selectedConsignataria);
+        // NOVO: PEGA O CAMINHO DE SAÍDA
+        const outputPathInput = document.getElementById('output-path-input');
+        if (outputPathInput && outputPathInput.value.trim() !== "") {
+            formData.append('output_path', outputPathInput.value.trim());
+            logToConsole(`Caminho de saída definido: ${outputPathInput.value.trim()}`, 'info');
+        } else {
+            logToConsole(`Usando pasta de saída padrão do sistema`, 'info');
         }
 
+        // Log detalhado dos arquivos
         for (const [fieldId, files] of Object.entries(fileDataMap)) {
-            files.forEach((file) => {
-                formData.append(fieldId, file, file.name); 
+            files.forEach(file => {
+                formData.append(fieldId, file, file.name);
+                logToConsole(`Anexando: ${file.name} (${(file.size/1024).toFixed(1)}KB) -> [${fieldId}]`, 'info');
             });
         }
-        
-        const API_URL = 'http://localhost:8000/validar'; 
-        const response = await fetch(API_URL, { method: 'POST', body: formData });
-        
+
+        logToConsole("Enviando dados para o servidor...", 'warning');
+        logToConsole("Enviando dados para o servidor local (localhost:8000)...", 'warning');
+        logToConsole("Aguardando processamento do Python... Isso pode levar alguns minutos.", 'warning');
+
+        const response = await fetch('http://localhost:8000/validar', { method: 'POST', body: formData });
+
         if (!response.ok) {
-            let errorDetail = `Erro HTTP: ${response.status}`;
-            try {
-                const errorData = await response.json();
-                errorDetail = errorData.detail || errorDetail;
-            } catch (e) {}
-            throw new Error(errorDetail);
+            const err = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(err.detail || `Erro HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        // Logs de Sucesso vindos do servidor
+        logToConsole("------------------------------------------------", 'system');
+        logToConsole("PROCESSAMENTO CONCLUÍDO PELO SERVIDOR!", 'success');
+        logToConsole(`Mensagem: ${result.message}`, 'success');
+        
+        if (result.output_path) {
+            logToConsole(`Arquivos gerados salvos em:`, 'success');
+            logToConsole(`${result.output_path}`, 'info');
         }
         
-        return response.json();
+        return result;
     };
-    
-    updateSubmitButtonState();
 });

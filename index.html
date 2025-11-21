@@ -85,12 +85,25 @@
                 <div class="upload-fields-grid">
                     </div>
 
+                    <div class="output-path-container" style="margin: 20px 0;">
+                    <label for="output-path-input" class="form-label">
+                        <span class="iconify" data-icon="lucide:folder-open"></span>
+                        Caminho da Pasta de Saída (Opcional)
+                    </label>
+                    <input type="text" id="output-path-input" 
+                           placeholder="Ex: C:\Users\Nome\Desktop\Resultados (Deixe vazio para padrão)"
+                           class="custom-text-input">
+                </div>
+
                 <div class="submit-button-container">
                     <button type="submit" id="submit-validation" class="gradient-button" disabled>
                         <span class="iconify" data-icon="lucide:upload-cloud"></span>
                         Iniciar Validação e Processamento
                     </button>
                 </div>
+
+                <div id="system-console" class="console-container"></div>
+
             </form>
         </section>
 
