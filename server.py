@@ -9,6 +9,7 @@ from typing import List, Type, Optional
 # Importa as classes de validação
 from python.Consigfacil import CONSIGFACIL 
 from python.Codata import CODATA
+from python.INSS import INSS
 
 app = FastAPI()
 
@@ -36,9 +37,12 @@ CONSIGFACIL_CONVENIOS = [
 
 CODATA_CONVENIO = ["GOV. DA PARAIBA"]
 
+INSS_CONVENIO = ["INSS"]
+
 CONVENIO_MAP: dict[str, Type] = {
     **{convenio: CONSIGFACIL for convenio in CONSIGFACIL_CONVENIOS},
-    **{convenio: CODATA for convenio in CODATA_CONVENIO}
+    **{convenio: CODATA for convenio in CODATA_CONVENIO},
+    **{convenio: INSS for convenio in INSS_CONVENIO}
 }
 
 # --- Função Auxiliar de Leitura ---
@@ -103,6 +107,8 @@ async def validar_planilhas(
     CREDBASE_AKRK_E_DIG: List[UploadFile] = File(None, alias="CREDBASE"),
     FUNCAO: List[UploadFile] = File(None, alias="FUNCAO"),
     ANDAMENTO: List[UploadFile] = File(None, alias="ANDAMENTO"),
+    ORBITAL: List[UploadFile] = File(None, alias="ORBITAL"),
+    CASOS_CAPITAL: List[UploadFile] = File(None, alias="CASOS_CAPITAL")
 ):
     logging.info(f"\n--- INICIANDO VALIDAÇÃO: {convenio} ---")
     if consignataria:
@@ -123,7 +129,8 @@ async def validar_planilhas(
         credbase_df = await read_and_unify_files(CREDBASE_AKRK_E_DIG)
         funcao_df = await read_and_unify_files(FUNCAO)
         andamento_df = await read_and_unify_files(ANDAMENTO)
-
+        orbital_df = await read_and_unify_files(ORBITAL)
+        casoscapital_df = await read_and_unify_files(CASOS_CAPITAL)
 
         # Instanciação Condicional
         if ValidadorClass == CODATA:
@@ -139,8 +146,22 @@ async def validar_planilhas(
                 andamento_list=andamento_df,
                 caminho=CAMINHO_SAIDA,
                 tutela=liminar_df,
-                orbital=None 
+                orbital=orbital_df
             )
+
+        elif ValidadorClass == INSS:
+            # CODATA exige consignatária
+            validador = ValidadorClass(
+                portal_file_list=averbados_df,
+                funcao=funcao_df,
+                conciliacao=conciliacao_df,
+                liquidados=liquidados_df,
+                caminho=CAMINHO_SAIDA,
+                tutela=liminar_df,
+                orbital=orbital_df,
+                casos_capital=casoscapital_df
+            )
+
         else:
             # CONSIGFACIL (Padrão)
             validador = ValidadorClass(

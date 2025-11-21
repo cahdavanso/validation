@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const UPLOAD_FIELDS = [
         "CREDBASE", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS",
-        "ANDAMENTO", "AVERBADOS", "HISTÓRICO DE REFINS"
+        "ANDAMENTO", "AVERBADOS", "HISTÓRICO DE REFINS", "ORBITAL", "CASOS CAPITAL"
     ];
 
     const fileDataMap = {}; 
