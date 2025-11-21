@@ -13,73 +13,69 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     const UPLOAD_FIELDS = [
-        "CREDBASE AKRK E DIG", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS",
+        "CREDBASE", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS",
         "ANDAMENTO", "AVERBADOS", "HISTÓRICO DE REFINS"
     ];
 
     const fileDataMap = {}; 
     
-    // Elementos do DOM (Verificação Rigorosa)
+    // Elementos do DOM
     const selectButton = document.getElementById('select-convenio-button');
     const dropdownContent = document.getElementById('convenio-dropdown');
     const convenioSearch = document.getElementById('convenio-search');
     const convenioList = document.getElementById('convenio-list');
     const selectedConvenioText = document.getElementById('selected-convenio-text');
-    const uploadForm = document.getElementById('upload-form'); // O container principal
-    const uploadFieldsGrid = uploadForm ? uploadForm.querySelector('.upload-fields-grid') : null; // A DIV ONDE OS CAMPOS SÃO INJETADOS
+    
+    // --- NOVOS ELEMENTOS DE CONSIGNATÁRIA ---
+    const consignatariaArea = document.getElementById('consignataria-selection-area');
+    const selectConsigButton = document.getElementById('select-consignataria-button');
+    const dropdownConsigContent = document.getElementById('consignataria-dropdown');
+    const selectedConsigText = document.getElementById('selected-consignataria-text');
+    const consignatariaOptions = document.querySelectorAll('#consignataria-list li');
+
+    const uploadForm = document.getElementById('upload-form');
+    const uploadFieldsGrid = uploadForm ? uploadForm.querySelector('.upload-fields-grid') : null;
     const submitButton = document.getElementById('submit-validation');
     const themeToggleButton = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
 
     let selectedConvenio = null;
+    let selectedConsignataria = null;
 
-    // Se o grid de campos não for encontrado (uploadFieldsGrid é null), o script irá parar silenciosamente.
-    // Adicionamos uma verificação inicial para evitar isso.
     if (!uploadFieldsGrid) {
-        console.error("Erro FATAL: O container '.upload-fields-grid' não foi encontrado no DOM. Verifique seu index.html.");
-        return; // Interrompe o script se o elemento essencial não for encontrado.
+        console.error("Erro FATAL: Container de upload não encontrado.");
+        return;
     }
 
     // ----------------------------------------------------
-    // Lógica de Tema (Modo Claro/Escuro) - MANTIDA
+    // Lógica de Tema
     // ----------------------------------------------------
-
     const enableLightMode = () => {
         document.body.classList.remove('dark-mode');
         document.body.classList.add('light-mode');
         themeIcon.setAttribute('data-icon', 'lucide:moon');
         localStorage.setItem('theme', 'light');
     };
-
     const enableDarkMode = () => {
         document.body.classList.remove('light-mode');
         document.body.classList.add('dark-mode');
         themeIcon.setAttribute('data-icon', 'lucide:sun');
         localStorage.setItem('theme', 'dark');
     };
-
     const initializeTheme = () => {
         const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'light') {
-            enableLightMode();
-        } else {
-            enableDarkMode();
-        }
+        if (savedTheme === 'light') enableLightMode();
+        else enableDarkMode();
     };
-    
     initializeTheme();
     themeToggleButton.addEventListener('click', () => {
-        if (document.body.classList.contains('dark-mode')) {
-            enableLightMode();
-        } else {
-            enableDarkMode();
-        }
+        if (document.body.classList.contains('dark-mode')) enableLightMode();
+        else enableDarkMode();
     });
 
     // ----------------------------------------------------
     // Dropdown Pesquisável (Convênios)
     // ----------------------------------------------------
-
     const renderConvenios = (list) => {
         convenioList.innerHTML = '';
         if (list.length === 0) {
@@ -94,23 +90,13 @@ document.addEventListener('DOMContentLoaded', () => {
             convenioList.appendChild(listItem);
         });
     };
-
     renderConvenios(CONVENIOS);
 
     selectButton.addEventListener('click', (event) => {
         event.stopPropagation();
         const isCurrentlyOpen = dropdownContent.classList.toggle('show');
         selectButton.classList.toggle('open');
-        if (isCurrentlyOpen) {
-             convenioSearch.focus();
-        }
-    });
-
-    document.addEventListener('click', (event) => {
-        if (!selectButton.contains(event.target) && !dropdownContent.contains(event.target)) {
-            dropdownContent.classList.remove('show');
-            selectButton.classList.remove('open');
-        }
+        if (isCurrentlyOpen) convenioSearch.focus();
     });
 
     convenioSearch.addEventListener('input', (event) => {
@@ -119,8 +105,43 @@ document.addEventListener('DOMContentLoaded', () => {
         renderConvenios(filtered);
     });
 
+    // ----------------------------------------------------
+    // Lógica de Consignatária (Dropdown Novo)
+    // ----------------------------------------------------
+    if (selectConsigButton) {
+        selectConsigButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownConsigContent.classList.toggle('show');
+            selectConsigButton.classList.toggle('open');
+        });
+
+        consignatariaOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                selectedConsignataria = option.getAttribute('data-value');
+                selectedConsigText.textContent = option.textContent;
+                
+                dropdownConsigContent.classList.remove('show');
+                selectConsigButton.classList.remove('open');
+                
+                updateSubmitButtonState();
+            });
+        });
+    }
+
+    // Fecha dropdowns ao clicar fora
+    document.addEventListener('click', (event) => {
+        if (!selectButton.contains(event.target) && !dropdownContent.contains(event.target)) {
+            dropdownContent.classList.remove('show');
+            selectButton.classList.remove('open');
+        }
+        if (selectConsigButton && !selectConsigButton.contains(event.target) && !dropdownConsigContent.contains(event.target)) {
+            dropdownConsigContent.classList.remove('show');
+            selectConsigButton.classList.remove('open');
+        }
+    });
+
     /**
-     * FUNÇÃO CRÍTICA: Lida com a seleção do convênio e ATIVA a área de upload.
+     * FUNÇÃO PRINCIPAL: Seleção de Convênio com Lógica Condicional
      */
     const handleConvenioSelection = (convenio) => {
         selectedConvenio = convenio;
@@ -128,35 +149,31 @@ document.addEventListener('DOMContentLoaded', () => {
         dropdownContent.classList.remove('show');
         selectButton.classList.remove('open');
 
-        // 1. ATUALIZA O TÍTULO
-        const uploadTitle = document.getElementById('upload-title');
-        if (uploadTitle) {
-            uploadTitle.innerHTML = `📤 Upload para: **${convenio}**`;
+        // --- LÓGICA CONDICIONAL PARA GOV. DA PARAIBA ---
+        if (convenio === "GOV. DA PARAIBA") {
+            consignatariaArea.classList.remove('hidden');
+            // Reseta a seleção para forçar o usuário a escolher
+            selectedConsignataria = null;
+            selectedConsigText.textContent = "Clique para Selecionar";
+        } else {
+            consignatariaArea.classList.add('hidden');
+            selectedConsignataria = null;
         }
 
-        // 2. DESOCULTA A ÁREA DE UPLOAD (A classe 'hidden' está no HTML)
+        // Mostra a área de upload
         if (uploadForm.classList.contains('hidden')) {
             uploadForm.classList.remove('hidden');
         }
         
-        // 3. GARANTE A RENDERIZAÇÃO DOS CAMPOS
-        // Chamamos a função de renderização logo após a seleção
         renderUploadFields(); 
-
         updateSubmitButtonState();
     };
 
     // ----------------------------------------------------
-    // Geração e Lógica dos Campos de Upload
+    // Campos de Upload
     // ----------------------------------------------------
-
-    /**
-     * FUNÇÃO CRÍTICA: Gera dinamicamente o HTML dos campos de upload.
-     */
     const renderUploadFields = () => {
-        // Limpa o contêiner *antes* de injetar novo HTML
         uploadFieldsGrid.innerHTML = '';
-        
         UPLOAD_FIELDS.forEach(field => {
             const fieldId = field.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
             const fieldHTML = `
@@ -167,18 +184,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p class="upload-text-main">Arraste seu arquivo aqui</p>
                         <p class="upload-text-subtle">ou clique para selecionar</p>
                         <p class="file-info" id="file-info-${fieldId}">Formatos aceitos: CSV, XLSX, XLS</p>
-                        <input type="file" multiple 
-                               accept=".csv, .xlsx, .xls" 
-                               data-field-id="${fieldId}" 
-                               id="input-${fieldId}" 
-                               name="${fieldId}">
+                        <input type="file" multiple accept=".csv, .xlsx, .xls" data-field-id="${fieldId}" id="input-${fieldId}" name="${fieldId}">
                     </div>
                 </div>
             `;
-            // Insere o HTML no contêiner do grid
             uploadFieldsGrid.insertAdjacentHTML('beforeend', fieldHTML);
-            
-            // Configura os manipuladores de arquivo (Drag & Drop, Clique) para o novo campo
             setupFileHandlers(fieldId);
         });
     };
@@ -188,10 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const fileInput = document.getElementById(`input-${fieldId}`);
         const fileInfoElement = document.getElementById(`file-info-${fieldId}`);
 
-        // Verificação de segurança, caso o elemento não tenha sido renderizado corretamente
         if (!dropArea || !fileInput) return;
 
-        // Evento de Clique para abrir o seletor de arquivo
         dropArea.addEventListener('click', (event) => {
             if (!event.target.closest('input[type="file"]')) {
                 fileInput.click();
@@ -202,10 +210,8 @@ document.addEventListener('DOMContentLoaded', () => {
             handleFileProcess(event.target.files, fieldId, fileInfoElement);
         });
 
-        // ... (eventos de Drag & Drop) ...
-
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, preventDefaults, false);
+            dropArea.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false);
         });
 
         ['dragenter', 'dragover'].forEach(eventName => {
@@ -224,54 +230,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleFileProcess = (files, fieldId, infoElement) => {
         const validFiles = Array.from(files);
-
         if (validFiles.length > 0) {
             fileDataMap[fieldId] = validFiles;
-
             const names = validFiles.map(f => f.name).join(', ');
             const totalSize = (validFiles.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024)).toFixed(2);
-            
-            infoElement.textContent = `Arquivos: ${validFiles.length} (${totalSize} MB). Concatenados: ${names}`;
+            infoElement.textContent = `Arquivos: ${validFiles.length} (${totalSize} MB). ${names}`;
             infoElement.classList.remove('error');
-
         } else {
             delete fileDataMap[fieldId];
             infoElement.textContent = `Formatos aceitos: CSV, XLSX, XLS`; 
             infoElement.classList.remove('error');
         }
-
         updateSubmitButtonState();
-    };
-
-    const preventDefaults = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
     };
 
     const updateSubmitButtonState = () => {
         const hasFiles = Object.keys(fileDataMap).length > 0;
-        submitButton.disabled = !hasFiles || !selectedConvenio;
+        let isConfigValid = !!selectedConvenio;
+
+        // Validação extra para Paraíba: Exige Consignatária
+        if (selectedConvenio === "GOV. DA PARAIBA") {
+            if (!selectedConsignataria) {
+                isConfigValid = false;
+            }
+        }
+
+        submitButton.disabled = !hasFiles || !isConfigValid;
     };
 
     // ----------------------------------------------------
-    // Submissão do Formulário e Preparação da API - MANTIDA
+    // Submissão
     // ----------------------------------------------------
-
     uploadForm.addEventListener('submit', async (event) => {
         event.preventDefault();
 
         if (Object.keys(fileDataMap).length === 0) {
-            alert('Por favor, selecione pelo menos um arquivo para iniciar a validação.');
+            alert('Por favor, selecione pelo menos um arquivo.');
             return;
         }
 
         submitButton.disabled = true;
-        submitButton.textContent = 'Aguarde... Enviando dados para o Backend';
+        submitButton.textContent = 'Enviando...';
 
         try {
             await sendFilesToBackend();
             
-            submitButton.textContent = 'Validação Iniciada com Sucesso!';
+            submitButton.textContent = 'Sucesso!';
             submitButton.classList.add('success');
             setTimeout(() => {
                 submitButton.textContent = 'Iniciar Validação e Processamento';
@@ -280,9 +284,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 3000);
 
         } catch (error) {
-            console.error('Erro ao enviar dados para a API:', error);
-            alert(`Erro na comunicação com o backend. Verifique o console. Detalhe: ${error.message}`);
-            submitButton.textContent = 'Erro ao Enviar. Tente Novamente.';
+            console.error('Erro:', error);
+            alert(`Erro: ${error.message}`);
+            submitButton.textContent = 'Tente Novamente';
             submitButton.disabled = false;
         }
     });
@@ -291,46 +295,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         formData.append('convenio', selectedConvenio);
 
-        // Adiciona todos os arquivos ao FormData
+        // Envia consignatária apenas se foi selecionada (importante para o backend)
+        if (selectedConsignataria) {
+            formData.append('consignataria', selectedConsignataria);
+        }
+
         for (const [fieldId, files] of Object.entries(fileDataMap)) {
             files.forEach((file) => {
                 formData.append(fieldId, file, file.name); 
             });
         }
         
-        // As linhas de console.log abaixo são úteis para depuração,
-        // mas não são estritamente necessárias para o funcionamento.
-        console.log("--- Conteúdo do FormData para /validar ---");
-        for (let [key, value] of formData.entries()) {
-            if (value instanceof File) {
-                console.log(`Campo: ${key}, Arquivo: ${value.name}, Tamanho: ${(value.size / 1024).toFixed(2)} KB`);
-            } else {
-                console.log(`Campo: ${key}, Valor: ${value}`);
-            }
-        }
-        console.log("-----------------------------------------");
-        
         const API_URL = 'http://localhost:8000/validar'; 
-
-        // --- CÓDIGO REAL DA API (USANDO fetch) ---
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            body: formData
-        });
+        const response = await fetch(API_URL, { method: 'POST', body: formData });
         
-        // Verifica se a resposta foi um erro HTTP
         if (!response.ok) {
-            let errorDetail = `Erro HTTP: ${response.status} ${response.statusText}`;
+            let errorDetail = `Erro HTTP: ${response.status}`;
             try {
                 const errorData = await response.json();
                 errorDetail = errorData.detail || errorDetail;
-            } catch (e) {
-                // Falha ao ler JSON (ex: resposta HTML de erro)
-            }
-            throw new Error(`Falha na validação: ${errorDetail}`);
+            } catch (e) {}
+            throw new Error(errorDetail);
         }
         
-        return response.json(); // Retorna a resposta JSON do FastAPI
+        return response.json();
     };
     
     updateSubmitButtonState();

@@ -568,3 +568,10 @@ body {
         right: 20px;
     }
 }
+
+/* --- Regra para ocultar elementos --- */
+.hidden {
+    display: none !important;
+    opacity: 0;
+    pointer-events: none;
+}

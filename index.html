@@ -62,6 +62,25 @@
                 </div>
             </div>
 
+            <div id="consignataria-selection-area" class="hidden" style="margin-top: 1.5rem;">
+                <label for="select-consignataria-button" class="form-label">
+                    <span class="iconify" data-icon="lucide:layers"></span>
+                    Selecione a Consignatária
+                </label>
+                <div class="custom-select-container">
+                    <button id="select-consignataria-button" class="select-button" type="button">
+                        <span id="selected-consignataria-text">Clique para Selecionar</span>
+                        <span class="iconify" data-icon="lucide:chevron-down"></span>
+                    </button>
+                    <div id="consignataria-dropdown" class="dropdown-content">
+                        <ul id="consignataria-list" class="list-options">
+                            <li data-value="CAPITAL">CAPITAL</li>
+                            <li data-value="INSPFEM">INSPFEM</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             <form id="upload-form" class="upload-area-form hidden">
                 <div class="upload-fields-grid">
                     </div>
@@ -75,11 +94,6 @@
             </form>
         </section>
 
-
-
-
-
-        
         <footer class="system-footer">
             Sistema preparado para integração com backend Python via API REST
             <br>

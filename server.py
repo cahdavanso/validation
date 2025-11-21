@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import logging
 import io
-from typing import List, Type
+from typing import List, Type, Optional
 
 # Importa as classes de validação
 from python.Consigfacil import CONSIGFACIL 
@@ -12,7 +12,10 @@ from python.Codata import CODATA
 
 app = FastAPI()
 
-# Configuração de CORS
+# --- Configuração de Logging ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# --- Configuração de CORS ---
 origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -22,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mapeamento de Convênios
+# --- Mapeamento de Convênios ---
 CONSIGFACIL_CONVENIOS = [
         "GOV. DO MARANHÃO", "GOV. PIAUI", "PREF. BAYEUX", "PREF. CAJAMAR",
         "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. DE PORTO VELHO",
@@ -38,10 +41,10 @@ CONVENIO_MAP: dict[str, Type] = {
     **{convenio: CODATA for convenio in CODATA_CONVENIO}
 }
 
-# --- FUNÇÃO DE LEITURA INTELIGENTE (CORRIGIDA) ---
-def read_and_unify_files(file_list: List[UploadFile]):
+# --- Função Auxiliar de Leitura ---
+async def read_and_unify_files(file_list: List[UploadFile]):
     """
-    Lê arquivos Excel ou CSV baseando-se na extensão e unifica em um DataFrame.
+    Lê arquivos Excel (.xlsx, .xls) ou CSV/Texto (.csv, .txt) e unifica.
     """
     if not file_list:
         return None
@@ -51,36 +54,30 @@ def read_and_unify_files(file_list: List[UploadFile]):
     for uploaded_file in file_list:
         try:
             filename = uploaded_file.filename.lower()
-            content = uploaded_file.file.read() # Lê o conteúdo para memória
-            file_obj = io.BytesIO(content) # Cria objeto em memória
+            content = await uploaded_file.read()
+            file_obj = io.BytesIO(content)
 
             logging.info(f"Lendo arquivo: {uploaded_file.filename}")
 
-            # 1. Se for Excel (.xlsx, .xls)
             if filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(file_obj)
-            
-            # 2. Se for CSV ou Texto (.csv, .txt)
             else:
-                # Tenta UTF-8 com ponto e vírgula (padrão brasileiro)
+                # Tenta diferentes codificações e separadores para CSV
                 try:
                     file_obj.seek(0)
                     df = pd.read_csv(file_obj, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
                 except:
-                    # Tenta ISO-8859-1 com ponto e vírgula
                     try:
                         file_obj.seek(0)
                         df = pd.read_csv(file_obj, encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
                     except:
-                        # Tenta separador vírgula (padrão internacional)
                         file_obj.seek(0)
                         df = pd.read_csv(file_obj, encoding="latin1", sep=",", on_bad_lines="skip", low_memory=False)
 
             lista_df.append(df)
             
         except Exception as e:
-            logging.error(f"ERRO ao ler arquivo {uploaded_file.filename}: {e}")
-            # Não retorna None imediatamente, tenta processar os outros arquivos
+            logging.error(f"ERRO CRÍTICO ao ler {uploaded_file.filename}: {e}")
             continue
 
     if not lista_df:
@@ -95,47 +92,72 @@ def test_endpoint():
 @app.post("/validar")
 async def validar_planilhas(
     convenio: str = Form(...),
-    # Recebendo arquivos (removido is_csv pois a função agora é automática)
+    consignataria: Optional[str] = Form(None), # Novo campo opcional recebido do front
+    
+    # Campos de Arquivo (Aliases corrigidos para bater com app.js)
     AVERBADOS: List[UploadFile] = File(None, alias="AVERBADOS"),
     CONCILIACAO: List[UploadFile] = File(None, alias="CONCILIACAO"),
     LIQUIDADOS: List[UploadFile] = File(None, alias="LIQUIDADOS"),
     LIMINAR: List[UploadFile] = File(None, alias="LIMINAR"),
     HISTORICO_DE_REFINS: List[UploadFile] = File(None, alias="HISTORICO_DE_REFINS"),
-    CREDBASE_AKRK_E_DIG: List[UploadFile] = File(None, alias="CREDBASE_AKRK_E_DIG"),
+    CREDBASE_AKRK_E_DIG: List[UploadFile] = File(None, alias="CREDBASE"),
     FUNCAO: List[UploadFile] = File(None, alias="FUNCAO"),
     ANDAMENTO: List[UploadFile] = File(None, alias="ANDAMENTO"),
 ):
-    logging.info(f"\n--- PROCESSANDO CONVÊNIO: {convenio} ---")
+    logging.info(f"\n--- INICIANDO VALIDAÇÃO: {convenio} ---")
+    if consignataria:
+        logging.info(f"Consignatária: {consignataria}")
     
     ValidadorClass = CONVENIO_MAP.get(convenio, CONSIGFACIL)
+    
     CAMINHO_SAIDA = os.path.join(os.getcwd(), "output_data", convenio.replace(' ', '_').replace('.', ''))
     os.makedirs(CAMINHO_SAIDA, exist_ok=True)
-    
-    # Leitura Unificada (Sem precisar especificar se é CSV ou Excel)
-    averbados_df = read_and_unify_files(AVERBADOS)
-    conciliacao_df = read_and_unify_files(CONCILIACAO)
-    liquidados_df = read_and_unify_files(LIQUIDADOS)
-    liminar_df = read_and_unify_files(LIMINAR)
-    historico_df = read_and_unify_files(HISTORICO_DE_REFINS)
-    credbase_df = read_and_unify_files(CREDBASE_AKRK_E_DIG)
-    funcao_df = read_and_unify_files(FUNCAO) # Agora aceita .xlsx ou .csv automaticamente
-    andamento_df = read_and_unify_files(ANDAMENTO)
 
+    # Leitura dos arquivos
     try:
-        validador = ValidadorClass(
-            portal_file_list=averbados_df, 
-            convenio=convenio,
-            credbase=credbase_df,
-            funcao=funcao_df,
-            conciliacao=conciliacao_df,
-            andamento_list=andamento_df,
-            caminho=CAMINHO_SAIDA,
-            liquidados=liquidados_df,
-            historico_refin=historico_df,
-            tutela=liminar_df 
-        )        
+        averbados_df = await read_and_unify_files(AVERBADOS)
+        conciliacao_df = await read_and_unify_files(CONCILIACAO)
+        liquidados_df = await read_and_unify_files(LIQUIDADOS)
+        liminar_df = await read_and_unify_files(LIMINAR)
+        historico_df = await read_and_unify_files(HISTORICO_DE_REFINS)
+        credbase_df = await read_and_unify_files(CREDBASE_AKRK_E_DIG)
+        funcao_df = await read_and_unify_files(FUNCAO)
+        andamento_df = await read_and_unify_files(ANDAMENTO)
+
+
+        # Instanciação Condicional
+        if ValidadorClass == CODATA:
+            # CODATA exige consignatária
+            validador = ValidadorClass(
+                portal_file_list=averbados_df,
+                convenio=convenio,
+                credbase=credbase_df,
+                funcao=funcao_df,
+                consignataria=consignataria, # Passa o valor aqui
+                conciliacao=conciliacao_df,
+                liquidados=liquidados_df,
+                andamento_list=andamento_df,
+                caminho=CAMINHO_SAIDA,
+                tutela=liminar_df,
+                orbital=None 
+            )
+        else:
+            # CONSIGFACIL (Padrão)
+            validador = ValidadorClass(
+                portal_file_list=averbados_df, 
+                convenio=convenio,
+                credbase=credbase_df,
+                funcao=funcao_df,
+                conciliacao=conciliacao_df,
+                andamento_list=andamento_df,
+                caminho=CAMINHO_SAIDA,
+                liquidados=liquidados_df,
+                historico_refin=historico_df,
+                tutela=liminar_df 
+            )
+
         return {"message": "Sucesso", "output_path": CAMINHO_SAIDA}
 
     except Exception as e:
-        logging.error(f"Erro no processamento: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"FALHA NO PROCESSAMENTO: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")

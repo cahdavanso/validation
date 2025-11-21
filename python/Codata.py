@@ -19,7 +19,8 @@ class CODATA:
         self.averbados = portal_file_list if portal_file_list is not None else pd.DataFrame()
 
         # Credbase
-        self.creds_unficados = credbase if credbase is not None else pd.DataFrame()
+        self.creds_unificados = credbase if credbase is not None else pd.DataFrame()
+        
 
         # Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
@@ -45,7 +46,6 @@ class CODATA:
         # Tutela (Liminar) - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
         self.tutela = tutela if tutela is not None else pd.DataFrame()
         self.caminho = caminho
-
         # Orbitall - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
         self.orbital = orbital if orbital is not None else pd.DataFrame()
         
@@ -330,11 +330,11 @@ class CODATA:
     def unificacao_creds(self):
 
         # RENOMEIA A COLUNA CODIGO_CREDBASE
-        if 'Codigo Credbase' in self.creds_unficados.columns:
-            cred = self.creds_unficados.rename(columns={'Codigo Credbase': 'Codigo_Credbase'})
-            self.creds_unficados = cred
+        if 'Codigo Credbase' in self.creds_unificados.columns:
+            cred = self.creds_unificados.rename(columns={'Codigo Credbase': 'Codigo_Credbase'})
+            self.creds_unificados = cred
 
-        credbase_reduzido = self.creds_unficados[['Codigo_Credbase', 'Banco(s) quitado(s)', 'Filial', 'Esteira',
+        credbase_reduzido = self.creds_unificados[['Codigo_Credbase', 'Banco(s) quitado(s)', 'Filial', 'Esteira',
                                                  'Esteira(dias)', 'Tipo', 'Operacao', 'Situacao', 'Inicio', 'Cliente',
                                                  'Data Averbacao', 'CPF', 'Convenio', 'Banco', 'Parcela', 'Prazo',
                                                  'Tabela', 'Matricula']]
@@ -348,7 +348,7 @@ class CODATA:
 
         credbase_reduzido.to_excel(fr'{self.caminho}\CREDBASE UNIFICADO.xlsx', index=False)
 
-        # print(self.creds_unficados)
+        # print(self.creds_unificados)
 
         return credbase_reduzido
 
