@@ -51,7 +51,7 @@ class CONSIGFACIL:
         self.tutela = tutela if tutela is not None else pd.DataFrame()
 
         # 8. Histórico
-        self.historico = historico_refin if historico_refin is not None else pd.DataFrame()
+        self.historico = historico_refin if historico_refin is not None else None
 
 
         # --- GATILHO: Inicia a lógica original automaticamente ---
