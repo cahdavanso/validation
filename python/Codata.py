@@ -61,6 +61,15 @@ class CODATA:
 
         conciliacao = self.conciliacao.copy()
 
+        # Esteiras
+        esteiras_permitidas = ['11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
+                               'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
+                               '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
+                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "ANDAMENTO"
+                              ]
+        
+        # print(f'Esteiras Únicas do front: {front_consig["dsEsteira"].unique()}')
+
         # Vamos renomear a primeira coluna da conciliação
         conciliacao.rename(columns={conciliacao.columns[0]: 'CONTRATOS'}, inplace=True)
         # Converte para lista de colunas
@@ -70,12 +79,29 @@ class CODATA:
         conciliacao.columns = cols
         conciliacao['CONTRATOS'] = conciliacao['CONTRATOS'].astype('Int64')
 
+        # Adiciona a coluna de tipo de conciliação
         print(f'colunas de front consig: {front_consig.columns}')
         tipo_conci = front_consig['nrContrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
 
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
-        front_consig.to_excel(
+        # Adiciona só as esteiras que podem ser lançadas
+        front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
+
+        # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
+        front_consig_cartao_conciliacao = front_consig_esteiras[front_consig_esteiras['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
+
+        # Separar o que não é cartão de crédito da conciliação
+        front_consig_nao_cartao = front_consig_esteiras[~front_consig_esteiras['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
+
+        # Pegar o que é CARTAO DE CREDITO do front
+        condicao_cartao = ['CARTAO DE CREDITO']
+        front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['dsTipoOperacao'].isin(condicao_cartao)].copy()
+
+        # Faz concat dos dois dataframes
+        front_consig_trabalhado = pd.concat([front_consig_cartao_conciliacao, front_consig_cartao_front])
+
+        front_consig_trabalhado.to_excel(
         fr'{self.caminho}\TESTE FRONT VALIDATION GOV PB.xlsx', 
         index=False, 
         )
