@@ -363,6 +363,7 @@ body {
     display: flex;
     align-items: center;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    
 }
 
 .search-box input {
@@ -374,6 +375,8 @@ body {
     outline: none;
     font-size: 0.95rem;
 }
+
+
 
 .list-options {
     list-style: none;
@@ -653,4 +656,20 @@ body {
 .custom-text-input::placeholder {
     color: var(--text-muted);
     opacity: 0.7;
+}
+
+/* Define a animação de rotação */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Aplica a animação na classe que você já colocou no JS */
+.icon-spin {
+    display: inline-block; /* Garante que o elemento respeite a rotação */
+    animation: spin 1s linear infinite; /* Roda infinitamente, levando 1s por volta */
 }

@@ -43,6 +43,8 @@ CONSIGFACIL_CONVENIOS = [
 
 # --- Função Auxiliar de Leitura ---
 async def read_and_unify_files(file_list: List[UploadFile]):
+    conv: str = Form(...)
+
     if not file_list:
         return None
     lista_df = []
@@ -55,6 +57,8 @@ async def read_and_unify_files(file_list: List[UploadFile]):
 
             if filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(file_obj)
+            elif filename == 'liminar' and filename.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_obj, sheet_name='DEMAIS CONVÊNIOS')
             else:
                 try:
                     file_obj.seek(0)
@@ -93,10 +97,11 @@ async def validar_planilhas(
     LIMINAR: List[UploadFile] = File(None, alias="LIMINAR"),
     HISTORICO_DE_REFINS: List[UploadFile] = File(None, alias="HISTORICO_DE_REFINS"),
     CREDBASE: List[UploadFile] = File(None, alias="CREDBASE"),
+    FRONT: List[UploadFile] = File(None, alias="FRONT"),
     FUNCAO: List[UploadFile] = File(None, alias="FUNCAO"),
     ANDAMENTO: List[UploadFile] = File(None, alias="ANDAMENTO"),
     ORBITAL: List[UploadFile] = File(None, alias="ORBITAL"),
-    CASOS_CAPITAL: List[UploadFile] = File(None, alias="CASOS_CAPITAL")
+    CASOS_CAPITAL: List[UploadFile] = File(None, alias="CASOS_CAPITAL"),
 ):
     logging.info(f"\n--- INICIANDO VALIDAÇÃO: {convenio} ---")
     
@@ -120,6 +125,7 @@ async def validar_planilhas(
         liminar_df = await read_and_unify_files(LIMINAR)
         historico_df = await read_and_unify_files(HISTORICO_DE_REFINS)
         credbase_df = await read_and_unify_files(CREDBASE)
+        front_df = await read_and_unify_files(FRONT)
         funcao_df = await read_and_unify_files(FUNCAO)
         andamento_df = await read_and_unify_files(ANDAMENTO)
         orbital_df = await read_and_unify_files(ORBITAL)
@@ -133,6 +139,7 @@ async def validar_planilhas(
                 portal_file_list=averbados_df,
                 convenio=convenio,
                 credbase=credbase_df,
+                front = front_df,
                 funcao=funcao_df,
                 consignataria=consignataria, 
                 conciliacao=conciliacao_df,

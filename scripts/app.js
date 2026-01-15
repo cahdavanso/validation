@@ -17,8 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL].sort();
 
-    const FIELDS_CONSIGFACIL = ["CREDBASE", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS", "ANDAMENTO", "AVERBADOS", "HISTORICO_DE_REFINS"];
-    const FIELDS_CODATA = ["CREDBASE", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS", "ANDAMENTO", "AVERBADOS", "ORBITAL"];
+    const FIELDS_CONSIGFACIL = ["CREDBASE", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS", "ANDAMENTO", "AVERBADOS", "HISTORICO_DE_REFINS", "ORBITAL"];
+    const FIELDS_CODATA = ["FRONT", "CREDBASE", "FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS", "ANDAMENTO", "AVERBADOS", "ORBITAL"];
     const FIELDS_INSS = ["FUNCAO", "CONCILIACAO", "LIMINAR", "LIQUIDADOS", "AVERBADOS", "ORBITAL", "CASOS_CAPITAL"];
 
     const fileDataMap = {}; 
@@ -121,6 +121,10 @@ document.addEventListener('DOMContentLoaded', () => {
     convenioSearch.addEventListener('input', (e) => {
         const query = e.target.value.toUpperCase();
         renderConvenios(ALL_CONVENIOS.filter(c => c.toUpperCase().includes(query)));
+    });
+    convenioSearch.addEventListener('click', (e) => {
+    // Isso impede que o clique chegue ao 'document' e dispare o fechamento
+    e.stopPropagation(); 
     });
 
     if (selectConsigButton) {

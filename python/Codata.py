@@ -4,13 +4,14 @@ import openpyxl
 from datetime import datetime
 import numpy as np
 import tabula
+import xlsxwriter
 
 rejeitados = ['/']
 
 class CODATA:
 # Dentro de python/Codata.py
 
-    def __init__(self, portal_file_list, convenio, credbase, funcao, consignataria, conciliacao, liquidados, andamento_list, caminho, tutela=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, credbase, funcao, consignataria, conciliacao, liquidados, caminho, andamento_list=None, tutela=None, orbital=None):
 
         # A API FastAPI já leu, unificou e tratou a codificação. 
         # Aqui, apenas atribuímos o DataFrame ou inicializamos como vazio se for None.
@@ -21,6 +22,8 @@ class CODATA:
         # Credbase
         self.creds_unificados = credbase if credbase is not None else pd.DataFrame()
         
+        # Front
+        self.front = front if front is not None else pd.DataFrame()
 
         # Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
@@ -50,7 +53,33 @@ class CODATA:
         self.orbital = orbital if orbital is not None else pd.DataFrame()
         
         # Chama a primeira função da cadeia de processamento
+        self.tratamento_front()
         self.tratamento_funcao()
+        
+    def tratamento_front(self):
+        front_consig = self.front.copy()
+
+        conciliacao = self.conciliacao.copy()
+
+        # Vamos renomear a primeira coluna da conciliação
+        conciliacao.rename(columns={conciliacao.columns[0]: 'CONTRATOS'}, inplace=True)
+        # Converte para lista de colunas
+        cols = list(conciliacao.columns)
+
+        # Atualiza o DataFrame com novos nomes
+        conciliacao.columns = cols
+        conciliacao['CONTRATOS'] = conciliacao['CONTRATOS'].astype('Int64')
+
+        print(f'colunas de front consig: {front_consig.columns}')
+        tipo_conci = front_consig['nrContrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+
+        front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
+
+        front_consig.to_excel(
+        fr'{self.caminho}\TESTE FRONT VALIDATION GOV PB.xlsx', 
+        index=False, 
+        )
+
 
     def tratamento_funcao(self):
         funcao = self.funcao_bruto
@@ -98,7 +127,7 @@ class CODATA:
         # Criação do Credbase Semi Trabalhado
         condicoes_1 = ['11 FORMALIZAÇÃO ', '07.0 QUITAÇÃO - LIBERAÇÃO TROCO', '07.4 ENVIA CESSÃO FUNDO',
                        '11.2  DETERMINAÇÃO JUDICIAL', '10.7.0 INGRESSAR COM PROCESSO OU AÇÃO JURIDICO',
-                       '10.7.1 ACORDO EM ANDAMENTO', '02.03 AGUARDANDO PROCESSAMENTO CARTÃO',
+                       '02.03 AGUARDANDO PROCESSAMENTO CARTÃO',
                        '02.3 AGUARDANDO PROCESSAMENTO DE CARTÃO',
                        '07.0 QUITACAO – ENVIO DE CESSAO', '07.1 – QUITACAO – PAGAMENTO AO CLIENTE',
                        '07.1.1 QUITACAO - CORRECAO DE CCB', '07.2 TED DEVOLVIDA – PAGAMENTO AO CLIENTE',
@@ -110,8 +139,7 @@ class CODATA:
                        '10.5 AGUARDANDO AVERBACAO COMPRA OUTROS CONVENIOS', '07.0 QUITACAO \x96 ENVIO DE CESSAO',
                        '10.6 CONTRATO AVERBADO - AGUARDANDO COMPROVANTE DE RESERVA',
                        '02.03 AGUARDANDO PROCESSAMENTO CARTÃO', 'INTEGRADO', 'RISCO DA OPERAÇÃO - ÓBITO',
-                       'RISCO DA OPERAÇÂO-DEMAIS SITUAÇÕES',
-                       '10.7 CONTRATO NÃO AVERBADO - AGUARDANDO RESOLUÇÃO', '11.1 CONTRATO FÍSICO ENVIADO AO BANCO ',
+                       'RISCO DA OPERAÇÂO-DEMAIS SITUAÇÕES', '10.7 CONTRATO NÃO AVERBADO - AGUARDANDO RESOLUÇÃO', '11.1 CONTRATO FÍSICO ENVIADO AO BANCO ',
                        '11.PROBLEMAS DE AVERBAÇÃO', '15.0\tRISCO DA OPERAÇÂO-DEMAIS SITUAÇÕES',
                        '15.0	RISCO DA OPERAÇÂO-DEMAIS SITUAÇÕES', '14.0 RISCO DA OPERAÇÃO - ÓBITO',
                        '07.4 ENVIA CESSAO FUNDO', '08.0 LIBERACAO TROCO', '07.1 AGUARDANDO AVERBACAO',
@@ -172,14 +200,24 @@ class CODATA:
 
         # Condição 2: Coluna 'PRODUTO' contém 'EMPRESTIMO' ou 'BENS DURAVEIS'
         if self.consignataria == "CAPITAL":
+            print(funcao['PRODUTO'].unique())
             # segue sua lógica original para CAPITAL
+
+            mask_cartao_plastico = funcao['PRODUTO'].str.contains('CARTÃ\x83O PLÃ\x81STICO|CARTÃO PLÁSTICO', na=False)
+
             mask_produto = (
                     funcao['PRODUTO'].str.contains('EMPRESTIMO', na=False)
+                    | funcao['PRODUTO'].str.contains('EMPRÃ\x89STIMO', na=False)
                     | funcao['PRODUTO'].str.contains('BENS DURAVEIS', na=False)
                     | funcao['PRODUTO'].str.contains('EMPR COMPRA DIVIDA', na=False)
-                    | funcao['PRODUTO'].str.contains('CARTÃO PLÁSTICO', na=False)
                     | funcao['PRODUTO'].str.contains('CARTAO BENEFICIO', na=False)
+                    | funcao['PRODUTO'].str.contains('ADIANTAMENTO SALARIAL', na=False)
             )
+
+            mask_produto_orbital = (
+
+            )
+
             mask_origem_4 = (funcao['ORIGEM_4'].str.contains('INSPFEM', na=False))
 
             # Máscara final
@@ -190,7 +228,7 @@ class CODATA:
             # Sempre "NÃO" se for CARTÃO PLÁSTICO
             print(funcao['PRODUTO'].unique())
 
-            mask_cartao_plastico = funcao['PRODUTO'].str.contains('CARTÃ\x83O PLÃ\x81STICO', na=False)
+            mask_cartao_plastico = funcao['PRODUTO'].str.contains('CARTÃ\x83O PLÃ\x81STICO|CARTÃO PLÁSTICO', na=False)
 
             # "NÃO" se não for CARTÃO BENEFÍCIO nem ADIANTAMENTO SALARIAL,
             # mas somente quando também não for GOV PB INSPFEM
@@ -201,23 +239,19 @@ class CODATA:
             )
 
             # Máscara final = casos que devem receber "NÃO"
-            mask_final = mask_diff | mask_cartao_plastico | mask_produto
+            mask_final = mask_diff | mask_produto
 
         # print(funcao['OBS'][funcao['OBS'] == "NÃO"])
 
         # CONCILIAÇÃO
         conciliacao_tratado = self.trata_conciliacao()
 
-        # Converte para lista de colunas
-        cols = list(conciliacao_tratado.columns)
+
 
         # Encontra o índice da primeira ocorrência de "CONTRATO" e altera
-        for i, c in enumerate(cols):
-            if c == "CONTRATO" and c != "CONTRATOS":
-                cols[i] = "CONTRATOS"  # só a primeira vez
-                break
-            else:
-                break
+        conciliacao_tratado.rename(columns={conciliacao_tratado.columns[0]: 'CONTRATOS'}, inplace=True)
+        # Converte para lista de colunas
+        cols = list(conciliacao_tratado.columns)
 
         # Atualiza o DataFrame com novos nomes
         conciliacao_tratado.columns = cols
@@ -286,6 +320,7 @@ class CODATA:
         mask_positivo = funcao['Saldo'] >= 0
         funcao.loc[mask_positivo, 'OBS'] = "NÃO"
         # Agora, aplique o 'NÃO' nos locais corretos usando a máscara
+        funcao.loc[mask_cartao_plastico, 'OBS'] = 'NÃO LANÇAR - ORBITAL'
         funcao.loc[mask_final, 'OBS'] = 'NÃO'
 
         # Verifica se CONTSE LOCAL é igual á CONTSE SEMI CRED e se existe na concilicação
@@ -293,14 +328,15 @@ class CODATA:
             if (
                     row['CONTSE LOCAL'] == row['CONTSE SEMI TRABALHADO']
                     and row['CONTRATO CONCILIACAO'] != ''
-                    and "EMPRESTIMO" not in str(row['PRODUTO']) and "BENS DURAVEIS" not in str(row['PRODUTO'])
-                    and "EMPR COMPRA DIVIDA" not in str(row['PRODUTO']) and "CARTÃ\x83O PLÃ\x81STICO" not in str(
-                row['PRODUTO'])
+                    and "EMPRESTIMO" not in str(row['PRODUTO']) and "EMPRÃ\x89STIMO" not in str(row['PRODUTO']) and
+                    "EMPRÉSTIMO" not in str(row['PRODUTO']) and "BENS DURAVEIS" not in str(row['PRODUTO'])
+                    and "EMPR COMPRA DIVIDA" not in str(row['PRODUTO']) and "CARTÃ\x83O PLÃ\x81STICO" not in str(row['PRODUTO'])
+                    and "CARTÃO PLÁSTICO" not in str(row['PRODUTO'])
             ):
                 funcao.loc[idx, 'OBS'] = ''
 
         # FUNÇÃO INTERMEDIARIO
-        funcao.to_excel(fr'{self.caminho}\FUNÇÃO INTERMEDIÁRIO.xlsx', index=False)
+        funcao.to_excel(fr'{self.caminho}\FUNCAO INTERMEDIARIO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # FUNÇÃO SEM O QUE É NÃO
         funcao_tratado = funcao[funcao['OBS'] == ''].copy()
@@ -323,9 +359,29 @@ class CODATA:
 
         funcao_tratado['OBS'] = funcao_tratado.apply(classificar_obs, axis=1)
 
-        funcao_tratado.to_excel(fr'{self.caminho}\FUNCAO COM NÃO.xlsx', index=False)
+        funcao_tratado.to_excel(fr'{self.caminho}\FUNCAO COM NÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         self.unificacao_cred_funcao(cred_semi, funcao_tratado)
+
+    def orbital_tratado(self, orbital, funcao_para_separar):
+        orbital_preparado = orbital.loc[
+            orbital['Descrição EMPREGADOR'].str.contains('INSPFEM'), ['Numero de Contrato', 'nome_mutuario', 'num_cpf_mutuario',
+                                                                      'Validação  desconto final']].copy()
+        orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+
+        funcao_so_orbital = funcao_para_separar.loc[
+            funcao_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
+            ['NR_PROP', 'CLIENTE', 'CPF', 'VLR_PARC']
+        ].copy()
+        funcao_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+
+        orbital_final = pd.concat([funcao_so_orbital, orbital_preparado])
+
+        orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
+
+        orbital_final.to_excel(fr'{self.caminho}\ORBITAL TRABALHADO INSS.xlsx', index=False)
+
+        return orbital_final
 
     def unificacao_creds(self):
 
@@ -346,9 +402,9 @@ class CODATA:
         credbase_reduzido['Parcela'] = credbase_reduzido['Parcela'].str.replace(',', '.')
         credbase_reduzido['Parcela'] = pd.to_numeric(credbase_reduzido['Parcela'], errors='coerce')
 
-        credbase_reduzido.to_excel(fr'{self.caminho}\CREDBASE UNIFICADO.xlsx', index=False)
+        credbase_reduzido.to_excel(fr'{self.caminho}\CREDBASE UNIFICADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
-        # print(self.creds_unificados)
+        # print(i)
 
         return credbase_reduzido
 
@@ -370,7 +426,7 @@ class CODATA:
         funcao.insert(4, 'Esteira', '', True)
         funcao['Esteira'] = 'INTEGRADO'
 
-        funcao.to_excel(fr'{self.caminho}\Funcao tratado.xlsx', index=False)
+        funcao.to_excel(fr'{self.caminho}\FUNCAO TRATADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # Certificar-se de que as colunas 'Código' e 'NR_OPER' estão presentes
         if 'Codigo_Credbase' in cred.columns and 'NR_OPER_EDITADO' in funcao.columns:
@@ -476,13 +532,18 @@ class CODATA:
 
     def andamento_func(self, cred, func):
         # Andamento
+        if self.andamento is None:
+            self.credbase_trabalhado_func(cred)
+            return
+
+
         funcao = func.copy()
         # Primeiro, criamos um dicionário de correspondência
         # modalidade_dict = andam_file.set_index('Código na instituição')['Modalidade'].to_dict()
         # prazo_dict = andam_file.set_index('Código na instituição')['Prazo Total'].to_dict()
 
         andam_file = self.trata_cod_and(self.andamento)
-        andam_file.to_excel(rf'{self.caminho}\ANDAMENTO_TESTE.xlsx', index=False)
+        andam_file.to_excel(rf'{self.caminho}\ANDAMENTO_TESTE {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # Função para decidir o valor da nova modalidade
         def substituir_modalidade():
@@ -645,15 +706,16 @@ class CODATA:
     def trata_conciliacao(self):
         conciliacao_tratado = self.conciliacao
         # Converte para lista de colunas
+        conciliacao_tratado.rename(columns={conciliacao_tratado.columns[0]: 'CONTRATOS'}, inplace=True)
         cols = list(conciliacao_tratado.columns)
 
         # Encontra o índice da primeira ocorrência de "CONTRATO" e altera
-        for i, c in enumerate(cols):
+        '''for i, c in enumerate(cols):
             if c == "CONTRATO" and c != "CONTRATOS":
                 cols[i] = "CONTRATOS"  # só a primeira vez
                 break
             else:
-                break
+                break'''
 
         conciliacao_tratado.columns = cols
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype(str)
@@ -700,7 +762,7 @@ class CODATA:
 
         condicoes_1 = ['11 FORMALIZAÇÃO ', '07.0 QUITAÇÃO - LIBERAÇÃO TROCO', '07.4 ENVIA CESSÃO FUNDO',
                        '11.2  DETERMINAÇÃO JUDICIAL', '10.7.0 INGRESSAR COM PROCESSO OU AÇÃO JURIDICO',
-                       '10.7.1 ACORDO EM ANDAMENTO', '02.03 AGUARDANDO PROCESSAMENTO CARTÃO', '02.3 AGUARDANDO PROCESSAMENTO DE CARTÃO',
+                       '02.03 AGUARDANDO PROCESSAMENTO CARTÃO', '02.3 AGUARDANDO PROCESSAMENTO DE CARTÃO',
                        '07.0 QUITACAO – ENVIO DE CESSAO', '07.1 – QUITACAO – PAGAMENTO AO CLIENTE',
                        '07.1.1 QUITACAO - CORRECAO DE CCB', '07.2 TED DEVOLVIDA – PAGAMENTO AO CLIENTE',
                        '10.3.1 CONTRATO AVERBADO AGUARDANDO LIQUIDAÇÃO REFIN',
@@ -905,7 +967,7 @@ class CODATA:
 
         # print(f"OBS 475458: {credbase_trabalhado['Saldo'][credbase_trabalhado['Codigo_Credbase'] == '475458']}")
 
-        credbase_trabalhado.to_excel(fr'{self.caminho}\TESTE CREDBASE TRABALHADO.xlsx', index=False)
+        credbase_trabalhado.to_excel(fr'{self.caminho}\TESTE CREDBASE TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         '''print(f'Bancos quitados: {credbase_trabalhado['Banco(s) quitado(s)'][credbase_trabalhado['Codigo_Credbase'] == '480596']}')
         print(f'Prazo: {credbase_trabalhado['PRAZO'][credbase_trabalhado['Codigo_Credbase'] == '480596']}')
@@ -968,7 +1030,7 @@ class CODATA:
         # print(df_refin)
 
         # Transforma em xlsx
-        credbase_trabalhado.to_excel(fr'{self.caminho}\Credbase Trabalhado.xlsx', index=False)
+        credbase_trabalhado.to_excel(fr'{self.caminho}\CREDBASE TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
         # print(len(credbase_trabalhado))
 
         # print(df_refin)
@@ -1097,7 +1159,7 @@ class CODATA:
         # 7. (Opcional) Remove a coluna auxiliar que criamos.
         # averbado_novo = averbado_novo.drop(columns=['SOMA ACUMULADA DA RESERVA'])
 
-        averbado_novo.to_excel(fr'{self.caminho}\TRABALHADO AVERBADO.xlsx', index=False)
+        averbado_novo.to_excel(fr'{self.caminho}\TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
         averbado_novo['VALOR A LANÇAR'] = pd.to_numeric(averbado_novo['VALOR A LANÇAR'], errors='coerce')
         averbado_novo['VALOR A LANÇAR'] = averbado_novo['VALOR A LANÇAR'].map('{:.2f}'.format)
         averbado_novo['VALOR A LANÇAR'] = averbado_novo['VALOR A LANÇAR'].astype(str)
