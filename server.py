@@ -138,28 +138,20 @@ async def validar_planilhas(
             validador = CODATA(
                 portal_file_list=averbados_df,
                 convenio=convenio,
-                credbase=credbase_df,
                 front = front_df,
-                funcao=funcao_df,
                 consignataria=consignataria, 
                 conciliacao=conciliacao_df,
-                liquidados=liquidados_df,
                 andamento_list=andamento_df,
-                caminho=CAMINHO_SAIDA,
-                tutela=liminar_df,
-                orbital=orbital_df
+                caminho=CAMINHO_SAIDA
             )
 
         elif convenio in INSS_CONVENIO:
             logging.info("Usando validador: INSS")
             validador = INSS(
                 portal_file_list=averbados_df,
-                funcao=funcao_df,
+                front=front_df,
                 conciliacao=conciliacao_df,
-                liquidados=liquidados_df,
                 caminho=CAMINHO_SAIDA,
-                tutela=liminar_df,
-                orbital=orbital_df,
                 casos_capital=casoscapital_df
             )
 
@@ -169,14 +161,10 @@ async def validar_planilhas(
             validador = CONSIGFACIL(
                 portal_file_list=averbados_df, 
                 convenio=convenio,
-                credbase=credbase_df,
-                funcao=funcao_df,
+                front=front_df,
                 conciliacao=conciliacao_df,
                 andamento_list=andamento_df,
                 caminho=CAMINHO_SAIDA,
-                liquidados=liquidados_df,
-                historico_refin=historico_df,
-                tutela=liminar_df 
             )
 
         return {"message": "Validação concluída com sucesso!", "output_path": CAMINHO_SAIDA}

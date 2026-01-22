@@ -11,46 +11,26 @@ rejeitados = ['/']
 class CODATA:
 # Dentro de python/Codata.py
 
-    def __init__(self, portal_file_list, convenio, front, credbase, funcao, consignataria, conciliacao, liquidados, caminho, andamento_list=None, tutela=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, caminho, andamento_list=None):
 
         # A API FastAPI já leu, unificou e tratou a codificação. 
         # Aqui, apenas atribuímos o DataFrame ou inicializamos como vazio se for None.
+        self.caminho = caminho
         
         # Averbados (portal_file_list)
         self.averbados = portal_file_list if portal_file_list is not None else pd.DataFrame()
-
-        # Credbase
-        self.creds_unificados = credbase if credbase is not None else pd.DataFrame()
         
         # Front
         self.front = front if front is not None else pd.DataFrame()
 
         # Andamento
-        self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
+        self.andamento = andamento_list if andamento_list is not None else None
 
         self.convenio = convenio
         self.consignataria = consignataria
 
-        # Função (funcao_bruto) - CORREÇÃO: Trata None para evitar pd.read_csv(None, ...)
-        self.funcao_bruto = funcao if funcao is not None else pd.DataFrame()
-
         # Conciliação - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
-        self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()
-
-        # Liquidados - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
-        self.liquidados_file = liquidados if liquidados is not None else pd.DataFrame()
-
-        # Lógica de validação do arquivo liquidados
-        if not self.liquidados_file.empty:
-            # Certificando que o tipo dos contratos do Operações Liquidadas
-            if 'Nº OPERAÇÃO' in self.liquidados_file.columns:
-                self.liquidados_file['Nº OPERAÇÃO'] = self.liquidados_file['Nº OPERAÇÃO'].astype(str)
-        
-        # Tutela (Liminar) - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
-        self.tutela = tutela if tutela is not None else pd.DataFrame()
-        self.caminho = caminho
-        # Orbitall - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
-        self.orbital = orbital if orbital is not None else pd.DataFrame()
+        self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()    
         
         # Chama a primeira função da cadeia de processamento
         front_trabalhado = self.tratamento_front()
@@ -110,7 +90,10 @@ class CODATA:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão
-        front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False) & ~front_consig_validado_termino['dsTipoOperacao'].str.contains('CARTAO DE CREDITO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        if self.consignataria == 'CAPITAL':
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False) & ~front_consig_validado_termino['dsTipoOperacao'].str.contains('CARTAO DE CREDITO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        else:
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Adiantamento Salarial', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO INSPFEM'
 
         # Marca consignatária errada
         if self.consignataria == 'CAPITAL':
@@ -131,18 +114,22 @@ class CODATA:
     def tratamento_front(self):
         front_consig = self.tratamento_front_preliminar()
 
-        # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
+        if self.consignataria == 'CAPITAL':
+            # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
+            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
 
-        # Separar o que não é cartão de crédito da conciliação
-        front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
+            # Separar o que não é cartão de crédito da conciliação
+            front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
 
-        # Pegar o que é CARTAO DE CREDITO do front
-        condicao_cartao = ['CARTAO DE CREDITO']
-        front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['dsTipoOperacao'].isin(condicao_cartao)].copy()
-
-        # Faz concat dos dois dataframes
-        front_consig_trabalhado = pd.concat([front_consig_cartao_conciliacao, front_consig_cartao_front])
+            # Pegar o que é CARTAO DE CREDITO do front
+            condicao_cartao = ['CARTAO DE CREDITO']
+            front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['dsTipoOperacao'].isin(condicao_cartao)].copy()
+            # Faz concat dos dois dataframes
+            front_consig_trabalhado = pd.concat([front_consig_cartao_conciliacao, front_consig_cartao_front])
+        else:
+            # Separa apenas o que retornou como "INSPFEM - CARD" no tipo de conciliação
+            front_consig_cartao_conciliacao = front_consig[(front_consig['Tipo Conciliação'].str.contains('Adiantamento Salarial', na=False)) & (front_consig['OBS'] != 'NÃO LANÇAR - ORBITAL')].copy()
+            front_consig_trabalhado = front_consig_cartao_conciliacao
 
         # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['AcaoJudicial'] != 1].copy()
@@ -165,10 +152,15 @@ class CODATA:
         front_consig_trabalhado.loc[front_consig_trabalhado['Saldo'] > 0.1, 'Valor a lançar'] = 0
         front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Valor a lançar'] > 0].copy()
 
+        # -------------------------------------- TIRA O PRAZO ----------------------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['OBS'].str.contains('NÃO LANÇAR - PRAZO', na=False)].copy()
+
         front_consig_trabalhado.to_excel(
         fr'{self.caminho}\TESTE FRONT VALIDATION GOV PB.xlsx',
         index=False, 
         )
+
+        
 
         return front_consig_trabalhado
 
@@ -215,9 +207,6 @@ class CODATA:
         valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['vlPrestacao'])
 
         front_copy['Valor a lançar'] = valor_a_lancar
-
-        front_copy.to_excel(fr'{self.caminho}\TESTE FRONT VALIDATION TERMINO GOV PB.xlsx', index=False)
-
 
         return front_copy
 
@@ -461,7 +450,7 @@ class CODATA:
             qtd_contratos = front_consig.groupby('nrCpf').size() * 25
 
             # 3. Soma por CPF no orbital
-            somase_orbital = orbitall.groupby('CPF/CNPJ')['Valor da Parcela'].sum()
+            somase_orbital = orbitall.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
 
             # 4. Combina tudo em um único dataframe
             soma_total = (

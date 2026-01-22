@@ -8,30 +8,21 @@ import os
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 class INSS:
-    def __init__(self, portal_file_list, funcao, conciliacao, liquidados, caminho, tutela=None, orbital=None, casos_capital=None):
+    def __init__(self, portal_file_list, front,conciliacao, caminho, casos_capital=None):
         
         # --- ADAPTAÇÃO: Recebendo DataFrames do server.py ---
         
-        # Orbital
-        self.orbital = orbital if orbital is not None else pd.DataFrame()
-        
-        # Função
-        self.funcao_bruto = funcao if funcao is not None else pd.DataFrame()
-        
         # Averbados (portal_file_list)
         self.averbados = portal_file_list if portal_file_list is not None else pd.DataFrame()
+
+        # Front
+        self.front = front if front is not None else None
         
         # Casos Capital
         self.casos_capital = casos_capital if casos_capital is not None else pd.DataFrame()
         
-        # Liquidados (Operações Liquidadas)
-        self.op_liq = liquidados if liquidados is not None else pd.DataFrame()
-        
         # Conciliação
         self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()
-        
-        # Tutela (Liminar)
-        self.tutela = tutela if tutela is not None else pd.DataFrame()
         
         self.caminho = caminho
 
@@ -76,6 +67,77 @@ class INSS:
         conciliacao_tratado['Saldo'] = conciliacao_tratado['Pago'] + conciliacao_tratado['RECEBIDO GERAL']
 
         return conciliacao_tratado
+    
+    def tratamento_front_preliminar(self):
+        front_consig = self.front.copy()
+
+        conciliacao = self.conciliacao.copy()
+
+        # Insere as colunas vazias necessárias
+        front_consig.insert(21, 'Saldo', '', True)
+        front_consig.insert(22, 'Valor a lançar', '', True)
+        front_consig.insert(23, 'OBS', '', True)
+        front_consig.insert(24, '')
+
+        print(f'Esteiras Únicas do front: {front_consig["dsEsteira"].unique()}')
+
+        # Esteiras
+        esteiras_permitidas = ['11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
+                               'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
+                               '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
+                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "ANDAMENTO", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO"
+                              ]
+        
+        # Vamos renomear a primeira coluna da conciliação
+        conciliacao.rename(columns={conciliacao.columns[0]: 'CONTRATOS'}, inplace=True)
+        # Converte para lista de colunas
+        cols = list(conciliacao.columns)
+
+        # Atualiza o DataFrame com novos nomes
+        conciliacao.columns = cols
+        conciliacao['CONTRATOS'] = conciliacao['CONTRATOS'].astype('Int64')
+
+        # Adiciona a coluna de tipo da Conciliação
+        print(f'colunas de front consig: {front_consig.columns}')
+        tipo_conci = front_consig['nrContrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
+
+        # Adiciona só as esteiras que podem ser lançadas
+        front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
+
+
+        # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
+        # Marca saldo positivo
+        front_consig_validado_termino = self.validacao_termino_front(front_consig_esteiras)
+        front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > 0.1, 'OBS'] = 'NÃO LANÇAR - SALDO POSITIVO'
+
+        # Marca o que é Obito
+        # No caso de Obito estiver estiver SIM e NÃO ao invés de 1 e 0
+        front_consig_validado_termino['Obito'] = front_consig_validado_termino['Obito'].replace({'SIM': 1, 'NÃƒO': 0})
+        front_consig_validado_termino.loc[front_consig_validado_termino['AcaoJudicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
+
+        # Marca o que é Ação Judicial
+        # No caso de ação judicial estiver estiver SIM e NÃO ao invés de 1 e 0
+        front_consig_validado_termino['AcaoJudicial'] = front_consig_validado_termino['AcaoJudicial'].replace({'SIM': 1, 'NÃƒO': 0})
+        front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'OBS'] = 'NÃO LANÇAR - ÓBITO'
+
+        # Marca tudo que é orbital
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
+        
+        # Marcar liquidados em StatusContrato
+        front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
+
+        # Marca tudo que é Empréstimo
+        front_consig_validado_termino.loc[(front_consig_validado_termino['dsTipoOperacao'].str.contains('EMPRÉSTIMO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - EMPRÉSTIMO'
+
+        # Marca tudo que é Telesaque
+        front_consig_validado_termino.loc[(front_consig_validado_termino['dsTipoOperacao'].str.contains('TELESAQUE', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - TELESAQUE'
+
+        # Tira tudo que é excluído do arquivo de Averbação
+
+
+        pass  # Implementação futura se necessário
+    
 
     def tratamento_funcao(self):
         funcao = self.funcao_bruto.copy()
