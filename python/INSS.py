@@ -19,18 +19,14 @@ class INSS:
         self.front = front if front is not None else None
         
         # Casos Capital
-        self.casos_capital = casos_capital if casos_capital is not None else pd.DataFrame()
+        self.casos_capital = casos_capital if casos_capital is not None else None
         
         # Conciliação
         self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()
         
         self.caminho = caminho
 
-        # Inicia o processamento
-        if not self.funcao_bruto.empty:
-            self.tratamento_funcao()
-        else:
-            print("ERRO: O arquivo 'FUNÇÃO' está vazio ou não foi enviado. O processamento não pode continuar.")
+        self.trata_front_final()
 
     def trata_conciliacao(self):
         conciliacao_tratado = self.conciliacao.copy()
@@ -57,12 +53,12 @@ class INSS:
         soma_d8 = conciliacao_tratado[colunas_d8].sum(axis=1)
 
         # Conversão segura para cálculos
-        conciliacao_tratado['PRESTAÇÃO'] = pd.to_numeric(conciliacao_tratado['PRESTAÇÃO'], errors='coerce').fillna(0)
+        conciliacao_tratado['PMT'] = pd.to_numeric(conciliacao_tratado['PMT'], errors='coerce').fillna(0)
         conciliacao_tratado['PRAZO'] = pd.to_numeric(conciliacao_tratado['PRAZO'], errors='coerce').fillna(0)
         conciliacao_tratado['RECEBIDO GERAL'] = pd.to_numeric(conciliacao_tratado['RECEBIDO GERAL'], errors='coerce').fillna(0)
 
         # Cálculos
-        prestacao_vezes_prazo = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']
+        prestacao_vezes_prazo = conciliacao_tratado['PMT'] * conciliacao_tratado['PRAZO']
         conciliacao_tratado['Pago'] = soma_d8 - prestacao_vezes_prazo
         conciliacao_tratado['Saldo'] = conciliacao_tratado['Pago'] + conciliacao_tratado['RECEBIDO GERAL']
 
@@ -71,13 +67,29 @@ class INSS:
     def tratamento_front_preliminar(self):
         front_consig = self.front.copy()
 
+        # Trasnforma vlPrestacao em numérico
+        front_consig['vlPrestacao'] = front_consig['vlPrestacao'].astype(str).str.replace('.', '', regex=False)
+        front_consig['vlPrestacao'] = front_consig['vlPrestacao'].astype(str).str.replace(',', '.', regex=False)
+        front_consig['vlPrestacao'] = pd.to_numeric(front_consig['vlPrestacao'], errors='coerce').fillna(0)
+
         conciliacao = self.conciliacao.copy()
 
+        # Colocar traços nos contratos xxxxxxxxx-x
+        contratos_com_traço = front_consig['nrCCB'].astype(str).str.zfill(10).str.slice(0, 9) + '-' + front_consig['nrCCB'].astype(str).str.zfill(10).str.slice(9, 10)
+
         # Insere as colunas vazias necessárias
+        front_consig.insert(0, 'NR_OPER', contratos_com_traço,True)
         front_consig.insert(21, 'Saldo', '', True)
         front_consig.insert(22, 'Valor a lançar', '', True)
-        front_consig.insert(23, 'OBS', '', True)
-        front_consig.insert(24, '')
+        front_consig.insert(23, 'Análise', '', True)
+
+        situacao_averbado_index = self.averbados.set_index('NR_OPER_EDITADO')['SITUAÇÃO'].copy()
+        situacao_averbado_map = front_consig['nrContrato'].map(situacao_averbado_index.to_dict())
+        front_consig.insert(24, 'SITUAÇÃO', situacao_averbado_map, True)
+
+        valor_reajustado_index = self.averbados.set_index('NR_OPER_EDITADO')['MARGEM REAJUSTADA'].copy()
+        valor_reajustado = front_consig['nrContrato'].map(valor_reajustado_index.to_dict())
+        front_consig.insert(25, 'Valor Averbado Reajustado', valor_reajustado, True)
 
         print(f'Esteiras Únicas do front: {front_consig["dsEsteira"].unique()}')
 
@@ -85,7 +97,7 @@ class INSS:
         esteiras_permitidas = ['11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
                                'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
                                '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
-                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "ANDAMENTO", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO"
+                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO"
                               ]
         
         # Vamos renomear a primeira coluna da conciliação
@@ -99,280 +111,193 @@ class INSS:
 
         # Adiciona a coluna de tipo da Conciliação
         print(f'colunas de front consig: {front_consig.columns}')
-        tipo_conci = front_consig['nrContrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        tipo_conci = front_consig['nrContrato'].map(conciliacao.set_index('CONTRATOS')['TIPO OP'].to_dict())
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
-        front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
+        # front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
 
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
-        # Marca saldo positivo
-        front_consig_validado_termino = self.validacao_termino_front(front_consig_esteiras)
-        front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > 0.1, 'OBS'] = 'NÃO LANÇAR - SALDO POSITIVO'
-
-        # Marca o que é Obito
-        # No caso de Obito estiver estiver SIM e NÃO ao invés de 1 e 0
-        front_consig_validado_termino['Obito'] = front_consig_validado_termino['Obito'].replace({'SIM': 1, 'NÃƒO': 0})
-        front_consig_validado_termino.loc[front_consig_validado_termino['AcaoJudicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
-
-        # Marca o que é Ação Judicial
-        # No caso de ação judicial estiver estiver SIM e NÃO ao invés de 1 e 0
-        front_consig_validado_termino['AcaoJudicial'] = front_consig_validado_termino['AcaoJudicial'].replace({'SIM': 1, 'NÃƒO': 0})
-        front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'OBS'] = 'NÃO LANÇAR - ÓBITO'
-
-        # Marca tudo que é orbital
-        front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
-        
-        # Marcar liquidados em StatusContrato
-        front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
-
-        # Marca tudo que é Empréstimo
-        front_consig_validado_termino.loc[(front_consig_validado_termino['dsTipoOperacao'].str.contains('EMPRÉSTIMO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - EMPRÉSTIMO'
-
-        # Marca tudo que é Telesaque
-        front_consig_validado_termino.loc[(front_consig_validado_termino['dsTipoOperacao'].str.contains('TELESAQUE', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - TELESAQUE'
-
         # Tira tudo que é excluído do arquivo de Averbação
-
-
-        pass  # Implementação futura se necessário
-    
-
-    def tratamento_funcao(self):
-        funcao = self.funcao_bruto.copy()
-
-        # Normaliza nomes de colunas
-        funcao.columns = funcao.columns.str.strip().str.replace('ï»¿', '')
-        
-        if 'NR_OPER' not in funcao.columns and 'ï»¿NR_OPER' in funcao.columns:
-            funcao = funcao.rename(columns={'ï»¿NR_OPER': 'NR_OPER'})
-
-        if 'NR_OPER' not in funcao.columns:
-            print("ERRO CRÍTICO: Coluna NR_OPER não encontrada no arquivo Função.")
-            return
-
-        # Tratamento NR_OPER
-        funcao['NR_OPER'] = funcao['NR_OPER'].astype(str)
-        
-        codigo_editado = funcao['NR_OPER'].replace(r"\D", "", regex=True)
-        funcao.insert(1, 'NR_OPER_EDITADO', codigo_editado, True)
-        funcao['NR_OPER_EDITADO'] = funcao['NR_OPER_EDITADO'].str.slice(0, 9)
-        funcao['NR_OPER_EDITADO'] = funcao['NR_OPER_EDITADO'].astype(str)
-
-        # Insere colunas vazias se não existirem
-        cols_to_add = [
-            'CASOS CAPITAL', 'OP_LIQ', 'CONTRATO CONCILIACAO', 'STATUS CONCILIACAO', 
-            'LIMINAR', 'Saldo', 'SITUAÇÃO', 'Valor Averbado Reajustado'
-        ]
-        for col in cols_to_add:
-            if col not in funcao.columns:
-                funcao[col] = ''
-                
-        if 'Análise' not in funcao.columns:
-            funcao.insert(2, 'Análise', '', True)
-
-        funcao['Análise'] = funcao['Análise'].fillna('')
-        funcao['SITUAÇÃO'] = funcao['SITUAÇÃO'].fillna('')
-
-        # Tratamento VLR_PARC
-        if 'VLR_PARC' in funcao.columns:
-            funcao['VLR_PARC'] = funcao['VLR_PARC'].astype(str).str.replace('.', '', regex=False)
-            funcao['VLR_PARC'] = funcao['VLR_PARC'].str.replace(',', '.', regex=False)
-            funcao['VLR_PARC'] = pd.to_numeric(funcao['VLR_PARC'], errors='coerce').fillna(0)
-
-        # OP LIQUIDADO
-        if not self.op_liq.empty and 'Nº OPERAÇÃO' in self.op_liq.columns:
-            self.op_liq['Nº OPERAÇÃO'] = self.op_liq['Nº OPERAÇÃO'].astype(str)
-            funcao['OP_LIQ'] = funcao['NR_OPER'].map(
-                self.op_liq.set_index('Nº OPERAÇÃO')['Número Operação'].to_dict() if 'Número Operação' in self.op_liq.columns else self.op_liq.set_index('Nº OPERAÇÃO').index.to_series().to_dict()
-            )
-        
-        funcao['OP_LIQ'] = funcao['OP_LIQ'].fillna('')
-
-        # Máscaras de Produto (Logica Original)
-        mask_produto_orbital = (
-                funcao['PRODUTO'].str.contains('000061 - CARTÃO PLÁSTICO', na=False)
-                | funcao['PRODUTO'].str.contains('000094 - CARTÃO PLÁSTICO - RE', na=False)
-                | funcao['PRODUTO'].str.contains('CARTÃ\x83O PLÃ\x81STICO - RE', na=False)
-                | funcao['PRODUTO'].str.contains('000061 - CARTÃ\x83O PLÃ\x81STICO', na=False)
-        )
-        mask_produto_complementar = (
-                funcao['PRODUTO'].str.contains('000012 - DIG INSS REP LEGAL', na=False)
-                | funcao['PRODUTO'].str.contains('000015 - DIG INSS', na=False)
-                | funcao['PRODUTO'].str.contains('000106 - CARTÃO TS', na=False)
-                | funcao['PRODUTO'].str.contains('CARTÃ\x83O TS', na=False)
-                | funcao['PRODUTO'].str.contains('000098 - DIG INSS 30%', na=False)
-                | funcao['PRODUTO'].str.contains('000104 - CARTAO SEGURO - A VISTA', na=False)
-                | funcao['PRODUTO'].str.contains('000105 - CARTAO - SEG PARC', na=False)
-        )
-
-        # CASOS CAPITAL
-        if not self.casos_capital.empty and 'NR. OPER.' in self.casos_capital.columns:
-            self.casos_capital['NR. OPER.'] = self.casos_capital['NR. OPER.'].astype(str)
-            # Se não tiver a coluna 'Numero Operacao' explícita, usa o próprio 'NR. OPER.' como valor
-            self.casos_capital['Numero Operacao'] = self.casos_capital['NR. OPER.']
-            
-            funcao['CASOS CAPITAL'] = funcao['NR_OPER'].map(
-                self.casos_capital.set_index('NR. OPER.')['Numero Operacao'].to_dict()
-            )
-        funcao['CASOS CAPITAL'] = funcao['CASOS CAPITAL'].fillna('')
-
-        # CONCILIAÇÃO
-        conciliacao_tratado = self.trata_conciliacao()
-
-        if not conciliacao_tratado.empty:
-            # Criando DF auxiliar para mapeamento
-            contratos_conciliacao = pd.DataFrame()
-            contratos_conciliacao['CONTRATO'] = conciliacao_tratado['CONTRATOS']
-            contratos_conciliacao['CONTRATO PUXAR'] = conciliacao_tratado['CONTRATOS'] # Para ter valor não nulo
-            
-            funcao['CONTRATO CONCILIACAO'] = funcao['NR_OPER_EDITADO'].map(
-                contratos_conciliacao.set_index('CONTRATO')['CONTRATO PUXAR'].to_dict()
-            )
-            funcao['CONTRATO CONCILIACAO'] = funcao['CONTRATO CONCILIACAO'].fillna('')
-
-            # Criar coluna auxiliar (1 = preenchido, 0 = vazio)
-            funcao['has_conciliacao'] = funcao['CONTRATO CONCILIACAO'].notna() & (funcao['CONTRATO CONCILIACAO'] != '')
-
-            # Ordenar
-            funcao = funcao.sort_values(by="has_conciliacao", ascending=False).drop(columns="has_conciliacao")
-
-            # Puxar status e saldo
-            status_cols = conciliacao_tratado.filter(like='ST ')
-            if not status_cols.empty:
-                status_name = status_cols.columns[-1]
-                funcao['STATUS CONCILIACAO'] = funcao['NR_OPER_EDITADO'].map(
-                    conciliacao_tratado.set_index('CONTRATOS')[status_name].to_dict()
-                )
-
-            funcao['Saldo'] = funcao['NR_OPER_EDITADO'].map(
-                conciliacao_tratado.set_index('CONTRATOS')['Saldo'].to_dict()
-            )
-
-        # Lógica de Análise
         def obs_situacao(row):
-            situacao = str(row['SITUAÇÃO']).strip()
-            if situacao not in ['0 - Ativo', 'Ativo', 'nan', '']:
-                return f'NÃO - {situacao}'
-            elif situacao in ['0 - Ativo', 'Ativo']:
+            # 1. Pega o valor bruto primeiro
+            valor_bruto = row['SITUAÇÃO']
+            
+            # 2. Verifica se é nulo (NaN) ANTES de converter para string
+            if pd.isna(valor_bruto) or valor_bruto == '':
+                return ''
+
+            # 3. Agora sim converte para string com segurança
+            situacao = str(valor_bruto).strip()
+            
+            # 4. Verifica se a string virou 'nan' ou 'None' por acidente na conversão
+            if situacao.lower() in ['nan', 'none', '']:
+                return ''
+
+            # 5. Lógica de Negócio
+            if situacao in ['0 - Ativo', 'Ativo']:
                 return 'LANÇAR'
             else:
-                return row['Análise']
+                return f'NÃO - {situacao}'
+            
+        front_consig['Análise'] = front_consig.apply(obs_situacao, axis=1)
 
-        if not self.averbados.empty:
-            averbados = self.averbados.copy()
-            if 'NR_OPER_EDITADO' in averbados.columns:
-                averbados['NR_OPER_EDITADO'] = averbados['NR_OPER_EDITADO'].astype(str)
-                
-                if 'SITUAÇÃO' in averbados.columns:
-                    funcao['SITUAÇÃO'] = funcao['NR_OPER_EDITADO'].map(averbados.set_index("NR_OPER_EDITADO")['SITUAÇÃO'].to_dict())
-                
-                if 'MARGEM REAJUSTADA' in averbados.columns:
-                    funcao['Valor Averbado Reajustado'] = funcao['NR_OPER_EDITADO'].map(
-                        averbados.set_index("NR_OPER_EDITADO")['MARGEM REAJUSTADA'].to_dict())
+        # Marca saldo positivo
+        conciliacao_tatado = self.trata_conciliacao()
+        conciliacao_tatado['CONTRATOS'] = conciliacao_tatado['CONTRATOS'].astype('Int64')
+        front_consig['Saldo'] = front_consig['nrContrato'].map(conciliacao_tatado.set_index('CONTRATOS')['Saldo'].to_dict())
+        front_consig_validado_termino = front_consig.copy()
+        front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > -0.01, 'Análise'] = 'NÃO LANÇAR - SALDO POSITIVO'
+        # Valor que vai ser lançado
+        # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
+        valor_a_lancar = np.minimum(np.abs(front_consig_validado_termino['Saldo']).fillna(float('inf')), front_consig_validado_termino['vlPrestacao'])
 
-        funcao['Análise'] = funcao.apply(obs_situacao, axis=1)
-        funcao['Análise'] = funcao['Análise'].replace('NÃO - nan', '')
+        front_consig_validado_termino['Valor a lançar'] = valor_a_lancar
 
-        # LIMINAR
-        if not self.tutela.empty and 'CPF' in self.tutela.columns:
-            liminares = self.tutela
-            mask_liminar = funcao['CPF'].isin(liminares['CPF'])
-            if "CONTRATO" in liminares.columns:
-                funcao['LIMINAR'] = funcao['CPF'].map(liminares.set_index("CPF")["CONTRATO"].to_dict())
-            funcao.loc[mask_liminar, 'Análise'] = 'NÃO - LIMINAR'
+        # Marca o que é Ação Judicial
+        # No caso de Ação Judicial estiver estiver SIM e NÃO ao invés de 1 e 0
+        front_consig_validado_termino['AcaoJudicial'] = front_consig_validado_termino['AcaoJudicial'].replace({'SIM': 1, r'NÃƒO|NÃO': 0})
+        front_consig_validado_termino.loc[front_consig_validado_termino['AcaoJudicial'] == 1, 'Análise'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
 
-        # Lógicas Finais de Análise
-        condicao_liminar = (funcao['LIMINAR'].fillna('') == '')
-        condicao_op_liq = (funcao['OP_LIQ'].fillna('') != '')
-        funcao.loc[condicao_liminar & condicao_op_liq, 'Análise'] = 'NÃO - LIQUIDADO'
-
-        funcao.loc[(funcao['Análise'] == '') & (funcao['CASOS CAPITAL'] != ''), 'Análise'] = 'NÃO LANÇAR - ENVIADO CAPITAL'
-
-        mask_positivo = (pd.to_numeric(funcao['Saldo'], errors='coerce').fillna(-1) >= 0) & (funcao['NR_OPER'].str.startswith('600', na=False))
-        funcao.loc[((funcao['LIMINAR'] == '') | (funcao['OP_LIQ'] == '')) & mask_positivo, 'Análise'] = "NÃO - SALDO"
-
-        funcao.loc[((funcao['LIMINAR'] == '') | (funcao['OP_LIQ'] == '')) & mask_produto_orbital, 'Análise'] = 'NÃO LANÇAR - ORBITAL'
+        # Marca o que é Obito
+        # No caso de óbito estiver estiver SIM e NÃO ao invés de 1 e 0
         
-        funcao.loc[((funcao['LIMINAR'] == '') | (funcao['OP_LIQ'] == '')) & (funcao['Análise'] == '') & mask_produto_complementar, 'Análise'] = 'NÃO LANÇAR - COMPLEMENTAR'
+        # front_consig_validado_termino['Obito'] = front_consig_validado_termino['Obito'].replace({'SIM': 1, 'NÃƒO': 0})
+        # front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'Análise'] = 'NÃO LANÇAR - ÓBITO'
 
-        funcao.loc[funcao['Análise'] == '', 'Análise'] = 'NÃO LANÇAR - COMPLEMENTAR EXTRA'
-
-        # Salva arquivos
-        funcao.to_excel(os.path.join(self.caminho, 'FUNÇÃO INTERMEDIÁRIO.xlsx'), index=False)
-
-        funcao_tratado = funcao[funcao['Análise'] == 'LANÇAR'].copy()
+        # Marca tudo que é orbital
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['Análise'].isin(['', np.nan]))), 'Análise'] = 'NÃO LANÇAR - ORBITAL'
         
-        valores_desejados = ['NÃO LANÇAR - COMPLEMENTAR', 'NÃO LANÇAR - COMPLEMENTAR EXTRA']
-        funcao_complementos = funcao[funcao['Análise'].isin(valores_desejados)].copy()
+        # Marca Casos Patrick
+        if not self.casos_capital is None:
+            # print(f'casos capital:\n{self.casos_capital}')
+            numero_operacao = self.casos_capital['NR. OPER.'].astype(str).str.slice(0, 9).tolist()
+            self.casos_capital.insert(1, 'NR_OPER_EDITADO', numero_operacao, True)
+            casos_capital_lista = self.casos_capital['NR_OPER_EDITADO'].astype(str).tolist()
+            front_consig_validado_termino.loc[(front_consig_validado_termino['nrContrato'].astype(str).str.slice(0, 9).isin(casos_capital_lista)), 'Análise'] = 'NÃO LANÇAR - CASOS PATRICK'
 
-        funcao_tratado.to_excel(os.path.join(self.caminho, 'FUNCAO COM NÃO.xlsx'), index=False)
+        # Marcar liquidados em StatusContrato
+        front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado|CANCELADO|ANDAMENTO', na=False)), 'Análise'] = 'NÃO LANÇAR - LIQUIDADO'
+        # Marca tudo que é Empréstimo
+        front_consig_validado_termino.loc[(front_consig_validado_termino['dsTipoOperacao'].str.contains('EMPRÉSTIMO|EMPRESTIMO', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - EMPRÉSTIMO'
 
-        self.trata_funcao_final(funcao_tratado, funcao_complementos)
+        # Marca tudo que é Telesaque
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Conciliação'].str.contains('CARTÃO TS|CARTAO TS', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - TELESAQUE'
+    
+        # Marca "NÃO LANÇAR - COMPLEMENTAR" nas células vazias da coluna Análise onde veio vazio na coluna de SITUAÇÃO
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Análise'] == '') & (front_consig_validado_termino['SITUAÇÃO'].isna()), 'Análise'] = 'NÃO LANÇAR - COMPLEMENTAR'
 
-    def trata_funcao_final(self, funcao, funcao_complementos):
-        complementares = funcao_complementos.copy()
+        front_consig_validado_termino.to_excel(
+            fr'{self.caminho}\FRONT SEMI TRABALHADO INSS.xlsx',
+            index=False, 
+        )
 
-        # Seleciona apenas colunas que existem no DF para evitar erro
-        cols_target = ['NR_OPER', 'NR_OPER_EDITADO', 'Análise', 'CPF', 'MATRICULA','CLIENTE', 'DT_BASE',
-                         'VLR_PARC', 'Saldo', 'SITUAÇÃO', 'Valor Averbado Reajustado', 'PRODUTO','ORIGEM_4']
-        cols_existentes = [c for c in cols_target if c in funcao.columns]
-        funcao = funcao[cols_existentes].copy()
+        return front_consig_validado_termino
 
-        funcao["VLR_PARC_ORIGINAL"] = funcao["VLR_PARC"]
-        funcao["VALOR_COMPLEMENTADO"] = 0.0
-        funcao["STATUS_COMPLEMENTO"] = "" 
-        funcao.insert(len(funcao.columns), "VALOR A LANÇAR", '')
+    def front_trabalhado(self):
+        front_trabalhado = self.tratamento_front_preliminar()
 
-        # Somas (com verificação se DFs não estão vazios)
-        if not complementares.empty:
-            soma_complementar = complementares.groupby('CPF')['VLR_PARC'].sum().reset_index(name="SOMA_COMPLEMENTAR")
-        else:
-            soma_complementar = pd.DataFrame(columns=['CPF', 'SOMA_COMPLEMENTAR'])
+        # Renomear colunas
+        front_trabalhado.rename(columns={'nrContrato': 'NR_OPER_EDITADO', 'nrCpf': 'CPF', 'dsMatricula': 'MATRICULA', 'dsNome': 'CLIENTE', 
+                                         'dtCessao': 'DT_BASE', 'vlPrestacao': 'VLR_PARC', 'dsEsteira': 'ESTEIRA','dsTipoOperacao': 'PRODUTO', 'dsConvenio': 'ORIGEM_4'}, inplace=True)
 
-        if not self.orbital.empty:
-            soma_orbital = self.orbital.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum().reset_index(name="SOMA_ORBITAL")
-            soma_orbital = soma_orbital.rename(columns={"CPF/CNPJ": "CPF"})
-        else:
-            soma_orbital = pd.DataFrame(columns=['CPF', 'SOMA_ORBITAL'])
+        # Filtra só os que vão lançar
+        front_trabalhado_lancar = front_trabalhado[front_trabalhado['Análise'] == 'LANÇAR'].copy()
+        front_trabalhado_lancar.to_excel(
+            fr'{self.caminho}\FRONT PARA LANÇAMENTO INSS.xlsx',
+            index=False, 
+        )
 
-        # Merge
-        funcao_final = funcao.merge(soma_complementar, on="CPF", how="left")
-        funcao_final = funcao_final.merge(soma_orbital, on="CPF", how="left")
+        # Cria arquivo de complementares + telesaque + orbital
+        complementar_orbital_df = front_trabalhado[front_trabalhado['Análise'].str.contains('NÃO LANÇAR - COMPLEMENTAR|NÃO LANÇAR - TELESAQUE|NÃO LANÇAR - ORBITAL', na=False)].copy()
+        complementar_orbital_df.to_excel(
+            fr'{self.caminho}\FRONT COMPLEMENTARES TELESAQUE ORBITAL INSS.xlsx',
+            index=False, 
+        )
 
-        funcao_final["SOMA_COMPLEMENTAR"] = funcao_final["SOMA_COMPLEMENTAR"].fillna(0)
-        funcao_final["SOMA_ORBITAL"] = funcao_final["SOMA_ORBITAL"].fillna(0)
-        funcao_final["SOMA SOMASE"] = funcao_final["SOMA_COMPLEMENTAR"] + funcao_final["SOMA_ORBITAL"]
+        return front_trabalhado_lancar, complementar_orbital_df
 
-        funcao_final = funcao_final.drop(columns=["SOMA_COMPLEMENTAR", "SOMA_ORBITAL"])
-        funcao = funcao_final
+    def trata_front_final(self):
+        front_trabalhado_lancar, complementar_orbital_df = self.front_trabalhado()
 
-        # Conversão Numérica
+        # Separar as colunas necessárias
+        front_trabalhado_lancar = front_trabalhado_lancar[['NR_OPER', 'NR_OPER_EDITADO', 'CPF', 'Análise', 'MATRICULA', 'CLIENTE', 'DT_BASE', 'VLR_PARC', 
+                                                           'ESTEIRA', 'Saldo', 'SITUAÇÃO', 'Valor Averbado Reajustado', 'PRODUTO', 'ORIGEM_4']].copy()
+        
+
+        # Faz uma cópia do valor original, para controle
+        front_trabalhado_lancar["VLR_PARC_ORIGINAL"] = front_trabalhado_lancar["VLR_PARC"]
+
+        # Nova coluna para anotar quanto foi usado do "banco" de 30%
+        front_trabalhado_lancar["VALOR_COMPLEMENTADO"] = 0.0
+        front_trabalhado_lancar["STATUS_COMPLEMENTO"] = ""  # Total, Parcial, Nenhum
+        front_trabalhado_lancar.insert(9, "VALOR A LANÇAR", '', True)
+
+        # Soma dos valores de Complementar e Orbital
+        soma_complementar = complementar_orbital_df.groupby('CPF')['VLR_PARC'].sum().reset_index(name="SOMA_COMPLEMENTAR_ORBITAL")
+
+        # Junta os dados com a planilha principal
+        front_final = front_trabalhado_lancar.merge(soma_complementar, on="CPF", how="left")
+
+        # Preenche os NaN com zero (caso algum CPF não esteja em uma das duas planilhas)
+        front_final["SOMA_COMPLEMENTAR_ORBITAL"] = front_final["SOMA_COMPLEMENTAR_ORBITAL"].fillna(0)
+
+        # Calcula a soma total
+        front_final["SOMA SOMASE"] = front_final["SOMA_COMPLEMENTAR_ORBITAL"]
+        front_final["SOMA SOMASE"] = pd.to_numeric(front_final["SOMA SOMASE"], errors='coerce').fillna(0)
+
+        # Remove colunas do Arquivo
+        front_final = front_final.drop(columns=["SOMA_COMPLEMENTAR_ORBITAL"])
+
+        front_trabalhado_lancar = front_final.copy()
+
+        print(front_trabalhado_lancar[['Valor Averbado Reajustado', 'VLR_PARC']].dtypes)
+
+        # 1. Converta as colunas para um formato numérico.
+        #    Use os parâmetros 'decimal' e 'thousands' se seus dados usarem vírgula para decimal e ponto para milhar.
+        #    'errors='coerce'' é muito útil: se ele não conseguir converter um valor, ele o transformará em NaN (nulo).
+
         colunas_para_converter = ['Valor Averbado Reajustado', 'VLR_PARC']
         for coluna in colunas_para_converter:
-            if coluna in funcao.columns:
-                funcao[coluna] = pd.to_numeric(funcao[coluna], errors='coerce').fillna(0)
+            # Ajuste os parâmetros decimal e milhar, conforme seus dados
+            front_trabalhado_lancar[coluna] = pd.to_numeric(front_trabalhado_lancar[coluna], errors='coerce')
 
-        # Lógica Vetorizada de Complemento
-        funcao['ESPACO_PARA_COMPLEMENTO'] = (funcao['Valor Averbado Reajustado'] - funcao['VLR_PARC']).clip(lower=0)
-        
-        funcao['CUM_PEDIDO_COMPLEMENTO'] = funcao.groupby('CPF')['ESPACO_PARA_COMPLEMENTO'].cumsum()
-        
-        alocado_anteriormente = funcao['CUM_PEDIDO_COMPLEMENTO'] - funcao['ESPACO_PARA_COMPLEMENTO']
-        
-        saldo_restante_complemento = funcao['SOMA SOMASE'] - alocado_anteriormente
-        
-        funcao['COMPLEMENTO_REAL'] = np.minimum(funcao['ESPACO_PARA_COMPLEMENTO'], saldo_restante_complemento.clip(lower=0))
-        
-        funcao['PARCELA COMPLEMENTO REAL'] = funcao['VLR_PARC'] + funcao['COMPLEMENTO_REAL']
-        
-        funcao['VALOR A LANÇAR'] = np.minimum(funcao['PARCELA COMPLEMENTO REAL'], funcao['Valor Averbado Reajustado'])
+        # Preencha quaisquer valores que não puderam ser convertidos com 0 (ou outra estratégia que preferir)
+        front_trabalhado_lancar[colunas_para_converter] = front_trabalhado_lancar[colunas_para_converter].fillna(0)
 
-        # Salva arquivo final
-        funcao.to_excel(os.path.join(self.caminho, "LANÇAMENTO DE INSS TRATADO.xlsx"), index=False)
+        # Calcula o "espaço" disponível em cada linha para receber um complemento.
+        # .clip(0) garante que o resultado não seja negativo.
+        front_trabalhado_lancar['ESPACO_PARA_COMPLEMENTO'] = (front_trabalhado_lancar['Valor Averbado Reajustado'] - front_trabalhado_lancar['VLR_PARC']).clip(0)
+        print('Espaço Para Complemento, criado...\n\n')
 
-        self.arquivo_lancamento(funcao)
+        # a. Soma acumulada dos "pedidos" de complemento para cada CPF
+        front_trabalhado_lancar['CUM_PEDIDO_COMPLEMENTO'] = front_trabalhado_lancar.groupby('CPF')['ESPACO_PARA_COMPLEMENTO'].cumsum()
+        print('Espaço Para Complemento Acumulado, criado... \n\n')
+
+        # b. Quanto já foi alocado para as linhas ANTERIORES do mesmo CPF
+        alocado_anteriormente = front_trabalhado_lancar['CUM_PEDIDO_COMPLEMENTO'] - front_trabalhado_lancar['ESPACO_PARA_COMPLEMENTO']
+        print('Acumulado Anteriormente, criado...\n\n')
+
+        # c. Saldo restante do SOMA SOMASE disponível para a linha ATUAL
+        saldo_restante_complemento = front_trabalhado_lancar['SOMA SOMASE'] - alocado_anteriormente
+        print('Saldo Restante, calculado...\n\n')
+
+        # d. O complemento REAL a ser adicionado é o MENOR entre o que a linha PODE RECEBER e o que nós TEMOS DE SALDO
+        front_trabalhado_lancar['COMPLEMENTO_REAL'] = np.minimum(front_trabalhado_lancar['ESPACO_PARA_COMPLEMENTO'], saldo_restante_complemento.clip(0))
+        print('Complemento Real, criado...\n\n')
+
+        front_trabalhado_lancar['PARCELA COMPLEMENTO REAL'] = front_trabalhado_lancar['VLR_PARC'] + front_trabalhado_lancar['COMPLEMENTO_REAL']
+        print('Parcela Complemento Real, calculado...\n\n')
+
+        front_trabalhado_lancar['VALOR A LANÇAR'] = np.minimum(front_trabalhado_lancar['PARCELA COMPLEMENTO REAL'], front_trabalhado_lancar['Valor Averbado Reajustado'])
+        print('Valor a Lançar, alocado...\n\n')
+
+        print('Salvando Função tratado...')
+        # Exporta os resultados
+        front_trabalhado_lancar.to_excel(fr"{self.caminho}\LANÇAMENTO DE INSS TRATADO.xlsx", index=False)
+
+        self.arquivo_lancamento(front_trabalhado_lancar)
 
     def arquivo_lancamento(self, funcao_tratado):
         print('Preparando arquivo de lançamento...')

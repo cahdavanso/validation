@@ -88,36 +88,41 @@ class CONSIGFACIL:
         # Adiciona só as esteiras que podem ser lançadas
         front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
 
+        # Trata coluna de Tipo da Conciliação
+        front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['dsTipoOperacao']
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
         front_consig_validado_termino = self.validacao_termino_front(front_consig_esteiras)
-        front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > 0.1, 'OBS'] = 'NÃO LANÇAR - SALDO POSITIVO'
+        front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > -0.01, 'OBS'] = 'NÃO LANÇAR - SALDO POSITIVO'
 
         # Marca o que é ação judicial
         # No caso de Obito estiver estiver SIM e NÃO ao invés de 1 e 0
-        front_consig_validado_termino['Obito'] = front_consig_validado_termino['Obito'].replace({'SIM': 1, 'NÃO': 0})
+        front_consig_validado_termino['AcaoJudicial'] = front_consig_validado_termino['AcaoJudicial'].replace({'SIM': 1, 'NÃO': 0})
         front_consig_validado_termino.loc[front_consig_validado_termino['AcaoJudicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
 
         # Marca o que é Óbito
         # No caso de ação judicial estiver estiver SIM e NÃO ao invés de 1 e 0
-        front_consig_validado_termino['AcaoJudicial'] = front_consig_validado_termino['AcaoJudicial'].replace({'SIM': 1, 'NÃO': 0})
-        front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'OBS'] = 'NÃO LANÇAR - ÓBITO'
+        # front_consig_validado_termino['Obito'] = front_consig_validado_termino['Obito'].replace({'SIM': 1, 'NÃO': 0})
+        # front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'OBS'] = 'NÃO LANÇAR - ÓBITO'
  
         # Marca tudo que é orbital
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
-        # Marcar o que não é cartão
-        front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False) & ~front_consig_validado_termino['dsTipoOperacao'].str.contains('CARTAO DE CREDITO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
-       
+        # Marcar o que não é cartão Conciliação
+        front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
 
         # Marcar liquidados em StatusContrato
         front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
+        # TIRAR BANCO OUTROS
+        front_consig_validado_termino.loc[(front_consig_validado_termino['dsConsignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'
+
         # Salva com os NÃO LANÇAR
-        front_consig_validado_termino.to_excel(fr'{self.caminho}\TESTE FRONT VALIDATION COM NÃO LANÇAR {self.convenio}.xlsx', index=False)
+        front_consig_validado_termino.to_excel(fr'{self.caminho}\FRONT SEMI TRABALHADO {self.convenio}.xlsx', index=False)
 
         # --------------------------------------------------------------------------------------------- #
         return front_consig_validado_termino
@@ -126,26 +131,26 @@ class CONSIGFACIL:
         front_consig = self.tratamento_front_preliminar()
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
+        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
 
         # Separar o que não é cartão de crédito da conciliação
-        front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
+        # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
 
         # Pegar o que é CARTAO DE CREDITO do front
-        condicao_cartao = ['CARTAO DE CREDITO']
-        front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['dsTipoOperacao'].isin(condicao_cartao)].copy()
+        # condicao_cartao = ['CARTAO DE CREDITO']
+        # front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['dsTipoOperacao'].isin(condicao_cartao)].copy()
         # Faz concat dos dois dataframes
-        front_consig_trabalhado = pd.concat([front_consig_cartao_conciliacao, front_consig_cartao_front])
+        front_consig_trabalhado = front_consig_cartao_conciliacao.copy()
 
         # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['AcaoJudicial'] != 1].copy()
 
         # ---------------------------------- TIRAR ÓBITO DO FRONT ---------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Obito'] != 1].copy()
+        # front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Obito'] != 1].copy()
         
         # ------------------------------------ INSERE A COLUNA DE SALDO ------------------------------------- #
 
-        front_consig_trabalhado.loc[front_consig_trabalhado['Saldo'] > 0.1, 'Valor a lançar'] = 0
+        front_consig_trabalhado.loc[front_consig_trabalhado['Saldo'] > -0.01, 'Valor a lançar'] = 0
         front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Valor a lançar'] > 0].copy()
 
         # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
@@ -155,11 +160,14 @@ class CONSIGFACIL:
         # -------------------------------------- TIRA O PRAZO ----------------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['OBS'].str.contains('NÃO LANÇAR - PRAZO', na=False)].copy()
 
+        # --------------------------------------- TIRA BANCO OUTROS ----------------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['dsConsignataria'].str.contains('OUTROS', na=False)].copy()
+
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['StatusContrato'].str.contains('Liquidado', na=False)].copy()
 
         front_consig_trabalhado.to_excel(
-        fr'{self.caminho}\TESTE FRONT VALIDATION {self.convenio}.xlsx',
+        fr'{self.caminho}\FRONT TRABALHADO {self.convenio}.xlsx',
         index=False, 
         )        
 
@@ -303,7 +311,7 @@ class CONSIGFACIL:
         cond_prazo = ~status_andamento.isin(['', '0', '1', 0, 1])
 
         # Aplica a condição: se qualquer uma for verdadeira, OBS = 'NÃO'; caso contrário, OBS = ''
-        front.loc[cond_prazo & (front['OBS'] == '') & (~front['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)), 'OBS'] = 'NÃO LANÇAR - PRAZO'
+        front.loc[cond_prazo & (front['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - PRAZO'
 
         return front
 
