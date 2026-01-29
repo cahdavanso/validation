@@ -11,6 +11,7 @@ from typing import List, Optional
 from python.Consigfacil import CONSIGFACIL 
 from python.Codata import CODATA
 from python.INSS import INSS
+from python.Serha import SERHA
 
 app = FastAPI()
 
@@ -30,6 +31,7 @@ app.add_middleware(
 # --- LISTAS DE CONVÊNIOS ---
 CODATA_CONVENIO = ["GOV. PB"]
 INSS_CONVENIO = ["INSS"]
+SERHA_CONVENIO = ["GOV. MG - IPSM", "GOV. MG - CBMMG", "GOV. MG - PMMG", "GOV. MG - SEPLAG", "GOV. MG - IPSEMG"]
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
@@ -100,6 +102,7 @@ async def validar_planilhas(
     FRONT: List[UploadFile] = File(None, alias="FRONT"),
     FUNCAO: List[UploadFile] = File(None, alias="FUNCAO"),
     ANDAMENTO: List[UploadFile] = File(None, alias="ANDAMENTO"),
+    TRABALHADO_ANTERIOR: List[UploadFile] = File(None, alias="TRABALHADO_ANTERIOR"),
     ORBITAL: List[UploadFile] = File(None, alias="ORBITAL"),
     CASOS_CAPITAL: List[UploadFile] = File(None, alias="CASOS_CAPITAL"),
 ):
@@ -128,6 +131,7 @@ async def validar_planilhas(
         front_df = await read_and_unify_files(FRONT)
         funcao_df = await read_and_unify_files(FUNCAO)
         andamento_df = await read_and_unify_files(ANDAMENTO)
+        trabalhado_anterior_df = await read_and_unify_files(TRABALHADO_ANTERIOR)
         orbital_df = await read_and_unify_files(ORBITAL)
         casoscapital_df = await read_and_unify_files(CASOS_CAPITAL)
 
@@ -153,6 +157,18 @@ async def validar_planilhas(
                 conciliacao=conciliacao_df,
                 caminho=CAMINHO_SAIDA,
                 casos_capital=casoscapital_df
+            )
+        elif convenio in SERHA_CONVENIO:
+            logging.info("Usando validador: SERHA")
+            validador = SERHA(
+                portal_file_list=averbados_df,
+                convenio=convenio,
+                front=front_df,
+                conciliacao=conciliacao_df,
+                trabalhado_anterior=trabalhado_anterior_df,
+                rubrica=funcao_df,
+                caminho=CAMINHO_SAIDA,
+                complementar=liminar_df
             )
 
         else:

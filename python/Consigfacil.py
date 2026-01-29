@@ -5,6 +5,7 @@ import re
 import logging
 import os
 import chardet
+from python.acha_matriculas_consigfacil import ACHA_MATRICULA_CONSIGFACIL
 
 # Mantendo variáveis globais do original
 rejeitados = ['/']
@@ -430,10 +431,12 @@ class CONSIGFACIL:
             # 2. Reorganiza o DataFrame com a nova lista
             averbados = averbados[nova_ordem]
 
+        averbados_matricula = ACHA_MATRICULA_CONSIGFACIL(front_consig, averbados)
+
         # Remover de Averbados algumas colunas
         colunas_para_remover = ['Validade', 'Saldo de reserva', 'Data', 'IP', 'Código', '%']
 
-        averbados = averbados.drop(columns=colunas_para_remover, errors='ignore')
+        averbados = averbados_matricula.drop(columns=colunas_para_remover, errors='ignore')
 
         # Adicionar outras colunas em Averbados
         # averbados.insert(5, 'CONCAT', '', True)

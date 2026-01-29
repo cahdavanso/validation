@@ -11,15 +11,18 @@ document.addEventListener('DOMContentLoaded', () => {
         "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. DE PORTO VELHO",
         "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
         "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
-        "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. MG", 
-        "GOV. RN", "GOV. SC"
+        "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RN"
+    ];
+    const CONVENIOS_SERHA = [
+        "GOV. MG - IPSM", "GOV. MG - CBMMG", "GOV. MG - PMMG", "GOV. MG - SEPLAG", "GOV. MG - IPSEMG"
     ];
 
-    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL].sort();
+    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA].sort();
 
     const FIELDS_CONSIGFACIL = ["FRONT", "CONCILIACAO", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_CODATA = ["FRONT", "CONCILIACAO", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_INSS = ["FRONT", "CONCILIACAO", "AVERBADOS", "CASOS_CAPITAL"];
+    const FIELDS_SERHA = ["FRONT", "CONCILIACAO", "AVERBADOS", "TRABALHADO_ANTERIOR", "COMPLEMENTAR"];
 
     const fileDataMap = {}; 
     
@@ -36,6 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectedConsigText = document.getElementById('selected-consignataria-text');
     const consignatariaOptions = document.querySelectorAll('#consignataria-list li');
 
+    const rubricaArea = document.getElementById('rubrica-selection-area');
+    const selectRubricaButton = document.getElementById('select-rubrica-button');
+    const dropdownRubricaContent = document.getElementById('rubrica-dropdown');
+    const selectedRubricaText = document.getElementById('selected-rubrica-text');
+    const rubricaOptions = document.querySelectorAll('#rubrica-list li');
+
     const uploadForm = document.getElementById('upload-form');
     const uploadFieldsGrid = uploadForm ? uploadForm.querySelector('.upload-fields-grid') : null;
     const submitButton = document.getElementById('submit-validation');
@@ -48,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let selectedConvenio = null;
     let selectedConsignataria = null;
+    let selectedRubrica = null;
 
     if (!uploadFieldsGrid) return;
 
@@ -112,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
             li.textContent = convenio;
             li.setAttribute('data-value', convenio);
             li.addEventListener('click', () => handleConvenioSelection(convenio));
+            
             convenioList.appendChild(li);
         });
     };
@@ -139,9 +150,26 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (selectRubricaButton) {
+        selectRubricaButton.addEventListener('click', (e) => { e.stopPropagation(); dropdownRubricaContent.classList.toggle('show'); });
+        rubricaOptions.forEach(opt => {
+            opt.addEventListener('click', () => {
+                selectedRubrica = opt.getAttribute('data-value');
+                selectedRubricaText.textContent = opt.textContent;
+                dropdownRubricaContent.classList.remove('show');
+                updateSubmitButtonState();
+            });
+        });
+    }
+
     document.addEventListener('click', () => {
         dropdownContent.classList.remove('show');
         if (dropdownConsigContent) dropdownConsigContent.classList.remove('show');
+    });
+
+    document.addEventListener('click', () => {
+        dropdownContent.classList.remove('show');
+        if (dropdownRubricaContent) dropdownRubricaContent.classList.remove('show');
     });
 
     // --- Lógica de Seleção ---
@@ -154,6 +182,9 @@ document.addEventListener('DOMContentLoaded', () => {
         consignatariaArea.classList.add('hidden');
         selectedConsignataria = null;
         selectedConsigText.textContent = "Clique para Selecionar";
+        rubricaArea.classList.add('hidden');
+        selectedRubrica = null;
+        selectedRubricaText.textContent = "Clique para Selecionar a rubrica";
         for (const key in fileDataMap) delete fileDataMap[key];
         clearConsole(); // Limpa console anterior
 
@@ -163,7 +194,11 @@ document.addEventListener('DOMContentLoaded', () => {
             currentFields = FIELDS_CODATA;
         } else if (CONVENIOS_INSS.includes(convenio)) {
             currentFields = FIELDS_INSS;
-        } else {
+        } else if (CONVENIOS_SERHA.includes(convenio)) {
+            rubricaArea.classList.remove('hidden');
+            currentFields = FIELDS_SERHA;
+        }
+        else {
             currentFields = FIELDS_CONSIGFACIL;
         }
 
@@ -225,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateSubmitButtonState = () => {
         const hasFiles = Object.keys(fileDataMap).length > 0;
         let valid = !!selectedConvenio;
-        if (selectedConvenio && CONVENIOS_CODATA.includes(selectedConvenio) && !selectedConsignataria) valid = false;
+        if (selectedConvenio && CONVENIOS_CODATA.includes(selectedConvenio) && !selectedConsignataria && !selectedRubrica) valid = false;
         submitButton.disabled = !hasFiles || !valid;
     };
 
@@ -243,6 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. Logs Iniciais
         logToConsole(`Iniciando validação para: ${selectedConvenio}`, 'system');
         if (selectedConsignataria) logToConsole(`Consignatária selecionada: ${selectedConsignataria}`, 'info');
+        if (selectedRubrica) logToConsole(`Rubrica selecionada: ${selectedRubrica}`, 'info');
         
         const totalFiles = Object.values(fileDataMap).reduce((acc, val) => acc + val.length, 0);
         logToConsole(`Preparando ${totalFiles} arquivos para upload...`, 'info');
@@ -274,6 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         formData.append('convenio', selectedConvenio);
         if (selectedConsignataria) formData.append('consignataria', selectedConsignataria);
+        if (selectedRubrica) formData.append('rubrica', selectedRubrica);
 
         // NOVO: PEGA O CAMINHO DE SAÍDA
         const outputPathInput = document.getElementById('output-path-input');
