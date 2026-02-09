@@ -68,7 +68,7 @@ class INSS:
         front_consig = self.front.copy()
 
         # Trasnforma vlPrestacao em numérico
-        front_consig['vlPrestacao'] = front_consig['vlPrestacao'].astype(str).str.replace('.', '', regex=False)
+        # front_consig['vlPrestacao'] = front_consig['vlPrestacao'].astype(str).str.replace('.', '', regex=False)
         front_consig['vlPrestacao'] = front_consig['vlPrestacao'].astype(str).str.replace(',', '.', regex=False)
         front_consig['vlPrestacao'] = pd.to_numeric(front_consig['vlPrestacao'], errors='coerce').fillna(0)
 
@@ -97,7 +97,8 @@ class INSS:
         esteiras_permitidas = ['11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
                                'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
                                '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
-                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO"
+                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
+                               "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES"
                               ]
         
         # Vamos renomear a primeira coluna da conciliação
@@ -178,9 +179,9 @@ class INSS:
             front_consig_validado_termino.loc[(front_consig_validado_termino['nrContrato'].astype(str).str.slice(0, 9).isin(casos_capital_lista)), 'Análise'] = 'NÃO LANÇAR - CASOS PATRICK'
 
         # Marcar liquidados em StatusContrato
-        front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado|CANCELADO|ANDAMENTO', na=False)), 'Análise'] = 'NÃO LANÇAR - LIQUIDADO'
+        front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado|CANCELADO', na=False)), 'Análise'] = 'NÃO LANÇAR - LIQUIDADO'
         # Marca tudo que é Empréstimo
-        front_consig_validado_termino.loc[(front_consig_validado_termino['dsTipoOperacao'].str.contains('EMPRÉSTIMO|EMPRESTIMO', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - EMPRÉSTIMO'
+        # front_consig_validado_termino.loc[(front_consig_validado_termino['dsTipoOperacao'].str.contains('EMPRÉSTIMO|EMPRESTIMO', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - EMPRÉSTIMO'
 
         # Marca tudo que é Telesaque
         front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Conciliação'].str.contains('CARTÃO TS|CARTAO TS', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - TELESAQUE'

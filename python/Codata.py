@@ -52,10 +52,11 @@ class CODATA:
         esteiras_permitidas = ['11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
                                'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
                                '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
-                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "ANDAMENTO"
+                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
+                               "07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES"
                               ]
         
-        # print(f'Esteiras Únicas do front: {front_consig["dsEsteira"].unique()}')
+        print(f'Esteiras Únicas do front: {front_consig["dsEsteira"].unique()}')
 
         # Vamos renomear a primeira coluna da conciliação
         conciliacao.rename(columns={conciliacao.columns[0]: 'CONTRATOS'}, inplace=True)
@@ -74,6 +75,10 @@ class CODATA:
         # Adiciona só as esteiras que podem ser lançadas
         front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
 
+        # ------------------------------------ ESTEIRAS REMOVIDAS ------------------------------------- #
+        front_consig_esteiras_removidas = front_consig[~front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
+        front_consig_esteiras_removidas.to_excel(fr'{self.caminho}\FRONT ESTEIRAS REMOVIDAS GOV PB {self.consignataria}.xlsx', index=False)
+
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['dsTipoOperacao']
 
@@ -83,6 +88,7 @@ class CODATA:
         front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > -0.01, 'OBS'] = 'NÃO LANÇAR - SALDO POSITIVO'
 
         # Marca o que é ação judicial
+        front_consig_validado_termino['AcaoJudicial'] = front_consig_validado_termino['AcaoJudicial'].replace({'SIM': 1, r'NÃƒO|NÃO': 0})
         front_consig_validado_termino.loc[front_consig_validado_termino['AcaoJudicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
 
         # Marca o que é Óbito
@@ -101,14 +107,19 @@ class CODATA:
         if self.consignataria == 'CAPITAL':
             front_consig_validado_termino.loc[(front_consig_validado_termino['dsConsignataria'].str.contains('INSPFEM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - INSPFEM'
         elif self.consignataria == 'INSPFEM':
-            front_consig_validado_termino.loc[(front_consig_validado_termino['dsConsignataria'].str.contains('CAPITAL', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - CAPITAL'
-       
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['dsConsignataria'].str.contains('INSPFEM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - CAPITAL'
+
+        # Marcar liquidados em StatusContrato
+        if self.consignataria == 'CAPITAL':
+            front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado|CANCELADO|ANDAMENTO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
+        else:
+            front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
 
         # Salva com os NÃO LANÇAR
-        front_consig_validado_termino.to_excel(fr'{self.caminho}\FRONT SEMI TRABALHADO GOV PB.xlsx', index=False)
+        front_consig_validado_termino.to_excel(fr'{self.caminho}\FRONT SEMI TRABALHADO GOV PB {self.consignataria}.xlsx', index=False)
 
         # --------------------------------------------------------------------------------------------- #
         return front_consig_validado_termino
@@ -135,7 +146,7 @@ class CODATA:
 
         # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
         if self.consignataria == 'CAPITAL':
-            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['dsConsignataria'].str.contains('CAPITAL', na=False)].copy()
+            front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['dsConsignataria'].str.contains('INSPFEM', na=False)].copy()
         elif self.consignataria == 'INSPFEM':
             front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['dsConsignataria'].str.contains('INSPFEM', na=False)].copy()
         else:
@@ -150,8 +161,11 @@ class CODATA:
         # -------------------------------------- TIRA O PRAZO ----------------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['OBS'].str.contains('NÃO LANÇAR - PRAZO', na=False)].copy()
 
+        # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['OBS'].str.contains('NÃO LANÇAR - LIQUIDADO', na=False)].copy()
+
         front_consig_trabalhado.to_excel(
-        fr'{self.caminho}\FRONT TRABALHADO GOV PB.xlsx',
+        fr'{self.caminho}\FRONT TRABALHADO GOV PB {self.consignataria}.xlsx',
         index=False, 
         )
 

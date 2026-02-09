@@ -39,8 +39,7 @@ CONSIGFACIL_CONVENIOS = [
     "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. DE PORTO VELHO",
     "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
     "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
-    "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. MG", 
-    "GOV. RN", "GOV. SC"
+    "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RN", "GOV. SC"
 ]
 
 # --- Função Auxiliar de Leitura ---
@@ -90,6 +89,7 @@ def test_endpoint():
 async def validar_planilhas(
     convenio: str = Form(...),
     consignataria: Optional[str] = Form(None),
+    rubrica: Optional[str] = Form(None),
     output_path: Optional[str] = Form(None),
     
     # Todos os campos possíveis do sistema
@@ -104,6 +104,7 @@ async def validar_planilhas(
     ANDAMENTO: List[UploadFile] = File(None, alias="ANDAMENTO"),
     TRABALHADO_ANTERIOR: List[UploadFile] = File(None, alias="TRABALHADO_ANTERIOR"),
     ORBITAL: List[UploadFile] = File(None, alias="ORBITAL"),
+    COMPLEMENTAR: List[UploadFile] = File(None, alias="COMPLEMENTAR"),
     CASOS_CAPITAL: List[UploadFile] = File(None, alias="CASOS_CAPITAL"),
 ):
     logging.info(f"\n--- INICIANDO VALIDAÇÃO: {convenio} ---")
@@ -133,6 +134,7 @@ async def validar_planilhas(
         andamento_df = await read_and_unify_files(ANDAMENTO)
         trabalhado_anterior_df = await read_and_unify_files(TRABALHADO_ANTERIOR)
         orbital_df = await read_and_unify_files(ORBITAL)
+        complementar_df = await read_and_unify_files(COMPLEMENTAR)
         casoscapital_df = await read_and_unify_files(CASOS_CAPITAL)
 
         # 3. SELEÇÃO DO VALIDADOR (SEM A VARIÁVEL PROBLEMÁTICA)
@@ -166,9 +168,9 @@ async def validar_planilhas(
                 front=front_df,
                 conciliacao=conciliacao_df,
                 trabalhado_anterior=trabalhado_anterior_df,
-                rubrica=funcao_df,
+                rubrica=rubrica,
                 caminho=CAMINHO_SAIDA,
-                complementar=liminar_df
+                complementar=complementar_df
             )
 
         else:

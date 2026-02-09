@@ -111,7 +111,7 @@ class CONSIGFACIL:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão Conciliação
-        front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
@@ -132,7 +132,7 @@ class CONSIGFACIL:
         front_consig = self.tratamento_front_preliminar()
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
+        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -259,7 +259,7 @@ class CONSIGFACIL:
         # prazo_dict = andam_file.set_index('Código na instituição')['Prazo Total'].to_dict()
 
         andam_file = self.trata_cod_and(self.andamento)
-        andam_file.to_excel(rf'{self.caminho}\ANDAMENTO_TESTE {self.convenio} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        # andam_file.to_excel(rf'{self.caminho}\ANDAMENTO_TESTE {self.convenio} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # Função para decidir o valor da nova modalidade
         def substituir_modalidade():
@@ -431,12 +431,12 @@ class CONSIGFACIL:
             # 2. Reorganiza o DataFrame com a nova lista
             averbados = averbados[nova_ordem]
 
-        averbados_matricula = ACHA_MATRICULA_CONSIGFACIL(front_consig, averbados)
+        front_preliminar = ACHA_MATRICULA_CONSIGFACIL(averbados, front_consig)
 
         # Remover de Averbados algumas colunas
         colunas_para_remover = ['Validade', 'Saldo de reserva', 'Data', 'IP', 'Código', '%']
 
-        averbados = averbados_matricula.drop(columns=colunas_para_remover, errors='ignore')
+        averbados = averbados.drop(columns=colunas_para_remover, errors='ignore')
 
         # Adicionar outras colunas em Averbados
         # averbados.insert(5, 'CONCAT', '', True)

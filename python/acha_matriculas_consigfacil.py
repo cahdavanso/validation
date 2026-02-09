@@ -25,9 +25,9 @@ class ACHA_MATRICULA_CONSIGFACIL:
         # averbação bruto
         self.averbacao_bruto = averbado_trabalhado
 
-        df_front = pd.read_excel(self.front_trabalhado)
+        df_front = self.front_trabalhado
 
-        df_averbacao = pd.read_excel(self.averbacao_bruto)
+        df_averbacao = self.averbacao_bruto
 
         self.acha_matricula(df_front, df_averbacao)
 
@@ -85,24 +85,30 @@ class ACHA_MATRICULA_CONSIGFACIL:
             front_tratado = front_para_somar.copy()
             averbacao_geral = averbacao_para_somar.copy()
 
+            # ... (Seus prints e conversões de tipo iniciais continuam iguais) ...
             averbacao_geral['Matrícula'] = averbacao_geral['Matrícula'].astype(str)
-
-            # Preparação dos dados para a soma
             front_tratado['nrCpf'] = front_tratado['nrCpf'].astype(str).str.strip()
             averbacao_geral['CPF'] = averbacao_geral['CPF'].astype(str).str.strip()
             front_tratado['vlPrestacao'] = pd.to_numeric(front_tratado['vlPrestacao'], errors='coerce')
-
-            '''averbacao_geral['Valor da reserva'] = (averbacao_geral['Valor da reserva'].astype(str)
-                                                   .str.replace(".", "", regex=False)
-                                                   .str.replace(",", ".", regex=False))'''
             averbacao_geral['Valor da reserva'] = pd.to_numeric(averbacao_geral['Valor da reserva'], errors='coerce')
 
+            # ... (Criação do b_lookup continua igual) ...
             b_lookup = averbacao_geral.dropna(subset=['CPF', 'Valor da reserva', 'Matrícula']) \
                 .groupby('CPF') \
                 .apply(lambda x: dict(zip(round(x['Valor da reserva'], 2), x['Matrícula']))) \
                 .to_dict()
 
-            # print(f'b_lookup {b_lookup}')
+            # ==============================================================================
+            # CORREÇÃO AQUI: Inicializar as colunas ANTES do loop
+            # Isso garante que elas existam mesmo que nenhum match seja encontrado
+            # ==============================================================================
+            front_tratado['Soma_Calculada'] = np.nan       # Ou 0.0, se preferir
+            front_tratado['Parcela_Encontrada'] = np.nan   # Ou 0.0, se preferir
+            front_tratado['Metodo_Encontrado'] = 'N/A'     # Valor padrão para não encontrados
+            
+            # Dica: Se quiser garantir que 'MATRICULA_ENCONTRADA_1' exista também:
+            if 'MATRICULA_ENCONTRADA_1' not in front_tratado.columns:
+                front_tratado['MATRICULA_ENCONTRADA_1'] = np.nan
 
             cpfs_unicos = front_tratado['nrCpf'].unique()
             tolerancias = [0, 20, 40, 60]
@@ -111,9 +117,12 @@ class ACHA_MATRICULA_CONSIGFACIL:
                 if cpf not in b_lookup:
                     indices_para_marcar = front_tratado[front_tratado['nrCpf'] == cpf].index
                     front_tratado.loc[indices_para_marcar, 'MATRICULA_ENCONTRADA_1'] = 'CPF não encontrado na averbação (Soma)'
+                    # Opcional: Marcar explicitamente nas novas colunas também
+                    front_tratado.loc[indices_para_marcar, 'Metodo_Encontrado'] = 'CPF Inexistente'
                     continue
 
                 itens_a_combinar = list(front_tratado[front_tratado['nrCpf'] == cpf][['vlPrestacao']].itertuples())
+                
                 while itens_a_combinar:
                     match_encontrado_nesta_iteracao = False
                     for tamanho_comb in range(1, len(itens_a_combinar) + 1):
@@ -121,13 +130,15 @@ class ACHA_MATRICULA_CONSIGFACIL:
                             soma_parcelas = round(sum(item[1] for item in comb), 2)
                             for tol in tolerancias:
                                 valor_alvo = round(soma_parcelas + tol, 2)
+                                
                                 if valor_alvo in b_lookup.get(cpf, {}):
                                     mat_disponivel = b_lookup[cpf].pop(valor_alvo)
                                     indices_para_atualizar = [item.Index for item in comb]
 
                                     # Atualiza a coluna 'Matricula' original
                                     front_tratado.loc[indices_para_atualizar, 'MATRICULA_ENCONTRADA_1'] = mat_disponivel
-                                    # Adiciona colunas de auditoria
+                                    
+                                    # As colunas já existem, então o .loc funciona sem risco de erro
                                     front_tratado.loc[indices_para_atualizar, 'Soma_Calculada'] = soma_parcelas
                                     front_tratado.loc[indices_para_atualizar, 'Parcela_Encontrada'] = valor_alvo
                                     front_tratado.loc[indices_para_atualizar, 'Metodo_Encontrado'] = 'SOMAS'
@@ -136,13 +147,21 @@ class ACHA_MATRICULA_CONSIGFACIL:
                                                         item.Index not in indices_para_atualizar]
                                     match_encontrado_nesta_iteracao = True
                                     break
+                                else:
+                                    # print opcional para debug (pode comentar em produção para limpar o console)
+                                    # print(f'Nenhum match para CPF {cpf} com soma {soma_parcelas} +/- {tol}')
+                                    pass
+                                    
                             if match_encontrado_nesta_iteracao: break
                         if match_encontrado_nesta_iteracao: break
                     if not match_encontrado_nesta_iteracao: break
 
             print("--- Processo de soma concluído! ---")
-            # print(f"\n\n{credbase_tratado.loc[credbase_tratado['MATRICULA_ENCONTRADA_1'].notna()]}\n\n")
-            return front_tratado  # <<-- IMPORTANTE: Retorna o DataFrame modificado
+            
+            # Tratamento Final (Opcional): Preencher vazios para evitar erros futuros
+            # front_tratado['Soma_Calculada'] = front_tratado['Soma_Calculada'].fillna(0)
+            
+            return front_tratado
 
         def achar_por_contse(front_contse, averbacao_contse):
             print("\n--- Iniciando Método 3: Lógica de CONT.SE 1 ---")
@@ -267,6 +286,7 @@ class ACHA_MATRICULA_CONSIGFACIL:
         # --- PASSO 1: EXECUTAR MÉTODO DE SOMA POR CPF ---
         print("\n--- Iniciando Método 1: Lógica de Soma por CPF ---")
         df_resultado_passo_1 = soma_por_cpf(front, averbacao)
+        print(f'\nColunas após o Passo 1: {df_resultado_passo_1.columns.tolist()}\n')
 
         # Identifica os resolvidos pela coluna de auditoria 'Soma_Calculada'
         mask_resolvidos_p1 = df_resultado_passo_1['Soma_Calculada'].notna()

@@ -57,7 +57,10 @@ class SERHA:
         esteiras_permitidas = ['02.03 AGUARDANDO PROCESSAMENTO CARTAO', '11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
                                'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
                                '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
-                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "ANDAMENTO", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO"
+                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
+                               "07.2 TED DEVOLVIDA A\x80\x93 PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "11 FORMALIZAA\x87A\x83O", "07.1.1 QUITACAO - CORRECAO DE CCB",
+                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "10.7 CONTRATO NA\x83O AVERBADO - AGUARDANDO RESOLUA\x87A\x83O", 
+                               "10.5 AGUARDANDO AVERBACAO COMPRA OUTROS CONVENIOS"
                               ]
         
         # Vamos renomear a primeira coluna da conciliação
@@ -70,7 +73,6 @@ class SERHA:
         conciliacao['CONTRATOS'] = conciliacao['CONTRATOS'].astype('Int64')
 
         # Adiciona a coluna de tipo da Conciliação
-        print(f'colunas de front consig: {front_consig.columns}')
         tipo_conci = front_consig['nrContrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO PELO D8'].to_dict())
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
@@ -99,8 +101,13 @@ class SERHA:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão Conciliação
-        front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
-
+        if self.rubrica == 'CARTÃO':
+            # front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            # front_consig_validado_termino.loc[(~front_consig_validado_termino['dsTipoOperacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            pass
+        else:
+            # front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['dsTipoOperacao'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
         # Marcar liquidados em StatusContrato
         front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
@@ -118,9 +125,13 @@ class SERHA:
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
         if self.rubrica == 'CARTÃO':
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
+            # front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
+            # front_consig_cartao_conciliacao = front_consig[front_consig['dsTipoOperacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
+            front_consig_cartao_conciliacao = front_consig.copy()
+            pass
         else:
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False)].copy()
+            # front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False)].copy()
+            front_consig_cartao_conciliacao = front_consig[front_consig['dsTipoOperacao'].str.contains('CARTAO BENEFICIO', na=False)].copy()
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -227,21 +238,22 @@ class SERHA:
         return front_copy
 
 
-    def trata_contratos(self, averbados_df, cred_base):
+    def trata_contratos(self, averbados_df, front_base):
         '''
         :param averbados_df:
-        :param cred_base:
+        :param front_base:
         :return: df_codigos_tratados
         Função que faz o tratamento dos números de contrato do Relatório de Averbados
         '''
 
+        print('Iniciando o tratamento dos contratos da averbação...')
+
         averbados_puro = averbados_df[['DATA', 'MASP', 'CPF Consignado', 'CPF Ponto e Traço',
                                        'Nome Consignado', 'ContratoOriginal']].copy()
-        averbados_puro['ContratoOriginal'] = averbados_puro['ContratoOriginal'].astype(str)
 
-        cred_feito = cred_base.copy()
+        front_feito = front_base.copy()
 
-        cred_feito['Codigo_Credbase'] = cred_feito['Codigo_Credbase'].astype(str)
+        front_feito['nrContrato'] = front_feito['nrContrato'].astype(str)
 
         # print(f'Contratos da averbação:\n{averbados_puro['Contrato            ']}')
 
@@ -256,11 +268,11 @@ class SERHA:
                 return re.sub(r'[^0-9a-zA-Z]', '', texto)  # Mantém letras e números
 
             # --- Passo 1: Criar o mapa de referência (sem alterações) ---
-            df_limpo['Codigo_Credbase'] = df_limpo['Codigo_Credbase'].astype(str).str.strip()
-            df_limpo['Operacao'] = df_limpo['Operacao'].astype(str).str.strip()
+            df_limpo['nrContrato'] = df_limpo['nrContrato'].astype(str).str.strip()
+            df_limpo['nrCCB'] = df_limpo['nrCCB'].astype(str).str.strip()
             print("Criando mapa de referência CPF -> Contratos...")
-            cpf_contratos = df_limpo.groupby('CPF')['Codigo_Credbase'].apply(list).to_dict()
-            cpf_operacao = df_limpo.groupby('CPF')['Operacao'].apply(list).to_dict()
+            cpf_contratos = df_limpo.groupby('nrCpf')['nrContrato'].apply(list).to_dict()
+            cpf_operacao = df_limpo.groupby('nrCpf')['nrCCB'].apply(list).to_dict()
             # print(f'Mapa contratos:\n{cpf_contratos}')
 
             # --- Passo 2: Definir a função que será aplicada em cada linha (LÓGICA ALTERADA) ---
@@ -355,8 +367,6 @@ class SERHA:
                         if melhor_match_para_parte in contratos_disponiveis:
                             index_remocao = contratos_disponiveis.index(melhor_match_para_parte)
                             del contratos_disponiveis[index_remocao]
-                            if index_remocao < len(operacoes_disponiveis):
-                                del operacoes_disponiveis[index_remocao]
 
                 return encontrados_nesta_linha
 
@@ -373,46 +383,66 @@ class SERHA:
             df_resultado = pd.concat([df_sujo, df_contratos_novos], axis=1)
 
             print("Processo concluído com sucesso!")
-            r'''df_resultado.to_excel(fr'{self.caminho}\Relatório Averbados Contratos tratados.xlsx', index=False)'''
+            df_resultado.to_excel(fr'{self.caminho}\Relatório Averbados Contratos tratados.xlsx', index=False)
             return df_resultado
 
 
         # Chama a função principal com os dataframes preparados
-        df_codigos_tratados = extrair_contratos_com_referencia(averbados_puro, cred_feito)
+        df_codigos_tratados = extrair_contratos_com_referencia(averbados_puro, front_feito)
         return df_codigos_tratados
 
-    def trata_orbital(self):
+    def trata_orbital(self, front_para_separar):
         '''
         Função que faz o tratamento do arquivo de Orbitall. Por enquanto ele ainda não tem utilidade
         :return:
         '''
-        if self.orbital is None:
-            return
+        if 'NÃO LANÇAR - ORBITAL' not in front_para_separar['OBS'].values:
+            print('Não há registros de ORBITAL para tratar.')
+            return None
 
-    def averbados_func(self, cred, trabalhado_ant, complemento, cred_trab):
-        credbase_tudo = cred.copy()
-        # print(credbase_tudo['Esteira'].unique())
+        front_so_orbital = front_para_separar.loc[
+            front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
+            ['nrContrato', 'dsNome', 'nrCpf', 'vlPrestacao']
+        ].copy()
+        front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+
+        orbital_final = front_so_orbital
+
+        orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
+
+        orbital_final.to_excel(fr'{self.caminho}\ORBITAL TRABALHADO INSS.xlsx', index=False)
+
+        return orbital_final
+
+    def averbados_func(self, front, trabalhado_ant, complemento, front_trab):
+        front_tudo = front.copy()
+        # print(front_tudo['Esteira'].unique())
         trabalhado_mes_passado = trabalhado_ant.copy()
+        trabalhado_mes_passado = trabalhado_mes_passado.rename(columns={'Contrato original': 'ContratoOriginal'})
+        trabalhado_mes_passado = trabalhado_mes_passado.rename(columns={'Data': 'DATA'})
+        trabalhado_mes_passado = trabalhado_mes_passado.rename(columns={'Data + Hora': 'DATA'})
+        trabalhado_mes_passado = trabalhado_mes_passado.rename(columns={'CPF': 'CPF Consignado'})
         # trabalhado_mes_passado = trabalhado_mes_passado.iloc[:-2]
-        cred_trabalhado = cred_trab.copy()
-
+        front_trabalhado = front_trab.copy()
 
         if self.rubrica == 'CARTÃO':
-            trabalhado_ant.loc[
-                ~trabalhado_ant['ContratoOriginal'].astype(str).str.contains('/'),
+            trabalhado_mes_passado.loc[
+                ~trabalhado_mes_passado['ContratoOriginal'].astype(str).str.contains('/'),
                 'ContratoOriginal'
-            ] = trabalhado_ant['ContratoOriginal'].astype(str).str[:9]
+            ] = trabalhado_mes_passado['ContratoOriginal'].astype(str).str[:9]
 
             averbados = self.averbados.copy()
             if complemento is None:
                 complemento = pd.DataFrame(columns=['DATA', 'MASP', 'CPF Consignado', 'Nome Consignado', 'ContratoOriginal'])
-
-
+                print('Nenhum complemento foi fornecido para o mês anterior.')
+            else:
+                complemento = complemento.rename(columns={'Data': 'DATA'})
+                complemento = complemento.rename(columns={'Data + Hora': 'DATA'})
 
             # Remove a última linha do relatório de averbados
-            averbados = averbados.iloc[:-1]
+            averbados = averbados.loc[~averbados.iloc[:, 0].astype(str).str.contains('Auditoria Reservas Geral', na=False)].copy()
 
-            # print(averbados[['Contrato            ', 'Acao        ']])
+            # print(f'Relatorio de averbados:\n{averbados[['Contrato            ', 'Acao        ']]}')
 
             # No relatório de averbações abriremos o filtro da coluna "Acao", selecionaremos tudo que é Cancelamento e excluiremos da planilha
             averbados_sem_cancelamento = averbados.loc[averbados['Acao        '] != 'Cancelamento']
@@ -487,7 +517,7 @@ class SERHA:
             averbados_sem_cancelamento['cont la'] = averbados_sem_cancelamento['CPF Consig.'].map(cont_la)
             averbados_sem_cancelamento['cont la'] = averbados_sem_cancelamento['cont la'].fillna(0)
 
-            # print(averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la']>= 1, ['CPF Consig.', 'Contrato            ','cont la']] )
+            print(f'Averbados sem cancelamento cont igual a 1:\n{averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la']>= 1, ['CPF Consig.', 'Contrato            ','cont la']]}')
 
             # Vamos remover os cont la que forem iguais ou maiores que 1
             averbados_cont_la_zero = averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la'] == 0].copy()
@@ -535,6 +565,7 @@ class SERHA:
             '''print(f'Tipo da coluna Contrato para copiar: {trabalhado_mes_passado['Contrato para copiar'].loc[trabalhado_mes_passado['CPF Consignado'] == 99140187691]}')
             print(f'Tipo da coluna Contato do averbados_cont_la: {averbados_cont_la_um['Contrato            '].loc[averbados_cont_la_um['CPF Consig.'] == 99140187691]}')'''
 
+            trabalhado_mes_passado['DATA'] = pd.to_datetime(trabalhado_mes_passado['DATA'], errors='coerce')
             trabalhado_mes_passado = trabalhado_mes_passado.sort_values(by='DATA', ascending=False)
             trabalhado_mes_passado = trabalhado_mes_passado.drop_duplicates(subset='ContratoOriginal', keep='first')
             trabalhado_mes_passado = trabalhado_mes_passado.drop_duplicates(subset='MASP', keep='first')
@@ -570,18 +601,18 @@ class SERHA:
 
 
         elif self.rubrica == 'BENEFÍCIO':
-            trabalhado_ant.loc[
-                ~trabalhado_ant['ContratoOriginal'].astype(str).str.contains('/'),
+            trabalhado_mes_passado.loc[
+                ~trabalhado_mes_passado['ContratoOriginal'].astype(str).str.contains('/'),
                 'ContratoOriginal'
-            ] = trabalhado_ant['ContratoOriginal'].astype(str).str[:9]
+            ] = trabalhado_mes_passado['ContratoOriginal'].astype(str).str[:9]
 
             # 1. Lista de colunas a verificar
-            cols_contratos = ['ContratoOriginal'] + [col for col in trabalhado_ant.columns if
+            cols_contratos = ['ContratoOriginal'] + [col for col in trabalhado_mes_passado.columns if
                                                      str(col).startswith('Contrato')]
 
             # 2. Cria a lista unificada e limpa o ".0"
             lista_bloqueio = (
-                trabalhado_ant[cols_contratos]
+                trabalhado_mes_passado[cols_contratos]
                 .apply(lambda x: x.astype(str))  # Converte tudo para texto
                 .stack()  # Empilha
                 .unique()  # Remove duplicatas
@@ -595,25 +626,23 @@ class SERHA:
             lista_bloqueio = lista_bloqueio.str.replace(r'\.0$', '', regex=True)
 
             # 3. Aplica o filtro
-            beneficio_filter = ~cred_trabalhado['Codigo_Credbase'].astype(str).isin(lista_bloqueio)
+            beneficio_filter = ~front_trabalhado['nrContrato'].astype(str).isin(lista_bloqueio)
 
-            cred_ben_filter = cred_trabalhado[beneficio_filter].loc[cred_trabalhado['CPF'] != '054.873.956-08']
-            # print(cred_ben_filter['Cliente'])
-            '''print(f'Codigo_Credbase do cred trabalhado \n{type(cred_trabalhado.loc[0, 'Codigo_Credbase'])}')
-            print(f'ContratoOriginal do trabalhado_anterior \n{type(trabalhado_ant.loc[0, 'ContratoOriginal'])}')
+            front_ben_filter = front_trabalhado[beneficio_filter].loc[front_trabalhado['nrCpf'] != '054.873.956-08']
+            # print(front_ben_filter['Cliente'])
+            '''print(f'Codigo_Credbase do front trabalhado \n{type(front_trabalhado.loc[0, "nrContrato"])}')
+            print(f'ContratoOriginal do trabalhado_mes_passado \n{type(trabalhado_mes_passado.loc[0, "ContratoOriginal"])}')
 
-            print(f'São iguais? {cred_trabalhado.loc[0, 'Codigo_Credbase'] == trabalhado_ant.loc[0, 'ContratoOriginal']}')'''
+            print(f'São iguais? {front_trabalhado.loc[0, "nrContrato"] == trabalhado_mes_passado.loc[0, "ContratoOriginal"]}')'''
 
-
-            nova_coluna_data = trabalhado_mes_passado['DATA'].tolist() + cred_ben_filter['Inicio'].tolist()
-            nova_coluna_masp = trabalhado_mes_passado['MASP'].tolist() + cred_ben_filter['Matricula'].tolist()
-            nova_coluna_CPF = trabalhado_mes_passado['CPF Consignado'].tolist() + cred_ben_filter[
-                'CPF'].tolist()
-            nova_coluna_nome = trabalhado_mes_passado['Nome Consignado'].tolist() + cred_ben_filter[
-                'Cliente'].tolist()
-            nova_coluna_contrato_original = trabalhado_mes_passado['ContratoOriginal'].tolist() + cred_ben_filter[
-                'Codigo_Credbase'].tolist()
-
+            nova_coluna_data = trabalhado_mes_passado['DATA'].tolist() + front_ben_filter['dtCessao'].tolist()
+            nova_coluna_masp = trabalhado_mes_passado['MASP'].tolist() + front_ben_filter['dsMatricula'].tolist()
+            nova_coluna_CPF = trabalhado_mes_passado['CPF Consignado'].tolist() + front_ben_filter[
+                'nrCpf'].tolist()
+            nova_coluna_nome = trabalhado_mes_passado['Nome Consignado'].tolist() + front_ben_filter[
+                'dsNome'].tolist()
+            nova_coluna_contrato_original = trabalhado_mes_passado['ContratoOriginal'].tolist() + front_ben_filter[
+                'nrContrato'].tolist()
             nova_planilha_data = pd.DataFrame(nova_coluna_data, columns=['DATA'])
 
             outras_colunas_data = trabalhado_mes_passado.drop(columns=['DATA'])
@@ -644,10 +673,10 @@ class SERHA:
 
         # Vamos separar só os NaN
         # Aqui é feito o tratamento dos números de contrato
-        trabalhado_mes_atual_tratado = self.trata_contratos(trabalhado_mes_atual, cred)
+        trabalhado_mes_atual_tratado = self.trata_contratos(trabalhado_mes_atual, front)
 
         # Só por precaução transforma os Codigos Credbase de novo em string
-        credbase_tudo['Codigo_Credbase'] = credbase_tudo['Codigo_Credbase'].astype(str)
+        front_tudo['nrContrato'] = front_tudo['nrContrato'].astype(str)
 
         # Inserir colunas de esteira
         # 1. Encontra todas as colunas que batem com o padrão "Contrato [número]"
@@ -671,7 +700,7 @@ class SERHA:
 
                 # Puxa as esteiras
                 trabalhado_mes_atual_tratado[col_esteira] = trabalhado_mes_atual_tratado[col_contrato].map(
-                    credbase_tudo.set_index('Codigo_Credbase')['Esteira'])
+                    front_tudo.set_index('nrContrato')['dsEsteira'])
 
 
                 # Cria a nova coluna no DataFrame
@@ -687,7 +716,8 @@ class SERHA:
                 print(f"Aviso: A coluna '{col_contrato}' não segue o padrão 'Contrato [número]'.")
 
         # PUXA TABELA
-        trabalhado_mes_atual_tratado['TABELA 1'] = trabalhado_mes_atual_tratado['Contrato 1'].map(credbase_tudo.set_index('Codigo_Credbase')['Tabela'])
+        # trabalhado_mes_atual_tratado['TABELA 1'] = trabalhado_mes_atual_tratado['Contrato 1'].map(front_tudo.set_index('nrContrato')['Tipo Conciliação'])
+        trabalhado_mes_atual_tratado['TABELA 1'] = trabalhado_mes_atual_tratado['Contrato 1'].map(front_tudo.set_index('nrContrato')['dsTipoOperacao'])
 
         # PUXA VALOR A LANÇAR
         for col in colunas_contrato:
@@ -699,8 +729,9 @@ class SERHA:
                 col_parcela = f'Parcela {numero}'
 
                 # Puxa as esteiras
+                front_trabalhado['nrContrato'] = front_trabalhado['nrContrato'].astype(str)
                 trabalhado_mes_atual_tratado[col_parcela] = trabalhado_mes_atual_tratado[col].map(
-                    cred_trabalhado.set_index('Codigo_Credbase')['Valor a lançar'])
+                    front_trabalhado.set_index('nrContrato')['Valor a lançar'])
 
                 # Cria a nova coluna no DataFrame
                 #    (Aqui, estou preenchendo com pd.NA (nulo),
@@ -713,10 +744,11 @@ class SERHA:
                 print(f"Aviso: A coluna '{col}' não segue o padrão 'Contrato [número]'."),
 
         # Orbitall
-        if self.orbital is not None:
+        orbital = self.trata_orbital(front)
+        if orbital is not None:
             # 1. Mapeamento da coluna ORBITAL (já existente)
             trabalhado_mes_atual_tratado['ORBITAL'] = trabalhado_mes_atual_tratado["CPF Ponto e Traço"].map(
-                self.orbital.set_index('CPF/CNPJ')['Valor da Parcela']
+                orbital.set_index('CPF/CNPJ')['VALOR DESCONTO']
             )
 
             # 2. Filtra todas as colunas que começam com "Parcela "
@@ -740,15 +772,17 @@ class SERHA:
             # 2. Soma essas colunas horizontalmente (axis=1) e cria a nova coluna
             trabalhado_mes_atual_tratado['Valor a Lançar'] = colunas_parcelas.sum(axis=1)
 
-        trabalhado_mes_atual_tratado.to_excel(fr'{self.caminho}\TRABALHADO MÊS ATUAL.xlsx', index=False)
+        trabalhado_mes_atual_tratado.to_excel(fr'{self.caminho}\TRABALHADO MÊS ATUAL {self.convenio} {self.rubrica}.xlsx', index=False)
 
     def main(self):
 
         # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- FLUXO PRINCIPAL -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
-        credbase_trabalhado = self.tratamento_front()
+        front_preliminar = self.tratamento_front_preliminar()
 
-        self.averbados_func(credbase_trabalhado, self.trabalhado_anterior, self.complementares, credbase_trabalhado)
+        front_trabalhado = self.tratamento_front()
+
+        self.averbados_func(front_preliminar, self.trabalhado_anterior, self.complementares, front_trabalhado)
 
 
 

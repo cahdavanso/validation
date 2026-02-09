@@ -260,7 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateSubmitButtonState = () => {
         const hasFiles = Object.keys(fileDataMap).length > 0;
         let valid = !!selectedConvenio;
-        if (selectedConvenio && CONVENIOS_CODATA.includes(selectedConvenio) && !selectedConsignataria && !selectedRubrica) valid = false;
+        if (selectedConvenio && CONVENIOS_CODATA.includes(selectedConvenio) && !selectedConsignataria) valid = false;
+        else if (selectedConvenio && CONVENIOS_SERHA.includes(selectedConvenio) && !selectedRubrica) valid = false;
         submitButton.disabled = !hasFiles || !valid;
     };
 
