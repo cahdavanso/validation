@@ -67,15 +67,16 @@ class INSS:
     def tratamento_front_preliminar(self):
         front_consig = self.front.copy()
 
-        # Trasnforma vlPrestacao em numérico
-        # front_consig['vlPrestacao'] = front_consig['vlPrestacao'].astype(str).str.replace('.', '', regex=False)
-        front_consig['vlPrestacao'] = front_consig['vlPrestacao'].astype(str).str.replace(',', '.', regex=False)
-        front_consig['vlPrestacao'] = pd.to_numeric(front_consig['vlPrestacao'], errors='coerce').fillna(0)
+        # Trasnforma Prestacao em numérico
+        # front_consig['Prestacao'] = front_consig['Prestacao'].astype(str).str.replace('.', '', regex=False)
+        front_consig.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
+        front_consig['Prestacao'] = front_consig['Prestacao'].astype(str).str.replace(',', '.', regex=False)
+        front_consig['Prestacao'] = pd.to_numeric(front_consig['Prestacao'], errors='coerce').fillna(0)
 
         conciliacao = self.conciliacao.copy()
 
         # Colocar traços nos contratos xxxxxxxxx-x
-        contratos_com_traço = front_consig['nrCCB'].astype(str).str.zfill(10).str.slice(0, 9) + '-' + front_consig['nrCCB'].astype(str).str.zfill(10).str.slice(9, 10)
+        contratos_com_traço = front_consig['CCB'].astype(str).str.zfill(10).str.slice(0, 9) + '-' + front_consig['CCB'].astype(str).str.zfill(10).str.slice(9, 10)
 
         # Insere as colunas vazias necessárias
         front_consig.insert(0, 'NR_OPER', contratos_com_traço,True)
@@ -84,14 +85,14 @@ class INSS:
         front_consig.insert(23, 'Análise', '', True)
 
         situacao_averbado_index = self.averbados.set_index('NR_OPER_EDITADO')['SITUAÇÃO'].copy()
-        situacao_averbado_map = front_consig['nrContrato'].map(situacao_averbado_index.to_dict())
+        situacao_averbado_map = front_consig['Contrato'].map(situacao_averbado_index.to_dict())
         front_consig.insert(24, 'SITUAÇÃO', situacao_averbado_map, True)
 
         valor_reajustado_index = self.averbados.set_index('NR_OPER_EDITADO')['MARGEM REAJUSTADA'].copy()
-        valor_reajustado = front_consig['nrContrato'].map(valor_reajustado_index.to_dict())
+        valor_reajustado = front_consig['Contrato'].map(valor_reajustado_index.to_dict())
         front_consig.insert(25, 'Valor Averbado Reajustado', valor_reajustado, True)
 
-        print(f'Esteiras Únicas do front: {front_consig["dsEsteira"].unique()}')
+        print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
 
         # Esteiras
         esteiras_permitidas = ['11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
@@ -112,7 +113,7 @@ class INSS:
 
         # Adiciona a coluna de tipo da Conciliação
         print(f'colunas de front consig: {front_consig.columns}')
-        tipo_conci = front_consig['nrContrato'].map(conciliacao.set_index('CONTRATOS')['TIPO OP'].to_dict())
+        tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['TIPO OP'].to_dict())
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
@@ -147,19 +148,19 @@ class INSS:
         # Marca saldo positivo
         conciliacao_tatado = self.trata_conciliacao()
         conciliacao_tatado['CONTRATOS'] = conciliacao_tatado['CONTRATOS'].astype('Int64')
-        front_consig['Saldo'] = front_consig['nrContrato'].map(conciliacao_tatado.set_index('CONTRATOS')['Saldo'].to_dict())
+        front_consig['Saldo'] = front_consig['Contrato'].map(conciliacao_tatado.set_index('CONTRATOS')['Saldo'].to_dict())
         front_consig_validado_termino = front_consig.copy()
         front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > -0.01, 'Análise'] = 'NÃO LANÇAR - SALDO POSITIVO'
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
-        valor_a_lancar = np.minimum(np.abs(front_consig_validado_termino['Saldo']).fillna(float('inf')), front_consig_validado_termino['vlPrestacao'])
+        valor_a_lancar = np.minimum(np.abs(front_consig_validado_termino['Saldo']).fillna(float('inf')), front_consig_validado_termino['Prestacao'])
 
         front_consig_validado_termino['Valor a lançar'] = valor_a_lancar
 
         # Marca o que é Ação Judicial
         # No caso de Ação Judicial estiver estiver SIM e NÃO ao invés de 1 e 0
-        front_consig_validado_termino['AcaoJudicial'] = front_consig_validado_termino['AcaoJudicial'].replace({'SIM': 1, r'NÃƒO|NÃO': 0})
-        front_consig_validado_termino.loc[front_consig_validado_termino['AcaoJudicial'] == 1, 'Análise'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
+        front_consig_validado_termino['Acao Judicial'] = front_consig_validado_termino['Acao Judicial'].replace({'SIM': 1, 'NAO': 0})
+        front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'Análise'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
 
         # Marca o que é Obito
         # No caso de óbito estiver estiver SIM e NÃO ao invés de 1 e 0
@@ -176,12 +177,12 @@ class INSS:
             numero_operacao = self.casos_capital['NR. OPER.'].astype(str).str.slice(0, 9).tolist()
             self.casos_capital.insert(1, 'NR_OPER_EDITADO', numero_operacao, True)
             casos_capital_lista = self.casos_capital['NR_OPER_EDITADO'].astype(str).tolist()
-            front_consig_validado_termino.loc[(front_consig_validado_termino['nrContrato'].astype(str).str.slice(0, 9).isin(casos_capital_lista)), 'Análise'] = 'NÃO LANÇAR - CASOS PATRICK'
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Contrato'].astype(str).str.slice(0, 9).isin(casos_capital_lista)), 'Análise'] = 'NÃO LANÇAR - CASOS PATRICK'
 
         # Marcar liquidados em StatusContrato
-        front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado|CANCELADO', na=False)), 'Análise'] = 'NÃO LANÇAR - LIQUIDADO'
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'Análise'] = 'NÃO LANÇAR - LIQUIDADO'
         # Marca tudo que é Empréstimo
-        # front_consig_validado_termino.loc[(front_consig_validado_termino['dsTipoOperacao'].str.contains('EMPRÉSTIMO|EMPRESTIMO', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - EMPRÉSTIMO'
+        # front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Operacao'].str.contains('EMPRÉSTIMO|EMPRESTIMO', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - EMPRÉSTIMO'
 
         # Marca tudo que é Telesaque
         front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Conciliação'].str.contains('CARTÃO TS|CARTAO TS', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - TELESAQUE'
@@ -200,8 +201,8 @@ class INSS:
         front_trabalhado = self.tratamento_front_preliminar()
 
         # Renomear colunas
-        front_trabalhado.rename(columns={'nrContrato': 'NR_OPER_EDITADO', 'nrCpf': 'CPF', 'dsMatricula': 'MATRICULA', 'dsNome': 'CLIENTE', 
-                                         'dtCessao': 'DT_BASE', 'vlPrestacao': 'VLR_PARC', 'dsEsteira': 'ESTEIRA','dsTipoOperacao': 'PRODUTO', 'dsConvenio': 'ORIGEM_4'}, inplace=True)
+        front_trabalhado.rename(columns={'Contrato': 'NR_OPER_EDITADO', 'CPF': 'CPF', 'Matricula': 'MATRICULA', 'Nome': 'CLIENTE', 
+                                         'dtCessao': 'DT_BASE', 'Prestacao': 'VLR_PARC', 'Esteira': 'ESTEIRA','Tipo Operacao': 'PRODUTO', 'Convenio': 'ORIGEM_4'}, inplace=True)
 
         # Filtra só os que vão lançar
         front_trabalhado_lancar = front_trabalhado[front_trabalhado['Análise'] == 'LANÇAR'].copy()

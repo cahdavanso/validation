@@ -46,8 +46,8 @@ class ACHA_MATRICULA_CONSIGFACIL:
             return re.sub(r'[^0-9a-zA-Z]', '', texto)
 
         def encontrar_matriculas_na_linha(row, mapa_cpf_matriculas):
-            cpf = str(row['nrCpf']).strip()
-            texto_matriculas_sujo = str(row['dsMatricula'])
+            cpf = str(row['CPF']).strip()
+            texto_matriculas_sujo = str(row['Matricula'])
 
             if cpf not in mapa_cpf_matriculas:
                 return ['CPF não encontrado na Averbação']
@@ -87,9 +87,9 @@ class ACHA_MATRICULA_CONSIGFACIL:
 
             # ... (Seus prints e conversões de tipo iniciais continuam iguais) ...
             averbacao_geral['Matrícula'] = averbacao_geral['Matrícula'].astype(str)
-            front_tratado['nrCpf'] = front_tratado['nrCpf'].astype(str).str.strip()
+            front_tratado['CPF'] = front_tratado['CPF'].astype(str).str.strip()
             averbacao_geral['CPF'] = averbacao_geral['CPF'].astype(str).str.strip()
-            front_tratado['vlPrestacao'] = pd.to_numeric(front_tratado['vlPrestacao'], errors='coerce')
+            front_tratado['Prestacao'] = pd.to_numeric(front_tratado['Prestacao'], errors='coerce')
             averbacao_geral['Valor da reserva'] = pd.to_numeric(averbacao_geral['Valor da reserva'], errors='coerce')
 
             # ... (Criação do b_lookup continua igual) ...
@@ -110,18 +110,18 @@ class ACHA_MATRICULA_CONSIGFACIL:
             if 'MATRICULA_ENCONTRADA_1' not in front_tratado.columns:
                 front_tratado['MATRICULA_ENCONTRADA_1'] = np.nan
 
-            cpfs_unicos = front_tratado['nrCpf'].unique()
+            cpfs_unicos = front_tratado['CPF'].unique()
             tolerancias = [0, 20, 40, 60]
 
             for cpf in cpfs_unicos:
                 if cpf not in b_lookup:
-                    indices_para_marcar = front_tratado[front_tratado['nrCpf'] == cpf].index
+                    indices_para_marcar = front_tratado[front_tratado['CPF'] == cpf].index
                     front_tratado.loc[indices_para_marcar, 'MATRICULA_ENCONTRADA_1'] = 'CPF não encontrado na averbação (Soma)'
                     # Opcional: Marcar explicitamente nas novas colunas também
                     front_tratado.loc[indices_para_marcar, 'Metodo_Encontrado'] = 'CPF Inexistente'
                     continue
 
-                itens_a_combinar = list(front_tratado[front_tratado['nrCpf'] == cpf][['vlPrestacao']].itertuples())
+                itens_a_combinar = list(front_tratado[front_tratado['CPF'] == cpf][['Prestacao']].itertuples())
                 
                 while itens_a_combinar:
                     match_encontrado_nesta_iteracao = False
@@ -179,7 +179,7 @@ class ACHA_MATRICULA_CONSIGFACIL:
             mapa_matricula = df_averbacao_unico.set_index('CPF')['Matrícula'].to_dict()
 
             # 5 Preencher no credbase apenas para esses CPFs
-            df_front['MATRICULA_ENCONTRADA_1'] = df_front['nrCpf'].map(mapa_matricula)
+            df_front['MATRICULA_ENCONTRADA_1'] = df_front['CPF'].map(mapa_matricula)
             mask_contse = (df_front['MATRICULA_ENCONTRADA_1'] != '') | df_front['MATRICULA_ENCONTRADA_1'] != 'CPF não encontrado na Averbação'
             df_front.loc[mask_contse, 'Metodo_Encontrado'] = 'CONT.SE'
 
@@ -204,8 +204,8 @@ class ACHA_MATRICULA_CONSIGFACIL:
             # --- Passo 1: Calcular o "gasto" de cada matrícula com base nos resultados já encontrados ---
             # Usamos o DataFrame completo com os resultados parciais para ter a visão total.
             gasto_por_matricula = (front_com_resultados_parciais
-                                   .dropna(subset=['MATRICULA_ENCONTRADA_1', 'vlPrestacao'])
-                                   .groupby('MATRICULA_ENCONTRADA_1')['vlPrestacao']
+                                   .dropna(subset=['MATRICULA_ENCONTRADA_1', 'Prestacao'])
+                                   .groupby('MATRICULA_ENCONTRADA_1')['Prestacao']
                                    .sum())
 
             # print(f'tipo da coluna matrícula {credbase_com_resultados_parciais['MATRICULA_ENCONTRADA_1'].dtype}')
@@ -241,11 +241,11 @@ class ACHA_MATRICULA_CONSIGFACIL:
             # --- Passo 4: Iterar sobre as linhas restantes e encontrar a melhor matrícula (LÓGICA ALTERADA) ---
             # É importante ordenar por Parcela (da maior para a menor) para alocar as parcelas grandes primeiro
             # Isso ajuda a otimizar o uso do saldo
-            df_restante_ordenado = df_restante.sort_values(by=['nrCpf', 'vlPrestacao'], ascending=[True, False])
+            df_restante_ordenado = df_restante.sort_values(by=['CPF', 'Prestacao'], ascending=[True, False])
 
             for index, row in df_restante_ordenado.iterrows():
-                cpf = str(row['nrCpf']).strip()
-                parcela_a_cobrir = row['vlPrestacao']
+                cpf = str(row['CPF']).strip()
+                parcela_a_cobrir = row['Prestacao']
 
                 # Pega a lista de matrículas e saldos disponíveis para este CPF
                 saldos_disponiveis = mapa_saldos_por_cpf.get(cpf)

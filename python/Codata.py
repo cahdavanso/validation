@@ -56,7 +56,7 @@ class CODATA:
                                "07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES"
                               ]
         
-        print(f'Esteiras Únicas do front: {front_consig["dsEsteira"].unique()}')
+        print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
 
         # Vamos renomear a primeira coluna da conciliação
         conciliacao.rename(columns={conciliacao.columns[0]: 'CONTRATOS'}, inplace=True)
@@ -69,18 +69,18 @@ class CODATA:
 
         # Adiciona a coluna de tipo da Conciliação
         print(f'colunas de front consig: {front_consig.columns}')
-        tipo_conci = front_consig['nrContrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
-        front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
+        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
 
         # ------------------------------------ ESTEIRAS REMOVIDAS ------------------------------------- #
-        front_consig_esteiras_removidas = front_consig[~front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
+        front_consig_esteiras_removidas = front_consig[~front_consig['Esteira'].isin(esteiras_permitidas)].copy()
         front_consig_esteiras_removidas.to_excel(fr'{self.caminho}\FRONT ESTEIRAS REMOVIDAS GOV PB {self.consignataria}.xlsx', index=False)
 
         # Trata coluna de Tipo da Conciliação
-        front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['dsTipoOperacao']
+        front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
@@ -88,8 +88,8 @@ class CODATA:
         front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > -0.01, 'OBS'] = 'NÃO LANÇAR - SALDO POSITIVO'
 
         # Marca o que é ação judicial
-        front_consig_validado_termino['AcaoJudicial'] = front_consig_validado_termino['AcaoJudicial'].replace({'SIM': 1, r'NÃƒO|NÃO': 0})
-        front_consig_validado_termino.loc[front_consig_validado_termino['AcaoJudicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
+        front_consig_validado_termino['Acao Judicial'] = front_consig_validado_termino['Acao Judicial'].replace({'SIM': 1, 'NAO': 0})
+        front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
 
         # Marca o que é Óbito
         # front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'OBS'] = 'NÃO LANÇAR - ÓBITO'
@@ -105,15 +105,15 @@ class CODATA:
 
         # Marca consignatária errada
         if self.consignataria == 'CAPITAL':
-            front_consig_validado_termino.loc[(front_consig_validado_termino['dsConsignataria'].str.contains('INSPFEM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - INSPFEM'
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('INSPFEM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - INSPFEM'
         elif self.consignataria == 'INSPFEM':
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['dsConsignataria'].str.contains('INSPFEM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - CAPITAL'
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Consignataria'].str.contains('INSPFEM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - CAPITAL'
 
         # Marcar liquidados em StatusContrato
         if self.consignataria == 'CAPITAL':
-            front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado|CANCELADO|ANDAMENTO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO|ANDAMENTO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
         else:
-            front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
@@ -138,7 +138,7 @@ class CODATA:
             front_consig_trabalhado = front_consig_cartao_conciliacao
 
         # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['AcaoJudicial'] != 1].copy()
+        front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Acao Judicial'] != 1].copy()
 
         # ---------------------------------- TIRAR ÓBITO DO FRONT ---------------------------------- #
         # front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Obito'] != 1].copy()
@@ -146,9 +146,9 @@ class CODATA:
 
         # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
         if self.consignataria == 'CAPITAL':
-            front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['dsConsignataria'].str.contains('INSPFEM', na=False)].copy()
+            front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Consignataria'].str.contains('INSPFEM', na=False)].copy()
         elif self.consignataria == 'INSPFEM':
-            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['dsConsignataria'].str.contains('INSPFEM', na=False)].copy()
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('INSPFEM', na=False)].copy()
         else:
             print('Consignatária inválida.')
             return
@@ -175,7 +175,7 @@ class CODATA:
 
         front_so_orbital = front_para_separar.loc[
             front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
-            ['nrContrato', 'dsNome', 'nrCpf', 'vlPrestacao']
+            ['Contrato', 'Nome', 'CPF', 'Prestacao']
         ].copy()
         front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
@@ -202,16 +202,17 @@ class CODATA:
         # print(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
 
         # Puxar o saldo para o credbase
-        front_copy['Saldo'] = front_copy['nrContrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
+        front_copy['Saldo'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
         # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
 
-        front_copy['vlPrestacao'] = front_copy['vlPrestacao'].str.replace('.', '', regex=False)
-        front_copy['vlPrestacao'] = front_copy['vlPrestacao'].str.replace(',', '.', regex=False)
-        front_copy['vlPrestacao'] = pd.to_numeric(front_copy['vlPrestacao'], errors='coerce')
+        front_copy.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
+        front_copy['Prestacao'] = front_copy['Prestacao'].str.replace('.', '', regex=False)
+        front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
+        front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
 
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
-        valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['vlPrestacao'])
+        valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['Prestacao'])
 
         front_copy['Valor a lançar'] = valor_a_lancar
 
@@ -252,7 +253,7 @@ class CODATA:
                         contrato_para_prazo[str(contrato).strip()] = prazo
 
             # 4. Aplica a busca no Front
-            return front['nrContrato'].astype(str).str.strip().map(contrato_para_prazo)
+            return front['Contrato'].astype(str).str.strip().map(contrato_para_prazo)
 
         # Aplica a função ao DataFrame front
         front['PRAZO'] = substituir_modalidade()
@@ -446,15 +447,15 @@ class CODATA:
         averbado_novo['CONTSE SEQ'] = averbado_novo.groupby('CPF').cumcount() + 1
 
         if self.consignataria == 'CAPITAL':
-            soma_condicional_dict_averb = front_consig.groupby('nrCpf')['Valor a lançar'].sum().to_dict()
+            soma_condicional_dict_averb = front_consig.groupby('CPF')['Valor a lançar'].sum().to_dict()
             averbado_novo['SOMASE'] = averbado_novo['CPF'].map(soma_condicional_dict_averb)
             averbado_novo['SOMASE'] = averbado_novo['SOMASE'].fillna(0)
         else:
             # 1. Soma por CPF no front_consig
-            somase_front_consig = front_consig.groupby('nrCpf')['Valor a lançar'].sum()
+            somase_front_consig = front_consig.groupby('CPF')['Valor a lançar'].sum()
 
             # 2. Contagem de contratos no front_consig (para somar 25 por contrato)
-            qtd_contratos = front_consig.groupby('nrCpf').size() * 25
+            qtd_contratos = front_consig.groupby('CPF').size() * 25
 
             # 3. Soma por CPF no orbital
             somase_orbital = orbitall.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()

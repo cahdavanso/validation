@@ -17,12 +17,15 @@ document.addEventListener('DOMContentLoaded', () => {
         "GOV. MG - IPSM", "GOV. MG - CBMMG", "GOV. MG - PMMG", "GOV. MG - SEPLAG", "GOV. MG - IPSEMG"
     ];
 
-    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA].sort();
+    const CONVENIOS_CONSIGLOG = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DE CAJAMAR", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. SÃO GONÇALO", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO"];
+
+    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...CONVENIOS_CONSIGLOG].sort();
 
     const FIELDS_CONSIGFACIL = ["FRONT", "CONCILIACAO", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_CODATA = ["FRONT", "CONCILIACAO", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_INSS = ["FRONT", "CONCILIACAO", "AVERBADOS", "CASOS_CAPITAL"];
     const FIELDS_SERHA = ["FRONT", "CONCILIACAO", "AVERBADOS", "TRABALHADO_ANTERIOR", "COMPLEMENTAR"];
+    const FIELDS_CONSIGLOG = ["FRONT", "CONCILIACAO", "AVERBADOS", "ORBITAL"];
 
     const fileDataMap = {}; 
     
@@ -192,6 +195,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (CONVENIOS_CODATA.includes(convenio)) {
             consignatariaArea.classList.remove('hidden');
             currentFields = FIELDS_CODATA;
+        }else if (CONVENIOS_CONSIGLOG.includes(convenio)) {
+            consignatariaArea.classList.remove('hidden');
+            currentFields = FIELDS_CONSIGLOG;
         } else if (CONVENIOS_INSS.includes(convenio)) {
             currentFields = FIELDS_INSS;
         } else if (CONVENIOS_SERHA.includes(convenio)) {
@@ -261,6 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasFiles = Object.keys(fileDataMap).length > 0;
         let valid = !!selectedConvenio;
         if (selectedConvenio && CONVENIOS_CODATA.includes(selectedConvenio) && !selectedConsignataria) valid = false;
+        else if (selectedConvenio && CONVENIOS_CONSIGLOG.includes(selectedConvenio) && !selectedConsignataria) valid = false;
         else if (selectedConvenio && CONVENIOS_SERHA.includes(selectedConvenio) && !selectedRubrica) valid = false;
         submitButton.disabled = !hasFiles || !valid;
     };

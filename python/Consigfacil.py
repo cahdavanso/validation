@@ -37,7 +37,19 @@ class CONSIGFACIL:
         self.front = front if front is not None else pd.DataFrame()
 
         # 4. Conciliação
-        self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()
+        conciliacao_falso = pd.DataFrame(
+            columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25', 'RECEBIDO GERAL'])
+        conciliacao_falso['CONTRATOS'] = 123
+        conciliacao_falso['CPF'] = '123.456'
+        conciliacao_falso['PRESTAÇÃO'] = 10
+        conciliacao_falso['PRODUTO'] = 'Cartão de Crédito'
+        conciliacao_falso['PRAZO'] = 96
+        conciliacao_falso['D8 JUN 25'] = 10
+        conciliacao_falso['ST JUL 25'] = 'DESCONTO TOTAL'
+        conciliacao_falso['RECEBIDO GERAL'] = 0
+
+
+        self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
         
         # 5. Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
@@ -63,7 +75,7 @@ class CONSIGFACIL:
         front_consig.insert(23, 'PRAZO', '', True)
         front_consig.insert(24, 'OBS', '', True)
 
-        print(f'Esteiras Únicas do front: {front_consig["dsEsteira"].unique()}')
+        print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
 
         # Esteiras
         esteiras_permitidas = ['11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
@@ -82,15 +94,15 @@ class CONSIGFACIL:
         conciliacao['CONTRATOS'] = conciliacao['CONTRATOS'].astype('Int64')
 
         # Adiciona a coluna de tipo da Conciliação
-        print(f'colunas de front consig: {front_consig.columns}')
-        tipo_conci = front_consig['nrContrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        print(f'colunas da conciliacao: {conciliacao.columns}')
+        tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
-        front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
+        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
 
         # Trata coluna de Tipo da Conciliação
-        front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['dsTipoOperacao']
+        front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
@@ -99,12 +111,12 @@ class CONSIGFACIL:
 
         # Marca o que é ação judicial
         # No caso de Obito estiver estiver SIM e NÃO ao invés de 1 e 0
-        front_consig_validado_termino['AcaoJudicial'] = front_consig_validado_termino['AcaoJudicial'].replace({'SIM': 1, 'NÃO': 0})
-        front_consig_validado_termino.loc[front_consig_validado_termino['AcaoJudicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
+        front_consig_validado_termino['Acao Judicial'] = front_consig_validado_termino['Acao Judicial'].replace({'SIM': 1, 'NAO': 0})
+        front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
 
         # Marca o que é Óbito
         # No caso de ação judicial estiver estiver SIM e NÃO ao invés de 1 e 0
-        # front_consig_validado_termino['Obito'] = front_consig_validado_termino['Obito'].replace({'SIM': 1, 'NÃO': 0})
+        # front_consig_validado_termino['Obito'] = front_consig_validado_termino['Obito'].replace({'SIM': 1, 'NAO': 0})
         # front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'OBS'] = 'NÃO LANÇAR - ÓBITO'
  
         # Marca tudo que é orbital
@@ -117,10 +129,10 @@ class CONSIGFACIL:
         front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
 
         # Marcar liquidados em StatusContrato
-        front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
         # TIRAR BANCO OUTROS
-        front_consig_validado_termino.loc[(front_consig_validado_termino['dsConsignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'
 
         # Salva com os NÃO LANÇAR
         front_consig_validado_termino.to_excel(fr'{self.caminho}\FRONT SEMI TRABALHADO {self.convenio}.xlsx', index=False)
@@ -139,12 +151,12 @@ class CONSIGFACIL:
 
         # Pegar o que é CARTAO DE CREDITO do front
         # condicao_cartao = ['CARTAO DE CREDITO']
-        # front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['dsTipoOperacao'].isin(condicao_cartao)].copy()
+        # front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['Tipo Operacao'].isin(condicao_cartao)].copy()
         # Faz concat dos dois dataframes
         front_consig_trabalhado = front_consig_cartao_conciliacao.copy()
 
         # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['AcaoJudicial'] != 1].copy()
+        front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Acao Judicial'] != 1].copy()
 
         # ---------------------------------- TIRAR ÓBITO DO FRONT ---------------------------------- #
         # front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Obito'] != 1].copy()
@@ -155,17 +167,17 @@ class CONSIGFACIL:
         front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Valor a lançar'] > 0].copy()
 
         # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
-        mask_peculio = front_consig_trabalhado['dsConsignataria'] == 'HOJE PREVIDENCIA PRIVADA'
+        mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA'
         front_consig_trabalhado.loc[mask_peculio, 'Valor a lançar'] += 20
 
         # -------------------------------------- TIRA O PRAZO ----------------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['OBS'].str.contains('NÃO LANÇAR - PRAZO', na=False)].copy()
 
         # --------------------------------------- TIRA BANCO OUTROS ----------------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['dsConsignataria'].str.contains('OUTROS', na=False)].copy()
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Consignataria'].str.contains('OUTROS', na=False)].copy()
 
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['StatusContrato'].str.contains('Liquidado', na=False)].copy()
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado', na=False)].copy()
 
         front_consig_trabalhado.to_excel(
         fr'{self.caminho}\FRONT TRABALHADO {self.convenio}.xlsx',
@@ -233,16 +245,17 @@ class CONSIGFACIL:
         # print(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
 
         # Puxar o saldo para o credbase
-        front_copy['Saldo'] = front_copy['nrContrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
+        front_copy['Saldo'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
         # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
 
-        front_copy['vlPrestacao'] = front_copy['vlPrestacao'].str.replace('.', '', regex=False)
-        front_copy['vlPrestacao'] = front_copy['vlPrestacao'].str.replace(',', '.', regex=False)
-        front_copy['vlPrestacao'] = pd.to_numeric(front_copy['vlPrestacao'], errors='coerce')
+        front_copy.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
+        front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace('.', '', regex=False)
+        front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
+        front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
 
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
-        valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['vlPrestacao'])
+        valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['Prestacao'])
 
         front_copy['Valor a lançar'] = valor_a_lancar
 
@@ -302,7 +315,7 @@ class CONSIGFACIL:
             andam_file_sem_prev_seguro.to_excel(rf'{self.caminho}\ANDAMENTO GERAL {self.convenio}.xlsx', index=False)
 
             # 4. Aplica a busca no Credbase
-            return front['nrContrato'].astype(str).str.strip().map(contrato_para_prazo)
+            return front['Contrato'].astype(str).str.strip().map(contrato_para_prazo)
 
         # Aplica a função ao DataFrame front
         front['PRAZO'] = substituir_modalidade()
@@ -393,13 +406,13 @@ class CONSIGFACIL:
     def orbital_tratado(self, front_para_separar):
         if self.convenio == 'PREF CAJAMAR':
             orbital_preparado = front_para_separar.loc[
-                front_para_separar['dsConvenio'].str.contains('PREF.CAJAMAR CC', case=False, na=False),
-                ['nrContrato', 'dsNome', 'nrCpf', 'vlPrestacao']
+                front_para_separar['Convenio'].str.contains('PREF.CAJAMAR CC', case=False, na=False),
+                ['Contrato', 'Nome', 'CPF', 'vlPrestacao']
             ].copy()
         elif self.convenio == 'GOV MT':
             orbital_preparado = front_para_separar.loc[
-                front_para_separar['dsConvenio'].str.contains('GOV MT PL CAPIT|GOV MT PLCARTOS|GOV MT CB|GOV MT CARTOS C|GOVMT CARTOS CB', case=False, na=False),
-                ['nrContrato', 'dsNome', 'nrCpf', 'vlPrestacao']
+                front_para_separar['Convenio'].str.contains('GOV MT PL CAPIT|GOV MT PLCARTOS|GOV MT CB|GOV MT CARTOS C|GOVMT CARTOS CB', case=False, na=False),
+                ['Contrato', 'Nome', 'CPF', 'vlPrestacao']
             ].copy()
         orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
@@ -471,7 +484,7 @@ class CONSIGFACIL:
             credbase.loc[credbase['Banco'] == 'BANCO HP', 'Valor a lançar'] += 20'''
 
         # SOMASE
-        soma_condicional_dict_averb = front_consig.groupby('nrCpf')['Valor a lançar'].sum().to_dict()
+        soma_condicional_dict_averb = front_consig.groupby('CPF')['Valor a lançar'].sum().to_dict()
 
         if self.convenio in ['PREF CAJAMAR', 'GOV MT']:
             # Orbitall

@@ -51,7 +51,7 @@ class SERHA:
         front_consig.insert(23, 'PRAZO', '', True)
         front_consig.insert(24, 'OBS', '', True)
 
-        print(f'Esteiras Únicas do front: {front_consig["dsEsteira"].unique()}')
+        print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
 
         # Esteiras
         esteiras_permitidas = ['02.03 AGUARDANDO PROCESSAMENTO CARTAO', '11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
@@ -77,7 +77,7 @@ class SERHA:
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
-        front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
+        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
 
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['dsTipoOperacao']
@@ -89,8 +89,8 @@ class SERHA:
 
         # Marca o que é ação judicial
         # No caso de Obito estiver estiver SIM e NÃO ao invés de 1 e 0
-        front_consig_validado_termino['AcaoJudicial'] = front_consig_validado_termino['AcaoJudicial'].replace({'SIM': 1, 'NÃO': 0})
-        front_consig_validado_termino.loc[front_consig_validado_termino['AcaoJudicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
+        front_consig_validado_termino['Acao Judicial'] = front_consig_validado_termino['Acao Judicial'].replace({'SIM': 1, 'NAO': 0})
+        front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
 
         # Marca o que é Óbito
         # No caso de ação judicial estiver estiver SIM e NÃO ao invés de 1 e 0
@@ -109,7 +109,7 @@ class SERHA:
             # front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
             front_consig_validado_termino.loc[(~front_consig_validado_termino['dsTipoOperacao'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
         # Marcar liquidados em StatusContrato
-        front_consig_validado_termino.loc[(front_consig_validado_termino['StatusContrato'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
         # TIRAR BANCO OUTROS
         front_consig_validado_termino.loc[(front_consig_validado_termino['dsConsignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'
@@ -161,7 +161,7 @@ class SERHA:
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['dsConsignataria'].str.contains('OUTROS', na=False)].copy()
 
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['StatusContrato'].str.contains('Liquidado', na=False)].copy()
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado', na=False)].copy()
 
         front_consig_trabalhado.to_excel(
         fr'{self.caminho}\FRONT TRABALHADO {self.convenio}.xlsx',
@@ -225,6 +225,7 @@ class SERHA:
         front_copy['Saldo'] = front_copy['nrContrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
         # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
 
+        front_copy.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
         front_copy['vlPrestacao'] = front_copy['vlPrestacao'].str.replace('.', '', regex=False)
         front_copy['vlPrestacao'] = front_copy['vlPrestacao'].str.replace(',', '.', regex=False)
         front_copy['vlPrestacao'] = pd.to_numeric(front_copy['vlPrestacao'], errors='coerce')
@@ -700,7 +701,7 @@ class SERHA:
 
                 # Puxa as esteiras
                 trabalhado_mes_atual_tratado[col_esteira] = trabalhado_mes_atual_tratado[col_contrato].map(
-                    front_tudo.set_index('nrContrato')['dsEsteira'])
+                    front_tudo.set_index('nrContrato')['Esteira'])
 
 
                 # Cria a nova coluna no DataFrame

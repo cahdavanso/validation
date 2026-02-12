@@ -12,6 +12,7 @@ from python.Consigfacil import CONSIGFACIL
 from python.Codata import CODATA
 from python.INSS import INSS
 from python.Serha import SERHA
+from python.Consiglog import CONSIGLOG
 
 app = FastAPI()
 
@@ -30,8 +31,13 @@ app.add_middleware(
 
 # --- LISTAS DE CONVÊNIOS ---
 CODATA_CONVENIO = ["GOV. PB"]
+
 INSS_CONVENIO = ["INSS"]
+
 SERHA_CONVENIO = ["GOV. MG - IPSM", "GOV. MG - CBMMG", "GOV. MG - PMMG", "GOV. MG - SEPLAG", "GOV. MG - IPSEMG"]
+
+CONSIGLOG_CONVENIO = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DE CAJAMAR", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. SÃO GONÇALO", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO"]
+
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
@@ -171,6 +177,17 @@ async def validar_planilhas(
                 rubrica=rubrica,
                 caminho=CAMINHO_SAIDA,
                 complementar=complementar_df
+            )
+        elif convenio in CONSIGLOG_CONVENIO:
+            logging.info("Usando validador: CONSIGLOG")
+            validador = CONSIGLOG(
+                portal_file_list=averbados_df, 
+                convenio=convenio,
+                front=front_df,
+                consignataria=consignataria,
+                conciliacao=conciliacao_df,
+                caminho=CAMINHO_SAIDA,
+                orbital=orbital_df
             )
 
         else:
