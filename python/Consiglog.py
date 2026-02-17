@@ -40,6 +40,7 @@ class CONSIGLOG:
                                "07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES",
                                "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES"]
 
+
         self.arquivo_lancamento()
 
 

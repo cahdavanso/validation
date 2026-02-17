@@ -168,6 +168,7 @@ class INSS:
         # front_consig_validado_termino['Obito'] = front_consig_validado_termino['Obito'].replace({'SIM': 1, 'NÃƒO': 0})
         # front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'Análise'] = 'NÃO LANÇAR - ÓBITO'
 
+
         # Marca tudo que é orbital
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['Análise'].isin(['', np.nan]))), 'Análise'] = 'NÃO LANÇAR - ORBITAL'
         

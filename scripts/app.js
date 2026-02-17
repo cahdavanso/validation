@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logToConsole("Enviando dados para o servidor local (localhost:8000)...", 'warning');
         logToConsole("Aguardando processamento do Python... Isso pode levar alguns minutos.", 'warning');
 
-        const response = await fetch('http://localhost:8000/validar', { method: 'POST', body: formData });
+        const response = await fetch('/validar', { method: 'POST', body: formData });
 
         if (!response.ok) {
             const err = await response.json().catch(() => ({ detail: response.statusText }));
@@ -355,9 +355,11 @@ document.addEventListener('DOMContentLoaded', () => {
         logToConsole("PROCESSAMENTO CONCLUÍDO PELO SERVIDOR!", 'success');
         logToConsole(`Mensagem: ${result.message}`, 'success');
         
-        if (result.output_path) {
-            logToConsole(`Arquivos gerados salvos em:`, 'success');
-            logToConsole(`${result.output_path}`, 'info');
+        // Se o backend devolver o nome do arquivo gerado
+        if (result.filename) {
+            logToConsole(`Baixando arquivo processado...`, 'success');
+            // Cria um link invisível para forçar o download
+            window.location.href = `/download/${result.filename}`; 
         }
         
         return result;

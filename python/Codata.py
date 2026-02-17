@@ -57,6 +57,7 @@ class CODATA:
                                "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES"
                               ]
         
+        
         print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
 
         # Vamos renomear a primeira coluna da conciliação

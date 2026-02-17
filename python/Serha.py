@@ -63,6 +63,7 @@ class SERHA:
                                "10.5 AGUARDANDO AVERBACAO COMPRA OUTROS CONVENIOS", "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES"
                               ]
         
+        
         # Vamos renomear a primeira coluna da conciliação
         conciliacao.rename(columns={conciliacao.columns[0]: 'CONTRATOS'}, inplace=True)
         # Converte para lista de colunas

@@ -1,4 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi.staticfiles import StaticFiles # <--- Importante
+from fastapi.responses import FileResponse, HTMLResponse # <--- Importante
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import pandas as pd
@@ -15,6 +17,13 @@ from python.Serha import SERHA
 from python.Consiglog import CONSIGLOG
 
 app = FastAPI()
+
+
+# 2. Rota para servir a página principal (Seu Frontend)
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    with open("index.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 # --- Configuração de Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -90,6 +99,7 @@ async def read_and_unify_files(file_list: List[UploadFile]):
 @app.get("/test")
 def test_endpoint():
     return {"message": "Servidor Online"}
+    
 
 @app.post("/validar")
 async def validar_planilhas(
@@ -115,18 +125,19 @@ async def validar_planilhas(
 ):
     logging.info(f"\n--- INICIANDO VALIDAÇÃO: {convenio} ---")
     
-    # 1. Define o caminho de saída
-    if output_path and output_path.strip():
-        CAMINHO_SAIDA = output_path.strip()
-    else:
-        CAMINHO_SAIDA = os.path.join(os.getcwd(), "output_data", convenio.replace(' ', '_').replace('.', ''))
+    # Define um caminho fixo no servidor (seguro para nuvem)
+    # Removemos o "if output_path" porque o servidor não acessa o PC do usuário
+    PASTA_BASE = os.path.join(os.getcwd(), "output_data")
+    
+    # Cria uma subpasta com o nome do convênio (opcional, ajuda na organização)
+    CAMINHO_SAIDA = os.path.join(PASTA_BASE, convenio.replace(' ', '_').replace('.', ''))
     
     try:
         os.makedirs(CAMINHO_SAIDA, exist_ok=True)
     except Exception as e:
         error_trace = traceback.format_exc()
         raise HTTPException(status_code=500, detail=f"Erro ao criar pasta de saída:\n{error_trace}")
-
+    
     try:
         # 2. Leitura dos arquivos
         averbados_df = await read_and_unify_files(AVERBADOS)
@@ -202,7 +213,25 @@ async def validar_planilhas(
                 caminho=CAMINHO_SAIDA,
             )
 
-        return {"message": "Validação concluída com sucesso!", "output_path": CAMINHO_SAIDA}
+        # Lógica para pegar o nome do arquivo gerado para o download
+        try:
+            # Lista os arquivos na pasta de saída
+            arquivos_gerados = os.listdir(CAMINHO_SAIDA)
+            # Pega o primeiro arquivo encontrado (ex: "resultado.xlsx")
+            # Se você tiver certeza do nome, pode colocar a string direta aqui
+            nome_arquivo = arquivos_gerados[0] if arquivos_gerados else "resultado.xlsx"
+        except:
+            nome_arquivo = "erro_no_arquivo.xlsx"
+
+        # Retorna o CAMINHO RELATIVO para o endpoint de download achar
+        # Ex: "CONSIGFACIL/resultado.xlsx"
+        caminho_relativo = f"{convenio.replace(' ', '_').replace('.', '')}/{nome_arquivo}"
+
+        return {
+            "message": "Validação concluída com sucesso!", 
+            "output_path": CAMINHO_SAIDA, # Pode manter para log
+            "filename": caminho_relativo  # <--- O JavaScript vai usar ISSO aqui
+        }
 
     except Exception as e:
         error_traceback = traceback.format_exc()
@@ -211,3 +240,15 @@ async def validar_planilhas(
         logging.error("##################################################")
         
         raise HTTPException(status_code=500, detail=f"Erro Técnico Detalhado:\n{error_traceback}")
+    
+# 3. NOVA ROTA: Download do Arquivo
+# Note o ":path" depois de filename. Isso permite baixar arquivos dentro de subpastas
+@app.get("/download/{filename:path}")
+async def download_file(filename: str):
+    # O arquivo estará em output_data/NOME_DA_PASTA/arquivo.xlsx
+    file_path = os.path.join(os.getcwd(), "output_data", filename)
+    
+    if os.path.exists(file_path):
+        # O filename no final garante que o usuário baixe com o nome certo
+        return FileResponse(file_path, filename=os.path.basename(filename))
+    return {"error": "Arquivo não encontrado"}
