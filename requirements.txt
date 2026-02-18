@@ -12,3 +12,4 @@ numpy
 chardet
 openpyxl
 xlrd
+flask
