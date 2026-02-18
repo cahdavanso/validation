@@ -8,3 +8,4 @@ numpy
 thefuzz
 requests
 xlsxwriter
+chardet
