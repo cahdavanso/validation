@@ -138,7 +138,13 @@ class CONSIGFACIL:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'
 
         # Salva com os NÃO LANÇAR
-        front_consig_validado_termino.to_excel(fr'{self.caminho}\FRONT SEMI TRABALHADO {self.convenio}.xlsx', index=False)
+        # Dentro do seu validador (ex: python/Consigfacil.py)
+        print(f"DEBUG: Tentando salvar FRONT SEMI TRABALHADO em: {self.caminho}")
+        try:
+            front_consig_validado_termino.to_excel(os.path.join(self.caminho, f"FRONT SEMI TRABALHADO {self.convenio}.xlsx"), index=False)
+            print("DEBUG: Arquivo salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR: {e}")
 
         # --------------------------------------------------------------------------------------------- #
         return front_consig_validado_termino
@@ -182,10 +188,14 @@ class CONSIGFACIL:
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado', na=False)].copy()
 
-        front_consig_trabalhado.to_excel(
-        fr'{self.caminho}\FRONT TRABALHADO {self.convenio}.xlsx',
-        index=False, 
-        )        
+        print('DEBUG: Esteiras finais do front trabalhado')
+        try:
+            front_consig_trabalhado.to_excel(
+                os.path.join(self.caminho, f"FRONT TRABALHADO {self.convenio}.xlsx"),
+                index=False, 
+            )
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR FRONT TRABALHADO: {e}")
 
         return front_consig_trabalhado
 
@@ -242,7 +252,12 @@ class CONSIGFACIL:
         # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
 
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
-        conciliacao_tratado.to_excel(fr'{self.caminho}\Conciliacao_TESTE.xlsx', index=False)
+
+        print('DEBUG: Colunas da conciliação tratada')
+        try:
+            conciliacao_tratado.to_excel(os.path.join(self.caminho, f"Conciliacao_TESTE.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR Conciliacao_TESTE.xlsx: {e}")
 
 
         # print(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
@@ -315,7 +330,11 @@ class CONSIGFACIL:
                     if pd.notna(contrato):
                         contrato_para_prazo[str(contrato).strip()] = prazo
 
-            andam_file_sem_prev_seguro.to_excel(rf'{self.caminho}\ANDAMENTO GERAL {self.convenio}.xlsx', index=False)
+            print('DEBUG: Dicionário contrato - prazo criado a partir do andamento:')
+            try:
+                andam_file_sem_prev_seguro.to_excel(os.path.join(self.caminho, f"ANDAMENTO GERAL {self.convenio}.xlsx"), index=False)
+            except Exception as e:
+                print(f"DEBUG: ERRO AO SALVAR ANDAMENTO GERAL: {e}")
 
             # 4. Aplica a busca no Credbase
             return front['Contrato'].astype(str).str.strip().map(contrato_para_prazo)
@@ -547,4 +566,8 @@ class CONSIGFACIL:
         # 7. (Opcional) Remove a coluna auxiliar que criamos.
         # averbado_novo = averbado_novo.drop(columns=['SOMA ACUMULADA DA RESERVA'])
 
-        averbado_novo.to_excel(fr'{self.caminho}\TRABALHADO AVERBADO {self.convenio} AUTOMATIZADO {str(datetime.now().month).zfill(2)}{datetime.now().year}.xlsx', index=False)
+        print('DEBUG: Averbados após cálculo vetorizado:')
+        try:
+            averbado_novo.to_excel(os.path.join(self.caminho, f"AVERBADOS CALCULADOS {self.convenio}.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR AVERBADOS CALCULADOS: {e}")
