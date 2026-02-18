@@ -10,7 +10,7 @@ import pandas as pd
 import logging
 import io
 import traceback
-from datetime import time
+from time import sleep
 from typing import List, Optional
 
 # Importa as classes de validação
@@ -225,7 +225,7 @@ async def validar_planilhas(
             )
 
         # 1. Pequena pausa para garantir que o sistema de arquivos liberou os .xlsx
-        time.sleep(1) 
+        sleep(1) 
 
         # 2. Verifica se realmente há arquivos para zipar
         arquivos_gerados = os.listdir(CAMINHO_SAIDA)
