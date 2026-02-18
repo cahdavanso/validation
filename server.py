@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse, HTMLResponse # <--- Importante
 from fastapi.middleware.cors import CORSMiddleware
 from flask import Flask, render_template, send_from_directory, jsonify
 import shutil
+import gc
 import os
 import pandas as pd
 import logging
@@ -229,6 +230,9 @@ async def validar_planilhas(
         # 2. Compacta a pasta CAMINHO_SAIDA inteira
         # Isso pega os 5 arquivos que estão lá dentro e vira um só
         shutil.make_archive(caminho_zip_completo, 'zip', CAMINHO_SAIDA)
+
+        del averbados_df, conciliacao_df, liquidados_df # delete os dataframes pesados
+        gc.collect() # chama o coletor de lixo do Python
 
         # 3. Retorna o nome do ZIP para o frontend
         return {
