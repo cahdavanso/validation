@@ -3,6 +3,7 @@ import pandas as pd
 import openpyxl
 import numpy as np
 from datetime import datetime
+import os
 import re
 
 class SERHA:
@@ -74,7 +75,11 @@ class SERHA:
         conciliacao['CONTRATOS'] = conciliacao['CONTRATOS'].astype('Int64')
 
         # Adiciona a coluna de tipo da Conciliação
-        tipo_conci = front_consig['nrContrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO PELO D8'].to_dict())
+        try:
+            tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        except Exception as e:
+            print(f'Coluna PRODUTO não se encontra na conciliação. Erro: {e}')
+            return False
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
@@ -116,13 +121,22 @@ class SERHA:
         front_consig_validado_termino.loc[(front_consig_validado_termino['dsConsignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'
 
         # Salva com os NÃO LANÇAR
-        front_consig_validado_termino.to_excel(fr'{self.caminho}\FRONT SEMI TRABALHADO {self.convenio}.xlsx', index=False)
+        print(f"DEBUG: Tentando salvar FRONT SEMI TRABALHADO em: {self.caminho}")
+        try:
+            front_consig_validado_termino.to_excel(os.path.join(self.caminho, f"FRONT SEMI TRABALHADO {self.convenio}.xlsx"), index=False)
+            print("DEBUG: Arquivo salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR: {e}")
 
         # --------------------------------------------------------------------------------------------- #
         return front_consig_validado_termino
         
     def tratamento_front(self):
         front_consig = self.tratamento_front_preliminar()
+
+        if front_consig is False:
+            print("tratamento_funcao: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
         if self.rubrica == 'CARTÃO':
@@ -164,10 +178,14 @@ class SERHA:
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado', na=False)].copy()
 
-        front_consig_trabalhado.to_excel(
-        fr'{self.caminho}\FRONT TRABALHADO {self.convenio}.xlsx',
-        index=False, 
-        )        
+        print('DEBUG: Esteiras finais do front trabalhado')
+        try:
+            front_consig_trabalhado.to_excel(
+                os.path.join(self.caminho, f"FRONT TRABALHADO {self.convenio}.xlsx"),
+                index=False, 
+            )
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR FRONT TRABALHADO: {e}")       
 
         return front_consig_trabalhado
 
@@ -217,7 +235,12 @@ class SERHA:
         # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
 
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
-        conciliacao_tratado.to_excel(fr'{self.caminho}\Conciliacao_TESTE.xlsx', index=False)
+
+        print('DEBUG: Colunas da conciliação tratada')
+        try:
+            conciliacao_tratado.to_excel(os.path.join(self.caminho, f"Conciliacao_TESTE.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR Conciliacao_TESTE.xlsx: {e}")
 
 
         # print(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
@@ -385,7 +408,10 @@ class SERHA:
             df_resultado = pd.concat([df_sujo, df_contratos_novos], axis=1)
 
             print("Processo concluído com sucesso!")
-            df_resultado.to_excel(fr'{self.caminho}\Relatório Averbados Contratos tratados.xlsx', index=False)
+            try:
+                df_resultado.to_excel(os.path.join(self.caminho, f"Relatório Averbados Contratos tratados.xlsx"), index=False)
+            except Exception as e:
+                print(f"DEBUG: ERRO AO SALVAR RELATÓRIO AVERBADO CONTRATOS TRATADOS: {e}")
             return df_resultado
 
 
@@ -412,7 +438,11 @@ class SERHA:
 
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
 
-        orbital_final.to_excel(fr'{self.caminho}\ORBITAL TRABALHADO INSS.xlsx', index=False)
+        try:
+            orbital_final.to_excel(os.path.join(self.caminho, f"ORBITAL TRABALHADO {self.convenio}.xlsx"), index=False)
+            print(f"DEBUG: ORBITAL TRABALHADO {self.convenio} salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
 
         return orbital_final
 
@@ -459,7 +489,11 @@ class SERHA:
             complemento_final = complemento.loc[complemento['Contse lá'].isna()]
 
             # CADÊ O AGUINALDO!!!
-            complemento_final.to_excel(fr'{self.caminho}\COMPLEMENTO TRATADO.xlsx', index=False)
+            try:
+                complemento_final.to_excel(os.path.join(self.caminho, f"COMPLEMENTO TRATADO {self.convenio}.xlsx"), index=False)
+            except Exception as e:
+                print(f"DEBUG: ERRO AO SALVAR COMPLEMENTO TRATADO {self.convenio}: {e}")
+
             nova_coluna_data = trabalhado_mes_passado['DATA'].tolist() + complemento_final['DATA'].tolist()
             nova_coluna_masp = trabalhado_mes_passado['MASP'].tolist() + complemento_final['MASP'].tolist()
             nova_coluna_CPF = trabalhado_mes_passado['CPF Consignado'].tolist() + complemento_final['CPF Consignado'].tolist()
@@ -483,7 +517,11 @@ class SERHA:
 
             trabalhado_mes_passado['ContratoOriginal'] = nova_coluna_contrato_original
 
-            trabalhado_mes_passado.to_excel(fr'{self.caminho}\TRABALHADO MÊS PASSADO COM COMPLEMENTO.xlsx', index=False)
+            try:
+                trabalhado_mes_passado.to_excel(os.path.join(self.caminho, f"TRABALHADO MÊS PASSADO COM COMPLEMENTO {self.convenio}.xlsx"), index=False)
+                print(f"DEBUG: TRABALHADO MÊS PASSADO COM COMPLEMENTO {self.convenio} salvo com sucesso!")
+            except Exception as e:
+                print(f"DEBUG: ERRO AO SALVAR TRABALHADO MÊS PASSADO COM COMPLEMENTO {self.convenio}: {e}")
 
             # =================================== UPDATE DOS CONTRATOS DE COMPLEMENTO ==================================
             mapa_de_contratos = complemento.set_index('CPF Consignado')['ContratoOriginal']
@@ -523,7 +561,11 @@ class SERHA:
 
             # Vamos remover os cont la que forem iguais ou maiores que 1
             averbados_cont_la_zero = averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la'] == 0].copy()
-            averbados_sem_cancelamento.to_excel(fr'{self.caminho}\AVERBADOS GOV MG PMMG.xlsx', index=False)
+            try:
+                averbados_sem_cancelamento.to_excel(os.path.join(self.caminho, f"AVERBADOS GOV MG PMMG {self.convenio}.xlsx"), index=False)
+            except Exception as e:
+                print(f"DEBUG: ERRO AO SALVAR AVERBADOS GOV MG PMMG {self.convenio}: {e}")
+
             # print(averbados_cont_la_zero[['CPF Consig.', 'Contrato            ', 'cont la']])
 
             nova_coluna_data = trabalhado_mes_passado['DATA'].tolist() + averbados_cont_la_zero['DATA'].tolist()
@@ -550,7 +592,11 @@ class SERHA:
 
             trabalhado_mes_passado['ContratoOriginal'] = nova_coluna_contrato_original
 
-            trabalhado_mes_passado.to_excel(fr'{self.caminho}\TRABALHADO MÊS PASSADO.xlsx', index=False)
+            try:
+                trabalhado_mes_passado.to_excel(os.path.join(self.caminho, f"TRABALHADO MÊS PASSADO {self.convenio}.xlsx"), index=False)
+                print(f"DEBUG: TRABALHADO MÊS PASSADO {self.convenio} salvo com sucesso!")
+            except Exception as e:
+                print(f"DEBUG: ERRO AO SALVAR TRABALHADO MÊS PASSADO {self.convenio}: {e}")
 
             # Faremos a mesma coisa para o cont la que são iguais ou maiores que 1
             averbados_cont_la_um = averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la'] >= 1].copy()
@@ -774,13 +820,20 @@ class SERHA:
             # 2. Soma essas colunas horizontalmente (axis=1) e cria a nova coluna
             trabalhado_mes_atual_tratado['Valor a Lançar'] = colunas_parcelas.sum(axis=1)
 
-        trabalhado_mes_atual_tratado.to_excel(fr'{self.caminho}\TRABALHADO MÊS ATUAL {self.convenio} {self.rubrica}.xlsx', index=False)
+        try:
+            trabalhado_mes_atual_tratado.to_excel(os.path.join(self.caminho, f"TRABALHADO MÊS ATUAL {self.convenio} {self.rubrica}.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR TRABALHADO MÊS ATUAL {self.convenio} {self.rubrica}: {e}")
 
     def main(self):
 
         # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- FLUXO PRINCIPAL -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
         front_preliminar = self.tratamento_front_preliminar()
+        
+        if front_preliminar is False:
+            print("Erro: O tratamento preliminar do front retornou None. Verifique os logs anteriores para mais detalhes.")
+            return
 
         front_trabalhado = self.tratamento_front()
 

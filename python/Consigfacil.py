@@ -98,7 +98,12 @@ class CONSIGFACIL:
 
         # Adiciona a coluna de tipo da Conciliação
         print(f'colunas da conciliacao: {conciliacao.columns}')
-        tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        try:
+            tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        except Exception as e:
+            print(f'Coluna PRODUTO não se encontra na conciliação. Erro: {e}')
+            return False
+        
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
@@ -151,6 +156,10 @@ class CONSIGFACIL:
         
     def tratamento_front(self):
         front_consig = self.tratamento_front_preliminar()
+
+        if front_consig is False:
+            print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
         front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
@@ -442,7 +451,11 @@ class CONSIGFACIL:
 
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
 
-        orbital_final.to_excel(fr'{self.caminho}\ORBITAL TRABALHADO {self.convenio}.xlsx', index=False)
+        try:
+            orbital_final.to_excel(os.path.join(self.caminho, f"ORBITAL TRABALHADO {self.convenio}.xlsx"), index=False)
+            print(f"DEBUG: ORBITAL TRABALHADO {self.convenio} salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
 
         return orbital_final
 
@@ -453,6 +466,10 @@ class CONSIGFACIL:
         front_preliminar = self.tratamento_front_preliminar
         averbados = self.averbados
 
+        if front_consig is False:
+            print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
+        
         if self.convenio in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE']:
             averbados = averbados[averbados['Modalidade'].isin(['Cartão de Crédito', 'Cartão Benefício (Compras)', 'Cartão Benefício'])]
         else:
@@ -568,6 +585,6 @@ class CONSIGFACIL:
 
         print('DEBUG: Averbados após cálculo vetorizado:')
         try:
-            averbado_novo.to_excel(os.path.join(self.caminho, f"AVERBADOS CALCULADOS {self.convenio}.xlsx"), index=False)
+            averbado_novo.to_excel(os.path.join(self.caminho, f"AVERBADO TRABALHADO {self.convenio}.xlsx"), index=False)
         except Exception as e:
-            print(f"DEBUG: ERRO AO SALVAR AVERBADOS CALCULADOS: {e}")
+            print(f"DEBUG: ERRO AO SALVAR AVERBADOS TRABALHADO: {e}")

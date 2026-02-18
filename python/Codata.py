@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import xlrd
 import openpyxl
@@ -70,7 +71,12 @@ class CODATA:
 
         # Adiciona a coluna de tipo da Conciliação
         print(f'colunas de front consig: {front_consig.columns}')
-        tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        try:
+            tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        except Exception as e:
+            print(f'Coluna PRODUTO não se encontra na conciliação. Erro: {e}')
+            return False
+        
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
@@ -78,7 +84,10 @@ class CODATA:
 
         # ------------------------------------ ESTEIRAS REMOVIDAS ------------------------------------- #
         front_consig_esteiras_removidas = front_consig[~front_consig['Esteira'].isin(esteiras_permitidas)].copy()
-        front_consig_esteiras_removidas.to_excel(fr'{self.caminho}\FRONT ESTEIRAS REMOVIDAS GOV PB {self.consignataria}.xlsx', index=False)
+        try:
+            front_consig_esteiras_removidas.to_excel(os.path.join(self.caminho, f'FRONT ESTEIRAS REMOVIDAS GOV PB {self.consignataria}.xlsx'), index=False)
+        except Exception as e:
+            print(f"Erro ao salvar o arquivo de esteiras removidas: {e}")
 
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
@@ -120,13 +129,22 @@ class CODATA:
         front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
 
         # Salva com os NÃO LANÇAR
-        front_consig_validado_termino.to_excel(fr'{self.caminho}\FRONT SEMI TRABALHADO GOV PB {self.consignataria}.xlsx', index=False)
+        print(f"DEBUG: Tentando salvar FRONT SEMI TRABALHADO em: {self.caminho}")
+        try:
+            front_consig_validado_termino.to_excel(os.path.join(self.caminho, f"FRONT SEMI TRABALHADO {self.convenio}.xlsx"), index=False)
+            print("DEBUG: Arquivo salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR: {e}")
 
         # --------------------------------------------------------------------------------------------- #
         return front_consig_validado_termino
         
     def tratamento_front(self):
         front_consig = self.tratamento_front_preliminar()
+
+        if front_consig is False:
+            print("tratamento_front: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
 
         if self.consignataria == 'CAPITAL':
             # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
@@ -165,10 +183,14 @@ class CODATA:
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['OBS'].str.contains('NÃO LANÇAR - LIQUIDADO', na=False)].copy()
 
-        front_consig_trabalhado.to_excel(
-        fr'{self.caminho}\FRONT TRABALHADO GOV PB {self.consignataria}.xlsx',
-        index=False, 
-        )
+        print('DEBUG: Esteiras finais do front trabalhado')
+        try:
+            front_consig_trabalhado.to_excel(
+                os.path.join(self.caminho, f"FRONT TRABALHADO {self.convenio} {self.consignataria}.xlsx"),
+                index=False, 
+            )
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR FRONT TRABALHADO: {e}")
 
         return front_consig_trabalhado
 
@@ -184,7 +206,11 @@ class CODATA:
 
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
 
-        orbital_final.to_excel(fr'{self.caminho}\ORBITAL TRABALHADO INSS.xlsx', index=False)
+        try:
+            orbital_final.to_excel(os.path.join(self.caminho, f"ORBITAL TRABALHADO {self.convenio}.xlsx"), index=False)
+            print(f"DEBUG: ORBITAL TRABALHADO {self.convenio} salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
 
         return orbital_final
 
@@ -197,7 +223,12 @@ class CODATA:
         # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
 
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
-        conciliacao_tratado.to_excel(fr'{self.caminho}\Conciliacao_TESTE.xlsx', index=False)
+
+        print('DEBUG: Colunas da conciliação tratada')
+        try:
+            conciliacao_tratado.to_excel(os.path.join(self.caminho, f"Conciliacao_TESTE.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR Conciliacao_TESTE.xlsx: {e}")
 
 
         # print(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
@@ -394,6 +425,10 @@ class CODATA:
         # Remove a última linha que contém o valor total das parcelas
         averbados = averbados.drop(averbados.index[-1])
 
+        if front is False:
+            print("averbados_func: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
+
         # Insere a coluna Codigo Entidade para o layout ser feito corretamente
         averbados.insert(6, 'Codigo Entidade', '', allow_duplicates=True)
         averbados.loc[averbados['Entidade'] == 'SEAD 1', 'Codigo Entidade'] = '1'
@@ -508,7 +543,7 @@ class CODATA:
         # 7. (Opcional) Remove a coluna auxiliar que criamos.
         # averbado_novo = averbado_novo.drop(columns=['SOMA ACUMULADA DA RESERVA'])
 
-        averbado_novo.to_excel(fr'{self.caminho}\TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        averbado_novo.to_excel(os.path.join(self.caminho, f"TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx"), index=False)
         averbado_novo['VALOR A LANÇAR'] = pd.to_numeric(averbado_novo['VALOR A LANÇAR'], errors='coerce')
         averbado_novo['VALOR A LANÇAR'] = averbado_novo['VALOR A LANÇAR'].map('{:.2f}'.format)
         averbado_novo['VALOR A LANÇAR'] = averbado_novo['VALOR A LANÇAR'].astype(str)

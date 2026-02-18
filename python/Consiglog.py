@@ -3,6 +3,7 @@ from thefuzz import fuzz
 from datetime import datetime
 import openpyxl
 import numpy as np
+import os
 import re
 
 
@@ -72,7 +73,12 @@ class CONSIGLOG:
 
         # Adiciona a coluna de tipo da Conciliação
         # print(f'colunas de front consig: {front_consig.columns}')
-        tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        try:
+            tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        except Exception as e:
+            print(f'Coluna PRODUTO não se encontra na conciliação. Erro: {e}')
+            return False
+        
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
@@ -170,13 +176,22 @@ class CONSIGLOG:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'  
 
         # Salva com os NÃO LANÇAR
-        front_consig_validado_termino.to_excel(fr'{self.caminho}\FRONT SEMI TRABALHADO {self.convenio}.xlsx', index=False)
+        print(f"DEBUG: Tentando salvar FRONT SEMI TRABALHADO em: {self.caminho}")
+        try:
+            front_consig_validado_termino.to_excel(os.path.join(self.caminho, f"FRONT SEMI TRABALHADO {self.convenio}.xlsx"), index=False)
+            print("DEBUG: Arquivo salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR: {e}")
 
         # --------------------------------------------------------------------------------------------- #
         return front_consig_validado_termino
         
     def tratamento_front(self):
         front_consig = self.tratamento_front_preliminar()
+
+        if front_consig is False:
+            print("tratamento_front: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
         if self.convenio == 'PREF. GOIÂNIA':
@@ -281,7 +296,12 @@ class CONSIGLOG:
         front_copy['Contrato'] = front_copy['Contrato'].astype(str)
 
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype(str)
-        conciliacao_tratado.to_excel(fr'{self.caminho}\Conciliacao_TESTE.xlsx', index=False)
+
+        print('DEBUG: Colunas da conciliação tratada')
+        try:
+            conciliacao_tratado.to_excel(os.path.join(self.caminho, f"Conciliacao_TESTE.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR Conciliacao_TESTE.xlsx: {e}")
 
         # Verifica o dtype de "Contrato" no front e de "CONTRATOS" na conciliação
         print(f'Dtype de Contrato no front: {front_copy["Contrato"].dtype}')
@@ -443,7 +463,10 @@ class CONSIGLOG:
             df_resultado = pd.concat([df_sujo, df_contratos_novos], axis=1)
 
             print("Processo concluído com sucesso!")
-            df_resultado.to_excel(fr'{self.caminho}\Relatório Averbados Contratos tratados.xlsx', index=False)
+            try:
+                df_resultado.to_excel(os.path.join(self.caminho, f"Relatório Averbados Contratos tratados.xlsx"), index=False)
+            except Exception as e:
+                print(f"DEBUG: ERRO AO SALVAR RELATÓRIO AVERBADO CONTRATOS TRATADOS: {e}")
             return df_resultado
 
 
@@ -528,7 +551,11 @@ class CONSIGLOG:
 
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
 
-        orbital_final.to_excel(fr'{self.caminho}\ORBITAL TRABALHADO {self.convenio}.xlsx', index=False)
+        try:
+            orbital_final.to_excel(os.path.join(self.caminho, f"ORBITAL TRABALHADO {self.convenio}.xlsx"), index=False)
+            print(f"DEBUG: ORBITAL TRABALHADO {self.convenio} salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
 
         return orbital_final
 
@@ -538,6 +565,10 @@ class CONSIGLOG:
         data = self.averbados
         front = self.tratamento_front_preliminar()
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
+
+        if front is False:
+            print("trata_averbacao_1: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
 
         print(f'Contrato 301268942 no front em trata_averbacao: {front.loc[front["Contrato"] == "301268942", "Prestacao"]}\n')
 
@@ -573,7 +604,6 @@ class CONSIGLOG:
 
 
             data_averbados_bruto['CONTSE'] = data_averbados_bruto.groupby('CONCAT')['CONCAT'].transform('count')
-            data_averbados_bruto.to_excel(fr'{self.caminho}\Averbacao com orbital teste.xlsx', index=False)
 
             # 1. Cria a máscara Booleana (True/False)
             # Note os parênteses extras envolvendo cada comparação
@@ -583,7 +613,10 @@ class CONSIGLOG:
             # 2. Filtra mantendo apenas o que NÃO (~) for Verdadeiro na máscara
             data_averbados_bruto = data_averbados_bruto.loc[~cont_orbital_mask]
 
-            data_averbados_bruto.to_excel(fr'{self.caminho}\Averbacao com orbital teste.xlsx', index=False)
+            try:
+                data_averbados_bruto.to_excel(os.path.join(self.caminho, f"Averbacao com orbital teste {self.convenio}.xlsx"), index=False)
+            except Exception as e:
+                print(f"DEBUG: ERRO AO SALVAR AVERBAÇÃO COM ORBITAL TESTE: {e}")
 
             data_averbados_bruto = data_averbados_bruto.loc[data_averbados_bruto['Qt Prestacao'] != 96]
             print(f'data_averbados_bruto tipo {data_averbados_bruto['Qt Prestacao'].dtype}')
@@ -742,6 +775,10 @@ class CONSIGLOG:
         data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, front)
 
         semi_front = self.tratamento_front_preliminar()
+        if semi_front is False:
+            print("trata_averbacao_2: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
+
         semi_front['Contrato'] = semi_front['Contrato'].astype(str).str.strip()
 
         conciliacao_tratado = self.trata_conciliacao()
@@ -992,7 +1029,10 @@ class CONSIGLOG:
             file_name = f'{self.caminho}\\TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
     
         # Salva o DataFrame no arquivo Excel
-        data_averbados.to_excel(file_name, index=False)
+        try:
+            data_averbados.to_excel(os.path.join(self.caminho, file_name), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR TRABALHADO CARTÃO {self.convenio}: {e}")
     
         # Cria o arquivo Averbações a Lançar
         if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
@@ -1010,7 +1050,10 @@ class CONSIGLOG:
             file_lancar = f'{self.caminho}\\LANCAMENTO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
     
         # Salva o arquivo de lancamento
-        a_lancar.to_excel(file_lancar, index=False)
+        try:
+            a_lancar.to_excel(os.path.join(self.caminho, file_lancar), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR LANCAMENTO CARTÃO {self.convenio}: {e}")
 
         # Cria o Front Trabalhado
         if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
@@ -1027,7 +1070,10 @@ class CONSIGLOG:
         else:
             file_front = f'{self.caminho}\\FRONT TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
             
-        front_trabalhado.to_excel(file_front, index=False)
+        try:
+            front_trabalhado.to_excel(os.path.join(self.caminho, file_front), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR FRONT TRABALHADO {self.convenio}: {e}")
 
 
 # print(tamanho_parte[0])
