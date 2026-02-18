@@ -359,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (result.filename) {
             logToConsole(`Baixando arquivo processado...`, 'success');
             // Cria um link invisível para forçar o download
-            window.location.href = `/download/${result.filename}`; 
+            window.open(`/download/${result.filename}`, '_blank'); 
         }
         
         return result;
