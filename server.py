@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles # <--- Importante
 from fastapi.responses import FileResponse, HTMLResponse # <--- Importante
 from fastapi.middleware.cors import CORSMiddleware
 from flask import Flask, render_template, send_from_directory, jsonify
+import shutil
 import os
 import pandas as pd
 import logging
@@ -221,25 +222,19 @@ async def validar_planilhas(
                 caminho=CAMINHO_SAIDA,
             )
 
-        # Lógica para pegar o nome do arquivo gerado para o download
-        try:
-            # Lista os arquivos na pasta de saída
-            arquivos_gerados = os.listdir(CAMINHO_SAIDA)
-            # Pega o primeiro arquivo encontrado (ex: "resultado.xlsx")
-            # Se você tiver certeza do nome, pode colocar a string direta aqui
-            nome_arquivo = arquivos_gerados[0] if arquivos_gerados else "resultado.xlsx"
-        except:
-            nome_arquivo = "erro_no_arquivo.xlsx"
+        # 1. Defina o nome do arquivo ZIP
+        nome_zip = f"resultado_{convenio.replace(' ', '_')}"
+        caminho_zip_completo = os.path.join(PASTA_BASE, nome_zip) # O shutil adiciona o .zip sozinho
 
-        # Retorna o CAMINHO RELATIVO para o endpoint de download achar
-        # Ex: "CONSIGFACIL/resultado.xlsx"
-        caminho_relativo = f"{convenio.replace(' ', '_').replace('.', '')}/{nome_arquivo}"
+        # 2. Compacta a pasta CAMINHO_SAIDA inteira
+        # Isso pega os 5 arquivos que estão lá dentro e vira um só
+        shutil.make_archive(caminho_zip_completo, 'zip', CAMINHO_SAIDA)
 
+        # 3. Retorna o nome do ZIP para o frontend
         return {
-            "message": "Validação concluída com sucesso!", 
-            "output_path": CAMINHO_SAIDA, # Pode manter para log
-            "filename": caminho_relativo  # <--- O JavaScript vai usar ISSO aqui
-        }
+            "message": "Validação concluída!", 
+            "filename": f"{nome_zip}.zip" 
+}
 
     except Exception as e:
         error_traceback = traceback.format_exc()
@@ -260,3 +255,4 @@ async def download_file(filename: str):
         # O filename no final garante que o usuário baixe com o nome certo
         return FileResponse(file_path, filename=os.path.basename(filename))
     return {"error": "Arquivo não encontrado"}
+
