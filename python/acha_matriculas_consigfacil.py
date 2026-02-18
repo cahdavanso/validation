@@ -2,8 +2,6 @@ import pandas as pd
 import openpyxl
 import numpy as np
 import re
-import tkinter as tk
-from tkinter import filedialog
 from thefuzz import fuzz
 from itertools import combinations
 
