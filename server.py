@@ -10,6 +10,7 @@ import pandas as pd
 import logging
 import io
 import traceback
+from datetime import time
 from typing import List, Optional
 
 # Importa as classes de validação
@@ -223,36 +224,41 @@ async def validar_planilhas(
                 caminho=CAMINHO_SAIDA,
             )
 
-        # 1. Defina o nome do arquivo ZIP
-        nome_zip = f"resultado_{convenio.replace(' ', '_')}"
-        caminho_zip_completo = os.path.join(PASTA_BASE, nome_zip) # O shutil adiciona o .zip sozinho
+        # 1. Pequena pausa para garantir que o sistema de arquivos liberou os .xlsx
+        time.sleep(1) 
 
-        # 2. Compacta a pasta CAMINHO_SAIDA inteira
-        # Isso pega os 5 arquivos que estão lá dentro e vira um só
-        # shutil.make_archive(caminho_zip_completo, 'zip', CAMINHO_SAIDA)
+        # 2. Verifica se realmente há arquivos para zipar
+        arquivos_gerados = os.listdir(CAMINHO_SAIDA)
+        if not arquivos_gerados:
+            raise HTTPException(status_code=500, detail="Validador não gerou arquivos para o ZIP.")
 
-        # 1. Lista os arquivos que o validador criou
-        arquivos_na_pasta = os.listdir(CAMINHO_SAIDA)
-        
-        # 2. Filtra para pegar apenas um arquivo Excel (ou o primeiro da lista)
-        # Vamos ignorar o ZIP por enquanto
-        planilhas = [f for f in arquivos_na_pasta if f.endswith(('.xlsx', '.xls', '.csv'))]
+        # 3. Define os nomes
+        nome_zip = f"resultado_{convenio.replace(' ', '_').replace('.', '')}"
+        # Onde o arquivo ZIP vai ficar (na raiz da PASTA_BASE)
+        caminho_zip_destino = os.path.join(PASTA_BASE, nome_zip) 
 
-        if not planilhas:
-            raise HTTPException(status_code=500, detail="Nenhum arquivo foi gerado pelo validador.")
+        try:
+            # 4. Cria o ZIP
+            # 'zip', CAMINHO_SAIDA -> Pega tudo dentro da pasta do convênio e gera o .zip
+            shutil.make_archive(caminho_zip_destino, 'zip', CAMINHO_SAIDA)
+            logging.info(f"ZIP criado com sucesso: {nome_zip}.zip")
+            
+            # 5. Limpeza de memória estratégica
+            # (Pegue a lista de variáveis que definimos antes)
+            for var in ['averbados_df', 'conciliacao_df', 'liquidados_df', 'front_df']:
+                if var in locals():
+                    del locals()[var]
+            gc.collect()
 
-        nome_do_arquivo_teste = planilhas[0]
-        
-        # 3. Monta o caminho relativo (Pasta/Arquivo)
-        pasta_formatada = convenio.replace(' ', '_').replace('.', '')
-        caminho_para_frontend = f"{pasta_formatada}/{nome_do_arquivo_teste}"
+            # 6. Retorna o nome do arquivo ZIP para o download
+            return {
+                "message": "Validação concluída com sucesso!",
+                "filename": f"{nome_zip}.zip" 
+            }
 
-        logging.info(f"Teste 3: Retornando apenas o arquivo {caminho_para_frontend}")
-
-        return {
-            "message": "Teste de arquivo único",
-            "filename": caminho_para_frontend 
-        }
+        except Exception as e:
+            logging.error(f"Erro ao criar ZIP: {e}")
+            raise HTTPException(status_code=500, detail="Erro na compactação dos arquivos.")
     
     except Exception as e:
         error_traceback = traceback.format_exc()
@@ -266,12 +272,16 @@ async def validar_planilhas(
 # Note o ":path" depois de filename. Isso permite baixar arquivos dentro de subpastas
 @app.get("/download/{filename:path}")
 async def download_file(filename: str):
+    # Procura o arquivo na PASTA_BASE (output_data)
     file_path = os.path.join(os.getcwd(), "output_data", filename)
     
     if os.path.exists(file_path):
         return FileResponse(
-            path=file_path, 
+            path=file_path,
             filename=os.path.basename(filename),
+            media_type='application/zip' if filename.endswith('.zip') else None
         )
+    
+    logging.error(f"Arquivo não encontrado: {file_path}")
     return {"error": "Arquivo não encontrado"}
 
