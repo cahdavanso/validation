@@ -2,6 +2,7 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.staticfiles import StaticFiles # <--- Importante
 from fastapi.responses import FileResponse, HTMLResponse # <--- Importante
 from fastapi.middleware.cors import CORSMiddleware
+from flask import Flask, render_template, send_from_directory, jsonify
 import os
 import pandas as pd
 import logging
@@ -18,6 +19,13 @@ from python.Consiglog import CONSIGLOG
 
 app = FastAPI()
 
+# 1. Configura as pastas para o site (CSS, JS, Imagens)
+# O servidor precisa saber onde estão esses arquivos para entregar ao navegador
+app.mount("/styles", StaticFiles(directory="styles"), name="styles")
+app.mount("/scripts", StaticFiles(directory="scripts"), name="scripts")
+app.mount("/python", StaticFiles(directory="python"), name="python")
+# Se tiver pasta assets, descomente a linha abaixo:
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # 2. Rota para servir a página principal (Seu Frontend)
 @app.get("/", response_class=HTMLResponse)
