@@ -12,4 +12,3 @@ numpy
 chardet
 openpyxl
 xlrd
-itertools
