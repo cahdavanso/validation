@@ -272,7 +272,6 @@ async def download_file(filename: str):
         return FileResponse(
             path=file_path, 
             filename=os.path.basename(filename),
-            media_type='application/zip'  # Força o tipo ZIP
         )
     return {"error": "Arquivo não encontrado"}
 
