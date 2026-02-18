@@ -112,7 +112,7 @@ def test_endpoint():
     
 
 @app.post("/validar")
-async def validar_planilhas(
+def validar_planilhas(
     convenio: str = Form(...),
     consignataria: Optional[str] = Form(None),
     rubrica: Optional[str] = Form(None),
@@ -150,19 +150,19 @@ async def validar_planilhas(
     
     try:
         # 2. Leitura dos arquivos
-        averbados_df = await read_and_unify_files(AVERBADOS)
-        conciliacao_df = await read_and_unify_files(CONCILIACAO)
-        liquidados_df = await read_and_unify_files(LIQUIDADOS)
-        liminar_df = await read_and_unify_files(LIMINAR)
-        historico_df = await read_and_unify_files(HISTORICO_DE_REFINS)
-        credbase_df = await read_and_unify_files(CREDBASE)
-        front_df = await read_and_unify_files(FRONT)
-        funcao_df = await read_and_unify_files(FUNCAO)
-        andamento_df = await read_and_unify_files(ANDAMENTO)
-        trabalhado_anterior_df = await read_and_unify_files(TRABALHADO_ANTERIOR)
-        orbital_df = await read_and_unify_files(ORBITAL)
-        complementar_df = await read_and_unify_files(COMPLEMENTAR)
-        casoscapital_df = await read_and_unify_files(CASOS_CAPITAL)
+        averbados_df = read_and_unify_files(AVERBADOS)
+        conciliacao_df = read_and_unify_files(CONCILIACAO)
+        liquidados_df = read_and_unify_files(LIQUIDADOS)
+        liminar_df = read_and_unify_files(LIMINAR)
+        historico_df = read_and_unify_files(HISTORICO_DE_REFINS)
+        credbase_df = read_and_unify_files(CREDBASE)
+        front_df = read_and_unify_files(FRONT)
+        funcao_df = read_and_unify_files(FUNCAO)
+        andamento_df = read_and_unify_files(ANDAMENTO)
+        trabalhado_anterior_df = read_and_unify_files(TRABALHADO_ANTERIOR)
+        orbital_df = read_and_unify_files(ORBITAL)
+        complementar_df = read_and_unify_files(COMPLEMENTAR)
+        casoscapital_df = read_and_unify_files(CASOS_CAPITAL)
 
         # 3. SELEÇÃO DO VALIDADOR (SEM A VARIÁVEL PROBLEMÁTICA)
         
