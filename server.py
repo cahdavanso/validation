@@ -231,7 +231,7 @@ async def validar_planilhas(
         # Isso pega os 5 arquivos que estão lá dentro e vira um só
         shutil.make_archive(caminho_zip_completo, 'zip', CAMINHO_SAIDA)
 
-        del averbados_df, conciliacao_df, liquidados_df # delete os dataframes pesados
+        del averbados_df, conciliacao_df, liquidados_df, front_df, andamento_df, trabalhado_anterior_df, orbital_df, complementar_df, casoscapital_df # delete os dataframes pesados
         gc.collect() # chama o coletor de lixo do Python
 
         # 3. Retorna o nome do ZIP para o frontend
