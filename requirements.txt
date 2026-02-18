@@ -8,4 +8,8 @@ numpy
 thefuzz
 requests
 xlsxwriter
+numpy
 chardet
+openpyxl
+xlrd
+

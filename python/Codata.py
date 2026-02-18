@@ -3,7 +3,6 @@ import xlrd
 import openpyxl
 from datetime import datetime
 import numpy as np
-import tabula
 import xlsxwriter
 
 rejeitados = ['/']
