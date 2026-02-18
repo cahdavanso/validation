@@ -231,8 +231,18 @@ async def validar_planilhas(
         # Isso pega os 5 arquivos que estão lá dentro e vira um só
         shutil.make_archive(caminho_zip_completo, 'zip', CAMINHO_SAIDA)
 
-        del averbados_df, conciliacao_df, liquidados_df, front_df, andamento_df, trabalhado_anterior_df, orbital_df, complementar_df, casoscapital_df # delete os dataframes pesados
-        gc.collect() # chama o coletor de lixo do Python
+        # Lista de todos os possíveis DataFrames que você usa
+        vars_para_limpar = [
+            'averbados_df', 'conciliacao_df', 'liquidados_df', 'front_df', 
+            'andamento_df', 'trabalhado_anterior_df', 'orbital_df', 
+            'complementar_df', 'casoscapital_df', 'liminar_df', 'historico_df', 'credbase_df'
+        ]
+
+        for var in vars_para_limpar:
+            if var in locals(): # Verifica se a variável realmente existe no momento
+                del locals()[var]
+
+        gc.collect() # Agora sim, limpa a RAM com segurança
 
         # 3. Retorna o nome do ZIP para o frontend
         return {
