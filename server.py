@@ -238,7 +238,7 @@ async def validar_planilhas(
         return {
             "message": "Validação concluída!", 
             "filename": f"{nome_zip}.zip" 
-}
+        }
 
     except Exception as e:
         error_traceback = traceback.format_exc()
@@ -252,11 +252,13 @@ async def validar_planilhas(
 # Note o ":path" depois de filename. Isso permite baixar arquivos dentro de subpastas
 @app.get("/download/{filename:path}")
 async def download_file(filename: str):
-    # O arquivo estará em output_data/NOME_DA_PASTA/arquivo.xlsx
     file_path = os.path.join(os.getcwd(), "output_data", filename)
     
     if os.path.exists(file_path):
-        # O filename no final garante que o usuário baixe com o nome certo
-        return FileResponse(file_path, filename=os.path.basename(filename))
+        return FileResponse(
+            path=file_path, 
+            filename=os.path.basename(filename),
+            media_type='application/zip'  # Força o tipo ZIP
+        )
     return {"error": "Arquivo não encontrado"}
 
