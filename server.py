@@ -112,7 +112,7 @@ def test_endpoint():
     
 
 @app.post("/validar")
-def validar_planilhas(
+async def validar_planilhas(
     convenio: str = Form(...),
     consignataria: Optional[str] = Form(None),
     rubrica: Optional[str] = Form(None),
@@ -150,19 +150,19 @@ def validar_planilhas(
     
     try:
         # 2. Leitura dos arquivos
-        averbados_df = read_and_unify_files(AVERBADOS)
-        conciliacao_df = read_and_unify_files(CONCILIACAO)
-        liquidados_df = read_and_unify_files(LIQUIDADOS)
-        liminar_df = read_and_unify_files(LIMINAR)
-        historico_df = read_and_unify_files(HISTORICO_DE_REFINS)
-        credbase_df = read_and_unify_files(CREDBASE)
-        front_df = read_and_unify_files(FRONT)
-        funcao_df = read_and_unify_files(FUNCAO)
-        andamento_df = read_and_unify_files(ANDAMENTO)
-        trabalhado_anterior_df = read_and_unify_files(TRABALHADO_ANTERIOR)
-        orbital_df = read_and_unify_files(ORBITAL)
-        complementar_df = read_and_unify_files(COMPLEMENTAR)
-        casoscapital_df = read_and_unify_files(CASOS_CAPITAL)
+        averbados_df = await read_and_unify_files(AVERBADOS)
+        conciliacao_df = await read_and_unify_files(CONCILIACAO)
+        liquidados_df = await read_and_unify_files(LIQUIDADOS)
+        liminar_df = await read_and_unify_files(LIMINAR)
+        historico_df = await read_and_unify_files(HISTORICO_DE_REFINS)
+        credbase_df = await read_and_unify_files(CREDBASE)
+        front_df = await read_and_unify_files(FRONT)
+        funcao_df = await read_and_unify_files(FUNCAO)
+        andamento_df = await read_and_unify_files(ANDAMENTO)
+        trabalhado_anterior_df = await read_and_unify_files(TRABALHADO_ANTERIOR)
+        orbital_df = await read_and_unify_files(ORBITAL)
+        complementar_df = await read_and_unify_files(COMPLEMENTAR)
+        casoscapital_df = await read_and_unify_files(CASOS_CAPITAL)
 
         # 3. SELEÇÃO DO VALIDADOR (SEM A VARIÁVEL PROBLEMÁTICA)
         
@@ -229,27 +229,31 @@ def validar_planilhas(
 
         # 2. Compacta a pasta CAMINHO_SAIDA inteira
         # Isso pega os 5 arquivos que estão lá dentro e vira um só
-        shutil.make_archive(caminho_zip_completo, 'zip', CAMINHO_SAIDA)
+        # shutil.make_archive(caminho_zip_completo, 'zip', CAMINHO_SAIDA)
 
-        # Lista de todos os possíveis DataFrames que você usa
-        vars_para_limpar = [
-            'averbados_df', 'conciliacao_df', 'liquidados_df', 'front_df', 
-            'andamento_df', 'trabalhado_anterior_df', 'orbital_df', 
-            'complementar_df', 'casoscapital_df', 'liminar_df', 'historico_df', 'credbase_df'
-        ]
+        # 1. Lista os arquivos que o validador criou
+        arquivos_na_pasta = os.listdir(CAMINHO_SAIDA)
+        
+        # 2. Filtra para pegar apenas um arquivo Excel (ou o primeiro da lista)
+        # Vamos ignorar o ZIP por enquanto
+        planilhas = [f for f in arquivos_na_pasta if f.endswith(('.xlsx', '.xls', '.csv'))]
 
-        for var in vars_para_limpar:
-            if var in locals(): # Verifica se a variável realmente existe no momento
-                del locals()[var]
+        if not planilhas:
+            raise HTTPException(status_code=500, detail="Nenhum arquivo foi gerado pelo validador.")
 
-        gc.collect() # Agora sim, limpa a RAM com segurança
+        nome_do_arquivo_teste = planilhas[0]
+        
+        # 3. Monta o caminho relativo (Pasta/Arquivo)
+        pasta_formatada = convenio.replace(' ', '_').replace('.', '')
+        caminho_para_frontend = f"{pasta_formatada}/{nome_do_arquivo_teste}"
 
-        # 3. Retorna o nome do ZIP para o frontend
+        logging.info(f"Teste 3: Retornando apenas o arquivo {caminho_para_frontend}")
+
         return {
-            "message": "Validação concluída!", 
-            "filename": f"{nome_zip}.zip" 
+            "message": "Teste de arquivo único",
+            "filename": caminho_para_frontend 
         }
-
+    
     except Exception as e:
         error_traceback = traceback.format_exc()
         logging.error("##################################################")
