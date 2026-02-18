@@ -369,7 +369,7 @@ class CONSIGFACIL:
         # print(data_averbados.columns)
 
         # SUBSTITUIMOS CARACTER POR NADA
-        contrato_editado = data_averbados['Código na instituição'].astype(str).apply(
+        contrato_editado = data_averbados['Código na instituição'].fillna('').astype(str).apply(
             lambda x: ''.join(char for char in x if char.isdigit() or char in rejeitados))
 
         contrato_editado = contrato_editado.replace('//', '/', regex=True)

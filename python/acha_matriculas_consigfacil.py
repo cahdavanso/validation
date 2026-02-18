@@ -134,6 +134,7 @@ class ACHA_MATRICULA_CONSIGFACIL:
                                     indices_para_atualizar = [item.Index for item in comb]
 
                                     # Atualiza a coluna 'Matricula' original
+                                    front_tratado['MATRICULA_ENCONTRADA_1'] = front_tratado['MATRICULA_ENCONTRADA_1'].astype(str)
                                     front_tratado.loc[indices_para_atualizar, 'MATRICULA_ENCONTRADA_1'] = mat_disponivel
                                     
                                     # As colunas já existem, então o .loc funciona sem risco de erro
