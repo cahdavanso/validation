@@ -1019,16 +1019,16 @@ class CONSIGLOG:
         if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
             if datetime.now().month == 12:
                 if datetime.now().day > 10:
-                    file_name = f'{self.caminho}\\TRABALHADO CARTÃO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'
+                    file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'
                 else:
-                    file_name = f'{self.caminho}\\TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
+                    file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
             else:
                 if datetime.now().day > 10:
-                    file_name = f'{self.caminho}\\TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month + 1).zfill(2)}-{datetime.now().year}.xlsx'
+                    file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month + 1).zfill(2)}-{datetime.now().year}.xlsx'
                 else:
-                    file_name = f'{self.caminho}\\TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
+                    file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
         else:
-            file_name = f'{self.caminho}\\TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
+            file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
     
         # Salva o DataFrame no arquivo Excel
         print(f"arquivo_lancamento: Salvando o arquivo de Averbados Trabalhados")
@@ -1041,16 +1041,16 @@ class CONSIGLOG:
         if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
             if datetime.now().month == 12:
                 if datetime.now().day > 10:
-                    file_lancar = f'{self.caminho}\\LANCAMENTO CARTAO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'
+                    file_lancar = f'LANCAMENTO CARTAO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'
                 else:
-                    file_lancar = f'{self.caminho}\\LANCAMENTO CARTAO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
+                    file_lancar = f'LANCAMENTO CARTAO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
             else:
                 if datetime.now().day > 10:
-                    file_lancar = f'{self.caminho}\\LANCAMENTO CARTAO {self.convenio} {self.consignataria} {str(datetime.now().month + 1).zfill(2)}-{datetime.now().year}.xlsx'
+                    file_lancar = f'LANCAMENTO CARTAO {self.convenio} {self.consignataria} {str(datetime.now().month + 1).zfill(2)}-{datetime.now().year}.xlsx'
                 else:
-                    file_lancar = f'{self.caminho}\\LANCAMENTO CARTAO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
+                    file_lancar = f'LANCAMENTO CARTAO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
         else:
-            file_lancar = f'{self.caminho}\\LANCAMENTO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
+            file_lancar = f'LANCAMENTO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
     
         # Salva o arquivo de lancamento
         print(f"arquivo_lancamento: Salvando o arquivo de Lançamento Cartão")
@@ -1063,16 +1063,16 @@ class CONSIGLOG:
         if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
             if datetime.now().month == 12:
                 if datetime.now().day > 10:
-                    file_front = f'{self.caminho}\\FRONT TRABALHADO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'
+                    file_front = f'FRONT TRABALHADO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'
                 else:
-                    file_front = f'{self.caminho}\\FRONT TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
+                    file_front = f'FRONT TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
             else:
                 if datetime.now().day > 10:
-                    file_front = f'{self.caminho}\\FRONT TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month + 1).zfill(2)}-{datetime.now().year}.xlsx'
+                    file_front = f'FRONT TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month + 1).zfill(2)}-{datetime.now().year}.xlsx'
                 else:
-                    file_front = f'{self.caminho}\\FRONT TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
+                    file_front = f'FRONT TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
         else:
-            file_front = f'{self.caminho}\\FRONT TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
+            file_front = f'FRONT TRABALHADO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
             
         print(f"arquivo_lancamento: Salvando o arquivo de Front Trabalhado")
         try:
