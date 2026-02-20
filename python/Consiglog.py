@@ -118,8 +118,9 @@ class CONSIGLOG:
             valores_encontrados = valores_encontrados.fillna(0)
 
             # --- ETAPA 6: Gravar no DataFrame original ---
-            front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_encontrados  
-            front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_encontrados  
+            valores_encontrados_str = valores_encontrados.astype(str)
+            front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
+            front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_encontrados_str  
 
         # Tentar transformar em string com virgula
         front_consig_esteiras.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
@@ -537,7 +538,8 @@ class CONSIGLOG:
         orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
         front_so_orbital = front_para_separar.loc[
-            front_para_separar['Orbital'] == 'SIM', ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
+            front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
+            ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
         
         front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 

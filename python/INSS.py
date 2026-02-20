@@ -203,7 +203,7 @@ class INSS:
 
         # Renomear colunas
         front_trabalhado.rename(columns={'Contrato': 'NR_OPER_EDITADO', 'CPF': 'CPF', 'Matricula': 'MATRICULA', 'Nome': 'CLIENTE', 
-                                         'dtCessao': 'DT_BASE', 'Prestacao': 'VLR_PARC', 'Esteira': 'ESTEIRA','Tipo Operacao': 'PRODUTO', 'Convenio': 'ORIGEM_4'}, inplace=True)
+                                         'Data Cessão': 'DT_BASE', 'Prestacao': 'VLR_PARC', 'Esteira': 'ESTEIRA','Tipo Operacao': 'PRODUTO', 'Convenio': 'ORIGEM_4'}, inplace=True)
 
         # Filtra só os que vão lançar
         front_trabalhado_lancar = front_trabalhado[front_trabalhado['Análise'] == 'LANÇAR'].copy()

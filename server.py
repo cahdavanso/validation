@@ -140,6 +140,15 @@ async def validar_planilhas(
     # Removemos o "if output_path" porque o servidor não acessa o PC do usuário
     PASTA_BASE = os.path.join(os.getcwd(), "output_data")
     
+    # --- NOVA LÓGICA DE LIMPEZA ---
+    if os.path.exists(PASTA_BASE):
+        # Deleta a pasta inteira e tudo dentro dela
+        shutil.rmtree(PASTA_BASE)
+    
+    # Recria a pasta do zero (vazia e limpa)
+    os.makedirs(PASTA_BASE, exist_ok=True)
+    # ------------------------------
+    
     # Cria uma subpasta com o nome do convênio (opcional, ajuda na organização)
     CAMINHO_SAIDA = os.path.join(PASTA_BASE, convenio.replace(' ', '_').replace('.', ''))
     
@@ -198,7 +207,8 @@ async def validar_planilhas(
                 trabalhado_anterior=trabalhado_anterior_df,
                 rubrica=rubrica,
                 caminho=CAMINHO_SAIDA,
-                complementar=complementar_df
+                complementar=complementar_df,
+                orbital=orbital_df
             )
         elif convenio in CONSIGLOG_CONVENIO:
             logging.info("Usando validador: CONSIGLOG")
