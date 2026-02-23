@@ -763,6 +763,11 @@ class SERHA:
             # 1. Lista de colunas a verificar
             cols_contratos = ['ContratoOriginal'] + [col for col in trabalhado_mes_passado.columns if
                                                      str(col).startswith('Contrato')]
+            
+            
+            cols = trabalhado_mes_passado[cols_contratos].columns
+            dup_cols = cols[cols.duplicated()].unique()
+            logging.error(f"Colunas duplicadas encontradas: {dup_cols}")
 
             # 2. Cria a lista unificada e limpa o ".0"
             lista_bloqueio = (

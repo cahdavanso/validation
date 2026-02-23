@@ -12,6 +12,7 @@ import io
 import traceback
 from time import sleep
 from typing import List, Optional
+import uvicorn
 
 # Importa as classes de validação
 from python.Consigfacil import CONSIGFACIL 
@@ -295,3 +296,9 @@ async def download_file(filename: str):
     logging.error(f"Arquivo não encontrado: {file_path}")
     return {"error": "Arquivo não encontrado"}
 
+
+# É melhor comentar do que apagar na próxima vez que precisar testar no render
+if __name__ == "__main__":
+    # Pega a porta do Render ou usa 5000 se estiver local
+    port = int(os.environ.get("PORT", 5000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
