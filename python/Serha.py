@@ -66,6 +66,31 @@ class SERHA:
 
         front_consig.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
 
+        # 1. Converte para string, remove espaços e trata valores nulos
+        col = front_consig['Prestacao'].astype(str).str.strip()
+
+        # 2. Remove o ponto de milhar (ex: 1.200,50 -> 1200,50)
+        col = col.str.replace('.', '', regex=False)
+
+        # 3. Troca a vírgula decimal por ponto (ex: 1200,50 -> 1200.50)
+        col = col.str.replace(',', '.', regex=False)
+
+        # 4. Converte para numérico
+        front_consig['Prestacao'] = pd.to_numeric(col, errors='coerce')
+
+        # Mudar o tipo da coluna Tipo Operacao no Front se o Contrato existir em alguma das colunas de Contrato arquivo trabalhado de beneficio do mes anterior
+        if self.rubrica == 'BENEFÍCIO':
+            front_beneficio = front_consig.copy()
+            front_beneficio['Contrato'] = front_beneficio['Contrato'].astype(str).str.strip()
+            contratos_trabalhado_anterior = set()
+            if self.trabalhado_anterior is not None:
+                for col in self.trabalhado_anterior.columns:
+                    if 'Contrato' in col:
+                        contratos_trabalhado_anterior.update(self.trabalhado_anterior[col].dropna().astype(str).str.strip())
+            front_beneficio['Tipo Operacao'] = np.where(front_beneficio['Contrato'].astype(str).str.strip().isin(contratos_trabalhado_anterior), 'CARTAO BENEFICIO', front_beneficio['Tipo Operacao'])
+            front_consig = front_beneficio.copy()
+
+
         print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
 
         # Colocar 11 FORMALIZACAO em todas as células que começarem com 11 FOR
@@ -81,7 +106,7 @@ class SERHA:
                                "07.2 TED DEVOLVIDA A\x80\x93 PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "11 FORMALIZAA\x87A\x83O", "07.1.1 QUITACAO - CORRECAO DE CCB",
                                "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "10.7 CONTRATO NA\x83O AVERBADO - AGUARDANDO RESOLUA\x87A\x83O", "11 FORMALIZAAÂ‡AÂƒO",
                                "10.5 AGUARDANDO AVERBACAO COMPRA OUTROS CONVENIOS", "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "07.2 TED DEVOLVIDA AÂ\x80Â\x93 PAGAMENTO AO CLIENTE",
-                               "RISCO DA OPERAAÂ\x87AÂ\x82O-DEMAIS SITUAAÂ\x87AÂ\x95ES", "10.7 CONTRATO NAÂ\x83O AVERBADO - AGUARDANDO RESOLUAÂ\x87AÂ\x83O"
+                               "RISCO DA OPERAAÂ\x87AÂ\x82O-DEMAIS SITUAAÂ\x87AÂ\x95ES", "10.7 CONTRATO NAÂ\x83O AVERBADO - AGUARDANDO RESOLUAÂ\x87AÂ\x83O", "RISCO DA OPERACAO - DEMAIS SITUACOES"
                               ]
         
         
@@ -561,6 +586,7 @@ class SERHA:
                 complemento = pd.DataFrame(columns=['DATA', 'MASP', 'CPF Consignado', 'Nome Consignado', 'ContratoOriginal'])
                 print('Nenhum complemento foi fornecido para o mês anterior.')
             else:
+                complemento = complemento.rename(columns={'CPF': 'CPF Consignado'})
                 complemento = complemento.rename(columns={'Data': 'DATA'})
                 complemento = complemento.rename(columns={'Data + Hora': 'DATA'})
 
