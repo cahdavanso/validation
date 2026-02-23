@@ -172,16 +172,17 @@ class SERHA:
             valores_encontrados = valores_encontrados.fillna(0)
 
             # --- ETAPA 6: Gravar no DataFrame original ---
-            valores_encontrados_str = valores_encontrados.astype(str)
+            # Garante que as colunas aceitem texto
+            for col in ['Prestacao', 'Valor a lançar']:
+                if col in front_consig_esteiras.columns:
+                    front_consig_esteiras[col] = front_consig_esteiras[col].astype(object)
 
-            # Em vez de usar valores_encontrados_str, converta para numérico
-            try:
-                front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
-                front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_encontrados_str  
-            except TypeError:
-                valores_numericos = pd.to_numeric(valores_encontrados_str, errors='coerce')
-                front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_numericos
-                front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_numericos
+            # Prepara os dados como string (bom para manter formatação de centavos se necessário)
+            valores_para_inserir = valores_encontrados.astype(str).str.strip()
+
+            # Atribui diretamente
+            front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_para_inserir
+            front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_para_inserir
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
