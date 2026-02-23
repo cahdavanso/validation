@@ -764,6 +764,11 @@ class SERHA:
             cols_contratos = ['ContratoOriginal'] + [col for col in trabalhado_mes_passado.columns if
                                                      str(col).startswith('Contrato')]
             
+            # 2. SELEÇÃO CRUCIAL: Remove colunas com nomes duplicados da nossa lista de interesse
+            # Isso garante que se houver dois "ContratoOriginal", apenas o primeiro será pego
+            df_filtrado = trabalhado_mes_passado[cols_contratos]
+            df_filtrado = df_filtrado.loc[:, ~df_filtrado.columns.duplicated()]
+            
             
             cols = trabalhado_mes_passado[cols_contratos].columns
             dup_cols = cols[cols.duplicated()].unique()
@@ -771,7 +776,7 @@ class SERHA:
 
             # 2. Cria a lista unificada e limpa o ".0"
             lista_bloqueio = (
-                trabalhado_mes_passado[cols_contratos]
+                df_filtrado
                 .apply(lambda x: x.astype(str))  # Converte tudo para texto
                 .stack()  # Empilha
                 .unique()  # Remove duplicatas
