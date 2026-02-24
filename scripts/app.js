@@ -321,13 +321,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedRubrica) formData.append('rubrica', selectedRubrica);
 
         // NOVO: PEGA O CAMINHO DE SAÍDA
-        const outputPathInput = document.getElementById('output-path-input');
+        /*const outputPathInput = document.getElementById('output-path-input');
         if (outputPathInput && outputPathInput.value.trim() !== "") {
             formData.append('output_path', outputPathInput.value.trim());
             logToConsole(`Caminho de saída definido: ${outputPathInput.value.trim()}`, 'info');
         } else {
             logToConsole(`Usando pasta de saída padrão do sistema`, 'info');
-        }
+        }*/
 
         // Log detalhado dos arquivos
         for (const [fieldId, files] of Object.entries(fileDataMap)) {
