@@ -25,7 +25,7 @@ class CONSIGFACIL:
         # Mantendo a conversão de tipo original:
         if 'Valor da reserva' in self.averbados.columns:
             # Parcela de Averbados já serão floats
-            self.averbados['Valor da reserva'] = self.averbados['Valor da reserva'].str.replace(".", "")
+            self.averbados['Valor da reserva'] = self.averbados['Valor da reserva'].astype(str).str.replace(".", "")
             self.averbados['Valor da reserva'] = self.averbados['Valor da reserva'].str.replace(",", ".")
             self.averbados['Valor da reserva'] = pd.to_numeric(self.averbados['Valor da reserva'], errors="coerce")
             self.averbados['Valor da reserva'] = pd.to_numeric(self.averbados['Valor da reserva'], errors="coerce")
@@ -260,7 +260,8 @@ class CONSIGFACIL:
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
         # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
 
-        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
+        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('float').astype('Int64')
+        # conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
 
         print('DEBUG: Colunas da conciliação tratada')
         try:
