@@ -789,6 +789,8 @@ class SERHA:
 
 
         elif self.rubrica == 'BENEFÍCIO':
+            # 1. Garante que a coluna aceite strings (evita o TypeError de int64)
+            trabalhado_mes_passado['ContratoOriginal'] = trabalhado_mes_passado['ContratoOriginal'].astype(object)
             trabalhado_mes_passado.loc[
                 ~trabalhado_mes_passado['ContratoOriginal'].astype(str).str.contains('/'),
                 'ContratoOriginal'
