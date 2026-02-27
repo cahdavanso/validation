@@ -777,7 +777,7 @@ class SERHA:
             mapa_de_contratos = averbados_cont_la_um.set_index('CPF Consig.')['Contrato            ']
 
             # Use o .map() para criar uma coluna de "Novos Contratos"
-            #    A coluna 'CPF' do df_A é usada como chave de busca no 'mapa'
+            # A coluna 'CPF' do df_A é usada como chave de busca no 'mapa'
             novos_contratos = trabalhado_mes_atual['CPF Consignado'].map(mapa_de_contratos)
             trabalhado_mes_atual = trabalhado_mes_atual.copy()
 
@@ -785,7 +785,7 @@ class SERHA:
             # Use .fillna() para preencher os 'NaN' (vazios)
             # com os valores da coluna antiga ('df_A['Contrato']')
             trabalhado_mes_atual['ContratoOriginal'] = novos_contratos.fillna(trabalhado_mes_atual['ContratoOriginal'])
-            # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+            # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 
         elif self.rubrica == 'BENEFÍCIO':

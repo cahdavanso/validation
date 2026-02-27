@@ -13,3 +13,4 @@ chardet
 openpyxl
 xlrd
 flask
+zipfile

@@ -1,4 +1,4 @@
-from idlelib.autocomplete import TRY_A
+# from idlelib.autocomplete import TRY_A
 
 import pandas as pd
 import rarfile
@@ -13,7 +13,7 @@ import openpyxl
 
 
 class ZETRA:
-    def __init__(self, portal_file_path, convenio, credbase, consignataria, caminho, historico=None, funcao=None, conciliacao=None, tutela=None, liquidados=None, orbital=None):
+    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, historico=None, conciliacao=None, orbital=None):
 
         self.caminho = caminho
 
@@ -23,90 +23,34 @@ class ZETRA:
 
         self.averbados = self.processar_arquivos_rar(portal_file_path)
 
-        if isinstance(credbase, str):  # Caso seja apenas um arquivo
-            self.creds_unificados = pd.read_csv(credbase, encoding="ISO-8859-1", sep=";", on_bad_lines="skip")
-        elif isinstance(credbase, list):  # Caso seja lista de arquivos
-            lista_df = []
-            for cred in credbase:
-                try:
-                    df = pd.read_csv(
-                        cred,
-                        encoding="utf-8-sig",  # tenta UTF-8 com BOM
-                        sep=";",
-                        on_bad_lines="skip",
-                        low_memory=False
-                    )
-                except UnicodeDecodeError:
-                    df = pd.read_csv(
-                        cred,
-                        encoding="ISO-8859-1",  # se falhar, tenta latin1
-                        sep=";",
-                        on_bad_lines="skip",
-                        low_memory=False
-                    )
-                lista_df.append(df)
-            self.creds_unificados = pd.concat(lista_df, ignore_index=True)
+        self.front = front
 
-        try:
-            self.funcao_bruto = pd.read_csv(funcao, encoding='utf-8', sep=';', on_bad_lines='skip') if funcao else None
-        except UnicodeDecodeError:
-            self.funcao_bruto = pd.read_csv(funcao, encoding='ISO-8859-1', sep=';', on_bad_lines='skip') if funcao else None
+        self.historico = historico if historico else None
 
         conciliacao_falso = pd.DataFrame(
             columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25', 'RECEBIDO GERAL'])
         conciliacao_falso['CONTRATOS'] = 123
         conciliacao_falso['CPF'] = '123.456'
         conciliacao_falso['PRESTAÇÃO'] = 10
+        conciliacao_falso['PRODUTO'] = 'Cartão de Crédito'
         conciliacao_falso['PRAZO'] = 96
         conciliacao_falso['D8 JUN 25'] = 10
         conciliacao_falso['ST JUL 25'] = 'DESCONTO TOTAL'
         conciliacao_falso['RECEBIDO GERAL'] = 0
 
-        self.historico = pd.read_excel(historico) if historico else None
+        self.conciliacao = conciliacao if conciliacao else conciliacao_falso
 
-        self.conciliacao = pd.read_excel(conciliacao) if conciliacao else conciliacao_falso
+        self.orbital = orbital if orbital else None
 
-        self.liquidados_file = pd.read_excel(liquidados) if liquidados else None
-
-        if not self.liquidados_file is None:
-            if len(self.liquidados_file) == 0:
-                self.liquidados_file = None
-            else:
-                self.liquidados_file = self.liquidados_file
-
-        if self.liquidados_file is not None:
-            # Certificando que o tipo dos contratos do Operações Liquidadas
-            self.liquidados_file['Nº OPERAÇÃO'] = self.liquidados_file['Nº OPERAÇÃO'].astype(str)
-
-        self.tutela = pd.read_excel(tutela, sheet_name='DEMAIS CONVÊNIOS') if tutela else None
-
-        self.orbital = pd.read_excel(orbital) if orbital else None
-
-        self.condicoes_1 = ['11 FORMALIZAÇÃO ', '07.0 QUITAÇÃO - LIBERAÇÃO TROCO', '07.4 ENVIA CESSÃO FUNDO',
-                            '11.2  DETERMINAÇÃO JUDICIAL', '11.2 ACORDO CLIENTE',
-                            '10.7.0 INGRESSAR COM PROCESSO OU AÇÃO JURIDICO',
-                            '10.7.1 ACORDO EM ANDAMENTO', '02.03 AGUARDANDO PROCESSAMENTO CARTÃO',
-                            '02.3 AGUARDANDO PROCESSAMENTO DE CARTÃO',
-                            '07.0 QUITACAO – ENVIO DE CESSAO', '07.1 – QUITACAO – PAGAMENTO AO CLIENTE',
-                            '07.1.1 QUITACAO - CORRECAO DE CCB', '07.2 TED DEVOLVIDA – PAGAMENTO AO CLIENTE',
-                            '10.3.1 CONTRATO AVERBADO AGUARDANDO LIQUIDAÇÃO REFIN',
-                            '08.0 LIBERAÇÃO TROCO', '09.0 PAGO', '09.1 - APOSENTADORIA IGEPREV - AVERB. TOTAL',
-                            '09.2 - APOSENTADORIA IGEPREV - AVERB. PARCIAL',
-                            '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE',
-                            '10.3.1 CONTRATO AVERBADO AGUARDANDO LIQUIDAÇÃO REFIN',
-                            '07.2 TED DEVOLVIDA \x96 PAGAMENTO AO CLIENTE',
-                            '10.5 AGUARDANDO AVERBACAO COMPRA OUTROS CONVENIOS', '07.0 QUITACAO \x96 ENVIO DE CESSAO',
-                            '10.6 CONTRATO AVERBADO - AGUARDANDO COMPROVANTE DE RESERVA',
-                            '02.03 AGUARDANDO PROCESSAMENTO CARTÃO', 'INTEGRADO', 'RISCO DA OPERAÇÃO - ÓBITO',
-                            'RISCO DA OPERAÇÂO-DEMAIS SITUAÇÕES',
-                            '10.7 CONTRATO NÃO AVERBADO - AGUARDANDO RESOLUÇÃO',
-                            '11.1 CONTRATO FÍSICO ENVIADO AO BANCO ',
-                            '11.PROBLEMAS DE AVERBAÇÃO', '15.0\tRISCO DA OPERAÇÂO-DEMAIS SITUAÇÕES',
-                            '15.0	RISCO DA OPERAÇÂO-DEMAIS SITUAÇÕES', '14.0 RISCO DA OPERAÇÃO - ÓBITO',
-                            '07.4 ENVIA CESSAO FUNDO', '08.0 LIBERACAO TROCO', '07.1 AGUARDANDO AVERBACAO',
-                            '11.PROBLEMAS DE AVERBACAO', '07.2 AGUARDANDO DESAVERBACAO IF',
-                            '07.5 AGUARDANDO DESAVERBACAO BENEFICIO', '10.7.0 INGRESSAR COM PROCESSO OU AÇÃO JURIDICO',
-                            '10.3 AGUARDANDO AVERBACAO COMPRA EMPRESTIMO SIAPE']
+        self.condicoes_1 = ['02.03 AGUARDANDO PROCESSAMENTO CARTAO', '11 FORMALIZACAO', '11 FORMALIZAA\x87A\x83O', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', "11 FORMALIZAAÂ\x87AÂ\x83O",
+                               '14.0 RISCO DA OPERACAO - OBITO', 'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
+                               '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
+                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO", "07.2 TED DEVOLVIDA PAGAMENTO AO CLIENTE",
+                               "07.2 TED DEVOLVIDA A\x80\x93 PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "11 FORMALIZAA\x87A\x83O", "07.1.1 QUITACAO - CORRECAO DE CCB",
+                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "10.7 CONTRATO NA\x83O AVERBADO - AGUARDANDO RESOLUA\x87A\x83O", "11 FORMALIZAAÂ‡AÂƒO",
+                               "10.5 AGUARDANDO AVERBACAO COMPRA OUTROS CONVENIOS", "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "07.2 TED DEVOLVIDA AÂ\x80Â\x93 PAGAMENTO AO CLIENTE",
+                               "RISCO DA OPERAAÂ\x87AÂ\x82O-DEMAIS SITUAAÂ\x87AÂ\x95ES", "10.7 CONTRATO NAÂ\x83O AVERBADO - AGUARDANDO RESOLUAÂ\x87AÂ\x83O", "RISCO DA OPERACAO - DEMAIS SITUACOES"
+                              ]
 
         # --- TABELA DE CONFIGURAÇÃO (Baseada na sua imagem) ---
         # 0 significa que o campo não existe ou deve ser ignorado
@@ -244,306 +188,204 @@ class ZETRA:
 
         return averbacao_completa
 
-    def unificacao_creds(self):
+    def tratamento_front_preliminar(self):
+        front_consig = self.front.copy()
 
-        # RENOMEIA A COLUNA CODIGO_CREDBASE
-        if 'Codigo Credbase' in self.creds_unificados.columns or 'ï»¿Codigo_Credbase' in self.creds_unificados.columns:
-            cred = self.creds_unificados.rename(columns={'Codigo Credbase': 'Codigo_Credbase', 'ï»¿Codigo_Credbase': 'Codigo_Credbase'})
-            self.creds_unificados = cred
+        conciliacao = self.conciliacao.copy()
 
-        credbase_reduzido = self.creds_unificados[['Codigo_Credbase', 'Banco(s) quitado(s)', 'Filial', 'Esteira',
-                                                 'Esteira(dias)', 'Tipo', 'Operacao', 'Situacao', 'Inicio', 'Cliente',
-                                                 'Data Averbacao', 'CPF', 'Convenio', 'Banco', 'Parcela', 'Prazo',
-                                                 'Tabela', 'Matricula']]
-
-        # Vamos alterar o tipo do Codigo_Credbase já que agora a coluna está com o nome certo
-        credbase_reduzido['Codigo_Credbase'] = credbase_reduzido['Codigo_Credbase'].astype(str)
+        orbital = self.orbital
 
 
-        credbase_reduzido['Parcela'] = credbase_reduzido['Parcela'].str.replace('.', '')
-        credbase_reduzido['Parcela'] = credbase_reduzido['Parcela'].str.replace(',', '.')
-        credbase_reduzido['Parcela'] = pd.to_numeric(credbase_reduzido['Parcela'], errors='coerce')
+        # Insere as colunas vazias necessárias
+        front_consig.insert(21, 'Saldo', '', True)
+        front_consig.insert(22, 'Valor a lançar', '', True)
+        front_consig.insert(23, 'PRAZO', '', True)
+        front_consig.insert(24, 'OBS', '', True)
 
-        credbase_reduzido = credbase_reduzido.sort_values(by='Data Averbacao', ascending=True)
-
-        credbase_reduzido.to_excel(fr'{self.caminho}\CREDBASE UNIFICADO.xlsx', index=False)
-
-        # print(self.creds_unificados)
-
-        return credbase_reduzido
-
-    def tratamento_funcao(self):
-        funcao = self.funcao_bruto
-        colunas_excluir = ['NR_OPER_EDITADO', 'CONTSE SEMI TRABALHADO', 'CONTSE LOCAL', 'Diff', 'OP_LIQ', 'CONTRATO CONCILIACAO', 'OBS', 'has_conciliacao']
-        funcao.drop(columns=colunas_excluir, errors='ignore', inplace=True)
-
-        if funcao is None:
-            '''cred = self.unificacao_creds()
-            credbase_reduzido = cred[
-                ['Codigo_Credbase', 'Banco(s) quitado(s)', 'Filial', 'Esteira', 'Esteira(dias)', 'Tipo',
-                 'Operacao', 'Situacao', 'Inicio', 'Cliente', 'Data Averbacao', 'CPF', 'Convenio', 'Banco',
-                 'Parcela', 'Prazo', 'Tabela', 'Matricula']]
-
-            credbase_reduzido.to_excel(rf'{self.caminho}\Teste Credbase Reduzido.xlsx', index=False)
-
-            self.validacao_termino(credbase_reduzido)'''
-
-            return None
-
-        # print(cred_unificado['Esteira'].unique())
-
-        if 'ï»¿NR_OPER' in funcao.columns:
-            funcao = funcao.rename(columns={'ï»¿NR_OPER': 'NR_OPER'})
-
-        # Alterar o tipo do número de contrato do Função para String e da parcela para float
-        funcao['NR_OPER'] = funcao['NR_OPER'].astype(str)
-        # funcao['VLR_PARC'] = pd.to_numeric(funcao['VLR_PARC'], errors="coerce")
-
-        codigo_editado = funcao['NR_OPER'].replace(r"\D", "", regex=True)
-        if 'NR_OPER_EDITADO' in funcao.columns:
-            funcao = funcao.drop(columns=['NR_OPER_EDITADO'])
-        funcao.insert(1, 'NR_OPER_EDITADO', codigo_editado, True)
-        funcao['NR_OPER_EDITADO'] = funcao['NR_OPER_EDITADO'].astype(str).str.slice(0, 9)
-
-        funcao['NR_OPER_EDITADO'] = funcao['NR_OPER_EDITADO'].astype(str)
-
-        # <-- CORREÇÃO: A linha "funcao.insert(3, 'CONCAT', '', True)" foi REMOVIDA daqui.
-
-        # Insere as outras colunas vazias
-        funcao.insert(4, 'CONTSE SEMI TRABALHADO', '', True)
-        if 'CONTSE LOCAL' not in funcao.columns:
-            funcao.insert(5, 'CONTSE LOCAL', '', True)
-        funcao.insert(6, 'Diff', '', True)
-        funcao.insert(7, 'OP_LIQ', '', True)
-        funcao.insert(8, 'CONTRATO CONCILIACAO', '', True)
-        if 'OBS' not in funcao.columns:
-            funcao.insert(10, 'OBS', '', True)
-
-        # Concat de CPF + PARCELA
-        try:
-            funcao['VLR_PARC'] = funcao['VLR_PARC'].str.replace('.', '', regex=False)
-            funcao['VLR_PARC'] = funcao['VLR_PARC'].str.replace(',', '.', regex=False)
-        except Exception as e:
-            pass
-        funcao['VLR_PARC'] = pd.to_numeric(funcao['VLR_PARC'], errors='coerce').fillna(0)
-
-        # Esta linha agora é a ÚNICA que cria a coluna 'CONCAT', o que é o correto.
-        funcao['CONCAT'] = funcao['CPF'].astype(str) + funcao['VLR_PARC'].astype(str)
-
-        cred_unificado = self.unificacao_creds()
-
-        # Garante que a coluna 'Esteira' exista antes de filtrar
-        if 'Esteira' in cred_unificado.columns:
-            cred_semi = cred_unificado[cred_unificado['Esteira'].isin(self.condicoes_1)].copy()
-
-            # Cria a coluna CONCAT CPF PARC apenas se cred_semi não for vazio
-            if not cred_semi.empty:
-                concat_CPF_parc = cred_semi['CPF'].astype(str) + cred_semi['Parcela'].astype(str)
-                cred_semi.insert(12, 'CONCAT CPF PARC', concat_CPF_parc, True)
-
-                # Contse Semi Trabalhado
-                contse_concat_semi_cred = cred_semi.groupby('CONCAT CPF PARC')['CONCAT CPF PARC'].count().to_dict()
-
-                # <-- CORREÇÃO 2: Garantido que o .map é chamado na coluna ['CONCAT'] e não no DataFrame 'funcao'
-                funcao['CONTSE SEMI TRABALHADO'] = funcao['CONCAT'].map(contse_concat_semi_cred)
-                funcao['CONTSE SEMI TRABALHADO'] = funcao['CONTSE SEMI TRABALHADO'].fillna(0)
-        # print(funcao['CONTSE SEMI TRABALHADO'])
-
-        # Contse Local
-        funcao['CONTSE LOCAL'] = funcao.groupby('CONCAT')['CONCAT'].transform('count')
-
-        # OP LIQUIDADO
-        try:
-            op_liq = self.liquidados_file
-            n_operacao_liq = op_liq
-            n_operacao_liq['Número Operação'] = op_liq['Nº OPERAÇÃO']
-            funcao['OP_LIQ'] = funcao['NR_OPER'].map(n_operacao_liq.set_index('Nº OPERAÇÃO')['Número Operação'].to_dict())
-
-        except Exception as e :
-            op_liq = pd.DataFrame(columns=['Nº OPERAÇÃO'])
-            print(f"Planilha de Operações Liquidadas está vazia {e}")
-
-
-        funcao['OP_LIQ'] = funcao['OP_LIQ'].fillna('')
-
-
-        funcao.loc[(funcao['OBS'] == '') & (funcao['OP_LIQ'] != ''), 'OBS'] = 'NÃO'
-
-        for idx, row in funcao.iterrows():
-            if funcao.loc[idx, 'CONTSE LOCAL'] > funcao.loc[idx, 'CONTSE SEMI TRABALHADO']:
-                funcao.loc[idx, 'Diff'] = 'VERDADEIRO'
-            else:
-                funcao.loc[idx, 'Diff'] = 'FALSO'
-
-        # Condição 1: Coluna 'Diff' contém 'FALSO'
-        mask_diff = funcao['Diff'].str.contains('FALSO', na=False)
-
-        # Condição 2: Coluna 'PRODUTO' contém 'EMPRESTIMO'
-        mask_produto = funcao['PRODUTO'].str.contains('EMPRESTIMO', na=False)
-
-        # A máscara final é Verdadeira se QUALQUER uma das condições for Verdadeira
-        mask_final = mask_diff | mask_produto
-
-        # Agora, aplique o 'NÃO' nos locais corretos usando a máscara
-        funcao.loc[mask_final, 'OBS'] = 'NÃO'
-
-        # print(funcao['OBS'][funcao['OBS'] == "NÃO"])
-
-        # CONCILIAÇÃO
-        conciliacao_tratado = self.conciliacao
-
-        conciliacao_tratado.rename(columns={conciliacao_tratado.columns[0]: 'CONTRATOS'}, inplace=True)
-
+        print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
+        
+        # Vamos renomear a primeira coluna da conciliação
+        conciliacao.rename(columns={conciliacao.columns[0]: 'CONTRATOS'}, inplace=True)
         # Converte para lista de colunas
-        cols = list(conciliacao_tratado.columns)
-
-        # Encontra o índice da primeira ocorrência de "CONTRATO" e altera
-        for i, c in enumerate(cols):
-            if c == "CONTRATO" and c != "CONTRATOS":
-                cols[i] = "CONTRATOS"  # só a primeira vez
-                break
-            else:
-                break
+        cols = list(conciliacao.columns)
 
         # Atualiza o DataFrame com novos nomes
-        conciliacao_tratado.columns = cols
-        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64').astype(str)
+        conciliacao.columns = cols
+        conciliacao['CONTRATOS'] = conciliacao['CONTRATOS'].astype('Int64')
 
-        contratos_conciliacao = pd.DataFrame()
+        # Adiciona a coluna de tipo da Conciliação
+        # print(f'colunas de front consig: {front_consig.columns}')
+        try:
+            tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
+        except Exception as e:
+            print(f'Coluna PRODUTO não se encontra na conciliação. Erro: {e}')
+            return False
+        
+        front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
-        '''Precisei fazer um Dataframe separado porque por algum motivo ele não conseguia usar os contratos como índice,
-           e puxar os mesmos contratos... Eu poderia criar uma coluna de contratos dentro da propria conciliacao mas resolvi
-           criar um DataFrame novo só com essas colunas já que é tudo que vamos precisar delas'''
+        # Adiciona só as esteiras que podem ser lançadas
+        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(self.condicoes_1)].copy()
 
-        contratos_conciliacao['CONTRATO'] = conciliacao_tratado['CONTRATOS']
-        contratos_conciliacao['CONTRATO PUXAR'] = conciliacao_tratado['CONTRATOS']
-        funcao['CONTRATO CONCILIACAO'] = funcao['NR_OPER_EDITADO'].map(contratos_conciliacao.set_index('CONTRATO')['CONTRATO PUXAR'].to_dict())
-        # Precisei transformar os códigos da coluna "CONTRATO CONCILIACAO" em número, mas para isso precisei transformar os vazios em 0
-        # funcao['CONTRATO CONCILIACAO'] = pd.to_numeric(funcao['CONTRATO CONCILIACAO'], errors='coerce').fillna(0).astype(int)
+        # Trata coluna de Tipo da Conciliação
+        front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
 
-        # Agora preciso transformar os zeros em NaN
-        funcao.loc[funcao['CONTRATO CONCILIACAO'] == 0, 'CONTRATO CONCILIACAO'] = np.nan
+        # --------------------------------------------- ORBITAL --------------------------------------------- #
+        # --- ETAPA 1: Garantir que as chaves são do mesmo tipo (Texto) ---
+        # Isso evita o erro clássico onde um lado é número e o outro é texto
+        if orbital is not None:
+            front_consig_esteiras['Contrato'] = front_consig_esteiras['Contrato'].astype(str).str.strip()
+            # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
 
-        # E de NaN para vazio mesmo... Quem sabe assim ele reconhece o número de contrato. PS: Não era esse o problema
-        funcao['CONTRATO CONCILIACAO'] = funcao['CONTRATO CONCILIACAO'].fillna('')
+            
 
-        # Criar coluna auxiliar (1 = preenchido, 0 = vazio)
-        funcao['has_conciliacao'] = funcao['CONTRATO CONCILIACAO'].notna() & (funcao['CONTRATO CONCILIACAO'] != '')
-
-        # Ordenar colocando os contratos da conciliação preenchidos primeiro
-        funcao = funcao.sort_values(by="has_conciliacao", ascending=False).drop(columns="has_conciliacao")
-        funcao = funcao.sort_values(by='CPF', ascending=True)
-
-        # Verifica se CONTSE LOCAL é igual á CONTSE SEMI CRED e se existe na concilicação
-        for idx, row in funcao.iterrows():
-            if (
-                    row['CONTSE LOCAL'] == row['CONTSE SEMI TRABALHADO']
-                    and row['CONTRATO CONCILIACAO'] != ''
-                    and "EMPRESTIMO" not in str(row['PRODUTO'])
-            ):
-                funcao.loc[idx, 'OBS'] = ''
-
-        # FUNÇÃO INTERMEDIARIO
-        funcao.to_excel(fr'{self.caminho}\FUNÇÃO INTERMEDIÁRIO.xlsx', index=False)
-
-        funcao_tratado = funcao[funcao['OBS'] == '']
-
-        return funcao_tratado
-
-    def unificacao_cred_funcao(self):
-        creds_unificados = self.unificacao_creds()
-        credbase_reduzido = creds_unificados[['Codigo_Credbase', 'Banco(s) quitado(s)', 'Filial', 'Esteira',
-                                                 'Esteira(dias)', 'Tipo', 'Operacao', 'Situacao', 'Inicio', 'Cliente',
-                                                 'Data Averbacao', 'CPF', 'Convenio', 'Banco', 'Parcela', 'Prazo',
-                                                 'Tabela', 'Matricula']]
-        cred = credbase_reduzido.copy()
-        cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
-
-        '''cred['Parcela'] = cred['Parcela'].str.replace('.', '')
-        cred['Parcela'] = cred['Parcela'].str.replace(',', '.')'''
-        cred['Parcela'] = pd.to_numeric(cred['Parcela'], errors='coerce')
-        funcao = self.tratamento_funcao()
-
-        # Transforma a coluna de NR_OPER_EDITADO EM NúMERO
-        # funcao['NR_OPER_EDITADO'] = funcao['NR_OPER_EDITADO'].astype(int)
+            orbital['Numero de Contrato'] = orbital['Numero de Contrato'].astype(str)
+            '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "Validação  desconto final"]}\n')
+            print(f'Contrato 301268942 no front: {front_consig_esteiras.loc[front_consig_esteiras["Contrato"] == "301268942", "Prestacao"]}\n')'''
 
 
-        # Cria a coluna Esteira no Função
-        if not funcao is None:
-            funcao.insert(5, 'Esteira', '', True)
-            funcao['Esteira'] = 'INTEGRADO'
+            # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
+            # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
+            mapa_orbital = orbital.set_index('Numero de Contrato')['Validação  desconto final']
+            # --- ETAPA 3: Definir quem vai ser alterado ---
+            filtro_esteira = front_consig_esteiras['Esteira'] == '99 CARTAO UTILIZADO'
 
-            funcao.to_excel(fr'{self.caminho}\FUNCAO TRATADO {self.convenio} AUTOMATIZADO {str(datetime.now().month).zfill(2)}{datetime.now().year}.xlsx', index=False)
+            # --- ETAPA 4: Fazer a mágica (Buscar valores) ---
+            # .loc[filtro, coluna] -> Seleciona só as linhas da esteira certa
+            # .map(mapa_orbital)   -> Faz o "PROCV" buscando no dicionário criado
+            valores_encontrados = front_consig_esteiras.loc[filtro_esteira, 'Contrato'].map(mapa_orbital)
 
-            # Certificar-se de que as colunas 'Código' e 'NR_OPER' estão presentes
-            if 'Codigo_Credbase' in cred.columns and 'NR_OPER_EDITADO' in funcao.columns:
-                # Empilhar os valores da coluna 'NR_OPER' abaixo dos valores da coluna 'Código'
-                nova_coluna_codigo = cred['Codigo_Credbase'].tolist() + funcao['NR_OPER_EDITADO'].tolist()
-                nova_coluna_matricula = cred['Matricula'].tolist() + funcao['MATRICULA'].tolist()
-                nova_coluna_esteira = cred['Esteira'].tolist() + funcao['Esteira'].tolist()
-                nova_coluna_inicio = cred['Inicio'].tolist() + funcao['DT_BASE'].tolist()
-                nova_coluna_cliente = cred['Cliente'].tolist() + funcao['CLIENTE'].tolist()
-                nova_coluna_CPF = cred['CPF'].tolist() + funcao['CPF'].tolist()
-                nova_coluna_banco = cred['Banco'].tolist() + funcao['ORIGEM_2'].tolist()
-                nova_coluna_produto = cred['Tipo'].tolist() + funcao['PRODUTO'].tolist()
-                nova_coluna_prazo = cred['Prazo'].tolist() + funcao['PARC'].tolist()
-                nova_coluna_convenio = cred['Convenio'].tolist() + funcao['ORIGEM_4'].tolist()
-                nova_coluna_parcela = cred['Parcela'].tolist() + funcao['VLR_PARC'].tolist()
+            # --- ETAPA 5: Tratar quem não foi achado ---
+            # Se o contrato não existe na Orbital, o map devolve NaN.
+            # Usamos fillna(0) para trocar NaN por 0, conforme você pediu.
+            valores_encontrados = valores_encontrados.fillna(0)
 
-                # Criar um novo DataFrame para armazenar o resultado
-                nova_planilha_codigo = pd.DataFrame(nova_coluna_codigo, columns=['Codigo_Credbase'])
+            # --- ETAPA 6: Gravar no DataFrame original ---
+            valores_encontrados_str = valores_encontrados.astype(str)
+            front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
+            front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_encontrados_str  
 
-                # Manter as outras colunas da planilha A
-                outras_colunas_codigo = cred.drop(columns=['Codigo_Credbase'])
+        # Tentar transformar em string com virgula
+        front_consig_esteiras.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
 
-                # Resetar os índices de ambos antes do concat
-                nova_planilha_codigo.reset_index(drop=True, inplace=True)
-                outras_colunas_codigo.reset_index(drop=True, inplace=True)
+        front_consig_esteiras['Prestacao'] = front_consig_esteiras['Prestacao'].astype(str).replace('.', ',', regex=False)
+        front_consig_esteiras['Valor a lançar'] = front_consig_esteiras['Valor a lançar'].astype(str).replace('.', ',', regex=False)
 
-                # cred = cred.drop('Esteira', axis=1)
-                cred = pd.concat([nova_planilha_codigo, outras_colunas_codigo.reindex(nova_planilha_codigo.index)], axis=1)
 
-                # Adiciona Integrado e Não Integrado na coluna esteira do Credbase
-                cred['Esteira'] = nova_coluna_esteira
+        # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
+        # Marca saldo positivo
+        front_consig_validado_termino = self.validacao_termino_front(front_consig_esteiras)
+        front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > -0.01, 'OBS'] = 'NÃO LANÇAR - SALDO POSITIVO'
 
-                # Adiciona as matriculas na coluna de matricula
-                cred['Matricula'] = nova_coluna_matricula
+        # Marca o que é ação judicial
+        # No caso de Obito estiver estiver SIM e NÃO ao invés de 1 e 0
+        front_consig_validado_termino['Acao Judicial'] = front_consig_validado_termino['Acao Judicial'].replace({'SIM': 1, 'NAO': 0})
+        front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
 
-                # Junta os clientes do Função junto a coluna de clientes do Credbase
-                cred['Cliente'] = nova_coluna_cliente
+        # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
+        front_consig_validado_termino['Consignataria'].fillna('', inplace=True)
 
-                # Junta os CPFs do Função junto a coluna de CPFs do Credbase
-                cred['CPF'] = nova_coluna_CPF
+        if self.consignataria == 'CIASPREV':
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'CIASPREV') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
+        elif self.consignataria == 'HOJE PREVIDENCIA PRIVADA':
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'HOJE PREVIDENCIA PRIVADA') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
+        elif self.consignataria == 'CAPITAL CONSIG':
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'CAPITAL CONSIG') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
+        elif self.consignataria == 'CLICKBANK':
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'CLICKBANK') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
+        else:
+            print('Consignatária inválida.')
+            return
 
-                # Adiciona o convenio devido na coluna Convenio
-                cred['Convenio'] = nova_coluna_convenio
+        # Marca o que é Óbito
+        # No caso de ação judicial estiver estiver SIM e NÃO ao invés de 1 e 0
+        # front_consig_validado_termino['Obito'] = front_consig_validado_termino['Obito'].replace({'SIM': 1, 'NÃO': 0})
+        # front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'OBS'] = 'NÃO LANÇAR - ÓBITO'
+ 
+        # Marca tudo que é orbital
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
-                # Adiciona os bancos junto do cred
-                cred['Banco'] = nova_coluna_banco
+        # Marcar o que não é cartão Conciliação
+        if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS']:
+            print(f'Convenio é {self.convenio}')
+            print(f'Convenio está em PREF GOIÂNIA ou PREF. DUQUE DE CAXIAS? {self.convenio in ["PREF. GOIÂNIA", "PREF. DUQUE DE CAXIAS"]}')
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        else:
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
 
-                # Junta a coluna de VLR_PARC do função junto à coluna Parcela do Credbase
-                cred['Parcela'] = nova_coluna_parcela
+        # Marcar liquidados em StatusContrato
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
-                # Junta a coluna de PRODUTO do função junto à coluna Tipo do Credbase
-                cred['Tipo'] = nova_coluna_produto
+        # TIRAR BANCO OUTROS
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'  
 
-                # Junta a coluna DataBase do função junto à coluna Inicio do Credbase
-                cred['Inicio'] = nova_coluna_inicio
+        # Salva com os NÃO LANÇAR
+        print(f"tratamento_front_preliminar: Tentando salvar FRONT SEMI TRABALHADO em: {self.caminho}")
+        try:
+            front_consig_validado_termino.to_excel(os.path.join(self.caminho, f"FRONT SEMI TRABALHADO {self.convenio}.xlsx"), index=False)
+            print("tratamento_front_preliminar: Arquivo salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR: {e}")
 
-                # Junta a coluna PARC do função junto à coluna Prazo do Credbase
-                cred['Prazo'] = nova_coluna_prazo
+        # --------------------------------------------------------------------------------------------- #
+        return front_consig_validado_termino
+        
+    def tratamento_front(self):
+        front_consig = self.tratamento_front_preliminar()
 
-        cred['Tabela'] = cred['Tabela'].fillna('CARTÃO')
+        if front_consig is False:
+            print("tratamento_front: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
 
-        cred_tratado = self.validacao_termino(cred)
+        # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
+        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
 
-        credbase_reduzido = cred_tratado[['Codigo_Credbase', 'Banco(s) quitado(s)', 'Filial', 'Esteira', 'Esteira(dias)', 'Tipo',
-                                 'Operacao', 'Situacao', 'Inicio', 'Cliente', 'Data Averbacao', 'CPF', 'Convenio', 'Banco',
-                                 'Parcela', 'Prazo', 'Tabela', 'Matricula']]
+        # Separar o que não é cartão de crédito da conciliação
+        # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
 
-        credbase_reduzido.to_excel(rf'{self.caminho}\Teste Credbase Reduzido.xlsx', index=False)
+        # Pegar o que é CARTAO DE CREDITO do front
+        # condicao_cartao = ['CARTAO DE CREDITO']
+        # front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['dsTipoOperacao'].isin(condicao_cartao)].copy()
+        # Faz concat dos dois dataframes
+        front_consig_trabalhado = front_consig_cartao_conciliacao.copy()
 
-        return credbase_reduzido
+        # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Acao Judicial'] != 1].copy()
+
+        # ---------------------------------- TIRAR ÓBITO DO FRONT ---------------------------------- #
+        # front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Obito'] != 1].copy()
+        
+        # ------------------------------------ INSERE A COLUNA DE SALDO ------------------------------------- #
+
+        front_consig_trabalhado.loc[front_consig_trabalhado['Saldo'] > -0.01, 'Valor a lançar'] = 0
+        front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Valor a lançar'] > 0].copy()
+
+        # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
+        '''mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA'
+        front_consig_trabalhado.loc[mask_peculio, 'Valor a lançar'] += 20'''
+
+        # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
+        front_consig_trabalhado['Consignataria'].fillna('', inplace=True)
+
+        if self.consignataria == 'CIASPREV':
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CIASPREV', na=False)].copy()
+        elif self.consignataria == 'HOJE PREVIDENCIA PRIVADA':
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('HOJE PREVIDENCIA PRIVADA', na=False)].copy()
+        elif self.consignataria == 'CAPITAL CONSIG':
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CAPITAL CONSIG', na=False)].copy()
+        elif self.consignataria == 'CLICKBANK':
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CLICKBANK', na=False)].copy()
+        else:
+            print('Consignatária inválida.')
+            return
+
+
+        # --------------------------------------- TIRA BANCO OUTROS ----------------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Consignataria'].str.contains('OUTROS', na=False)].copy()
+
+        # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado|CANCELADO', na=False)].copy()
+
+        return front_consig_trabalhado
 
     def trata_conciliacao(self):
         conciliacao_tratado = self.conciliacao
@@ -589,35 +431,35 @@ class ZETRA:
 
         return conciliacao_tratado
 
-    def validacao_termino(self, cred):
-        cred_copy = cred.copy()
+    def validacao_termino(self, front):
+        front_copy = front.copy()
         conciliacao_tratado = self.trata_conciliacao()
 
-        # Puxar o último status para o credbase
+        # Puxar o último status para o front
         status = conciliacao_tratado.filter(like='ST ')
         status_name = status.columns[-1]
-        '''print(f'Tipo do contrato no cred: {type(cred_copy.loc[1, 'Codigo_Credbase'])}')
+        '''print(f'Tipo do contrato no front: {type(front_copy.loc[1, 'Contrato'])}')
         print(f'Tipo do contrato da conciliação: {type(conciliacao_tratado.loc[1, 'CONTRATOS'])}')'''
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
-        # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
+        # front['Contrato'] = front['Contrato'].astype(str)
 
-        cred_copy.loc[:, 'Status'] = cred_copy['Codigo_Credbase'].map(conciliacao_tratado.set_index('CONTRATOS')[status_name]).to_dict()
+        front_copy.loc[:, 'Status'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')[status_name]).to_dict()
         conciliacao_tratado.to_excel(fr'{self.caminho}\Conciliacao_TESTE.xlsx', index=False)
 
 
-        # print(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
+        # print(f'status \n{front_copy[front_copy['Contrato'] == 300846910]}')
 
-        # Puxar o saldo para o credbase
-        cred_copy.loc[:, 'Saldo'] = cred_copy['Codigo_Credbase'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
+        # Puxar o saldo para o front
+        front_copy.loc[:, 'Saldo'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
 
         # Valor que vai ser lançado
-        # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
-        valor_a_lancar = np.minimum(np.abs(cred_copy['Saldo']).fillna(float('inf')), cred_copy['Parcela'])
+        # Substitui NaN em "Saldo" por um valor muito alto (para que "Prestacao" seja escolhida)
+        valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['Prestacao'])
 
-        cred_copy['Valor a lançar'] = valor_a_lancar
+        front_copy['Valor a lançar'] = valor_a_lancar
 
-        return cred_copy
+        return front_copy
 
     def extrair_contratos_com_referencia(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
         """
@@ -646,11 +488,9 @@ class ZETRA:
             return re.sub(r'[^0-9a-zA-Z]', '', texto)  # Mantém letras e números
 
         # --- Passo 1: Criar o mapa de referência (sem alterações) ---
-        df_limpo['Codigo_Credbase'] = df_limpo['Codigo_Credbase'].astype(str).str.strip()
-        df_limpo['Operacao'] = df_limpo['Operacao'].astype(str).str.strip()
+        df_limpo['Contrato'] = df_limpo['Contrato'].astype(str).str.strip()
         print("Criando mapa de referência CPF -> Contratos...")
-        cpf_contratos = df_limpo.groupby('CPF')['Codigo_Credbase'].apply(list).to_dict()
-        cpf_operacao = df_limpo.groupby('CPF')['Operacao'].apply(list).to_dict()
+        cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict()
         # print(f'Mapa contratos:\n{cpf_contratos}')
 
         # --- Passo 2: Definir a função que será aplicada em cada linha (LÓGICA ALTERADA) ---
@@ -660,8 +500,6 @@ class ZETRA:
 
             # Garante que as listas existam
             contratos_validos_para_cpf = cpf_contratos.get(cpf, [])
-            operacoes_validas_para_cpf = cpf_operacao.get(cpf, [])
-
 
             if not contratos_validos_para_cpf:
                 return []
@@ -676,7 +514,6 @@ class ZETRA:
 
             # Listas de controle
             contratos_disponiveis = list(contratos_validos_para_cpf)
-            operacoes_disponiveis = list(operacoes_validas_para_cpf)
 
             # --- MUDANÇA: LIMIAR ALTO ---
             # Agora podemos exigir quase perfeição porque mudamos o método de comparação
@@ -692,13 +529,9 @@ class ZETRA:
 
                 for i, contrato_valido in enumerate(contratos_disponiveis):
 
-                    # Pega a operação correspondente (se existir)
-                    operacao_valida = operacoes_disponiveis[i] if i < len(operacoes_disponiveis) else ""
-
                     # Vamos testar os dois alvos separadamente
                     alvos = [
                         (contrato_valido, 'CONTRATO'),
-                        (operacao_valida, 'OPERACAO')
                     ]
 
                     for alvo_texto, tipo_alvo in alvos:
@@ -746,8 +579,6 @@ class ZETRA:
                     if melhor_match_para_parte in contratos_disponiveis:
                         index_remocao = contratos_disponiveis.index(melhor_match_para_parte)
                         del contratos_disponiveis[index_remocao]
-                        if index_remocao < len(operacoes_disponiveis):
-                            del operacoes_disponiveis[index_remocao]
 
             return encontrados_nesta_linha
 
@@ -801,7 +632,7 @@ class ZETRA:
 
         return data_averbados
 
-    def orbital_tratado(self, orbital, funcao_para_separar):
+    def orbital_tratado(self, orbital, front_so_orbital):
         if orbital is None:
             return None
 
@@ -820,27 +651,31 @@ class ZETRA:
                 orbital['Descrição EMPREGADOR'].str.contains('GOV RJ|GOV RJ DG|GOV RJ SEG|GOV RJ M NEG', case=False, na=False),
                 ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
             ].copy()
-        orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+        front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
-        funcao_so_orbital = funcao_para_separar.loc[
-            funcao_para_separar['PRODUTO'].isin(['000061 - CARTÃO PLÁSTICO', '000094 - CARTÃO PLÁSTICO - RE']),
-            ['NR_PROP', 'CLIENTE', 'CPF', 'VLR_PARC']
-        ].copy()
+        # front_so_orbital['Proposta'] = front_so_orbital['Proposta'].astype(str).str.strip()
 
-        funcao_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+        # front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace('.', '', regex=False)
+        front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace(',', '.', regex=False)
+        front_so_orbital['VALOR DESCONTO'] = pd.to_numeric(front_so_orbital['VALOR DESCONTO'], errors='coerce')
 
-        orbital_final = pd.concat([funcao_so_orbital, orbital_preparado])
+        orbital_final = pd.concat([front_so_orbital, orbital_preparado])
 
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
 
-        orbital_final.to_excel(fr'{self.caminho}\ORBITAL TRABALHADO {self.convenio}.xlsx', index=False)
+        print(f"orbital_tratado: Salvando arquivo de orbital tratado teste com front")
+        try:
+            orbital_final.to_excel(os.path.join(self.caminho, f"ORBITAL TRABALHADO {self.convenio}.xlsx"), index=False)
+            print(f"orbital_tratado: ORBITAL TRABALHADO {self.convenio} salvo com sucesso!")
+        except Exception as e:
+            print(f"orbital_tratado: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
 
         return orbital_final
 
     def trata_averbacao(self):
         # PUXA OS ARQUIVOS À SEREM TRATADOS
         data = self.unifica_historico_averb()
-        cred = self.unificacao_cred_funcao()
+        front = self.front
         consig = self.consignataria
         orbital_tratado = self.orbital_tratado(self.orbital, self.funcao_bruto)
         convenio = self.convenio
@@ -851,24 +686,19 @@ class ZETRA:
 
         data_averbados_bruto = data[colunas]
 
-        data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, cred)
+        data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, front)
 
-        semi_cred = cred[cred['Esteira'].isin(self.condicoes_1)]
+        semi_front = front[front['Esteira'].isin(self.condicoes_1)]
 
         conciliacao_tratado = self.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO
         # OP LIQUIDADO
-        try:
-            oper_liq = self.liquidados_file
-            contratos_tratados_liq = oper_liq['Nº OPERAÇÃO'].str.slice(0, 9)
-            oper_liq.insert(1, "Nº OPERAÇÃO EDITADO", contratos_tratados_liq, True)
+        oper_liq = front[front['Status'].str.contains('Liquidado|CANCELADO')]
+        contratos_tratados_liq = oper_liq['Contrato'].astype(str).str.slice(0, 9)
+        oper_liq.insert(1, "Nº OPERAÇÃO EDITADO", contratos_tratados_liq, True)
 
-        except Exception as e:
-            oper_liq = pd.DataFrame(columns=['Nº OPERAÇÃO', 'Nº OPERAÇÃO EDITADO'])
-            print(f"Planilha de Operações Liquidadas está vazia {e}")
-
-        tutela = self.tutela
+        tutela = front[front['Acao Judicial'] == 'SIM']
 
         # consig = self.consignataria
 
@@ -896,12 +726,12 @@ class ZETRA:
 
             # Cria a coluna de Esteira correspondente
             data_averbados[f'Esteira_{i}'] = data_averbados[nome_coluna_contrato].map(
-                cred.set_index('Codigo_Credbase')['Esteira'].to_dict()
+                front.set_index('Contrato')['Esteira'].to_dict()
             )
 
             # Cria a coluna de Valor da Parcela correspondente
             data_averbados[f'Valor_Unif_{i}'] = data_averbados[nome_coluna_contrato].map(
-                semi_cred.set_index('Codigo_Credbase')['Parcela'].to_dict()
+                semi_front.set_index('Contrato')['Prestacao'].to_dict()
             )
 
             # Puxa os valores de saldo da conciliação
@@ -912,7 +742,7 @@ class ZETRA:
             # Puxando os contratos liquidados (FORMA CORRIGIDA)
             # Cria a nova coluna 'OP LIQ {i}' com o resultado do map
             data_averbados[f'OP LIQ {i}'] = data_averbados[nome_coluna_contrato].map(
-                oper_liq.set_index('Nº OPERAÇÃO EDITADO')['Nº OPERAÇÃO'].to_dict()
+                oper_liq.set_index('Nº OPERAÇÃO EDITADO')['Contrato'].to_dict()
             )
 
             # --- PASSO 2: PREPARAÇÃO E LIMPEZA DE DADOS ---
@@ -938,7 +768,7 @@ class ZETRA:
             # Condição de Operações Liquidadas, se a linha estiver preenchida vai lançar 0
 
         # --- 2.5 Puxa as liminares ---
-        data_averbados["LIMINAR"] = data_averbados['CPF'].map(tutela.set_index('CPF')['PROCESSO'].to_dict())
+        data_averbados["LIMINAR"] = data_averbados['CPF'].map(tutela.set_index('CPF')['Contrato'].to_dict())
         condicao_liminar = data_averbados['LIMINAR'].notna()
 
         # --- 3. Soma todos os valores encontrados (forma eficiente) ---
@@ -989,12 +819,16 @@ class ZETRA:
 
         return data_averbados
 
-    def credbase_trabalhado_func(self, averbado_trabalhado):
+    def tratamento_front(self, averbado_trabalhado):
 
-        cred = self.unificacao_cred_funcao()
+        front_consig = self.tratamento_front_preliminar()
+
+        if front_consig is False:
+            print("tratamento_front: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
 
         # CORREÇÃO 2: Garante que a coluna-chave principal seja string e sem espaços
-        cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str).str.strip()
+        front_consig['Contrato'] = front_consig['Contrato'].astype(str).str.strip()
 
         # ----------------------------- TRATAR AS ESTEIRAS DE CREDBASE TRABALHADO --------------------------------------
 
@@ -1028,10 +862,10 @@ class ZETRA:
 
                 # Usa o mapa para criar uma série de novos valores
                 # A conversão aqui é uma segurança extra, mas a principal é na linha de cima
-                novas_esteiras = cred['Codigo_Credbase'].map(mapa)
+                novas_esteiras = front_consig['Contrato'].map(mapa)
 
                 # AGORA VAI FUNCIONAR: preenche APENAS os vazios (NaN) em 'Esteira' com os novos valores
-                cred['Esteira'] = cred['Esteira'].fillna(novas_esteiras)
+                front_consig['Esteira'] = front_consig['Esteira'].fillna(novas_esteiras)
 
             except (IndexError, KeyError) as e:
                 print(f"Aviso: Não foi possível processar o par de colunas para '{nome_coluna_contrato}'. Erro: {e}")
@@ -1043,78 +877,56 @@ class ZETRA:
 
         # --------------------------------------------------------------------------------------------------------------
 
+        # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
+        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
 
-        conciliacao_tratado = self.trata_conciliacao()
+        # Separar o que não é cartão de crédito da conciliação
+        # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
 
-        cred_esteira = cred[cred['Esteira'].isin(self.condicoes_1)]
-        cred_esteiras = cred
+        # Pegar o que é CARTAO DE CREDITO do front
+        # condicao_cartao = ['CARTAO DE CREDITO']
+        # front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['dsTipoOperacao'].isin(condicao_cartao)].copy()
+        # Faz concat dos dois dataframes
+        front_consig_trabalhado = front_consig_cartao_conciliacao.copy()
 
-        # Separa as tabelas de lançamento
-        condicoes_2 = cred_esteira['Tabela'].str.contains('CART')
-        cred_tab_cart = cred_esteira[condicoes_2]
+        # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Acao Judicial'] != 1].copy()
 
-        # Seleciona Tipo Cartão
-        condicoes_3 = ['Cartão']
-        cred_tipo = cred_esteira[cred_esteira['Tipo'].isin(condicoes_3)]
+        # ---------------------------------- TIRAR ÓBITO DO FRONT ---------------------------------- #
+        # front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Obito'] != 1].copy()
+        
+        # ------------------------------------ INSERE A COLUNA DE SALDO ------------------------------------- #
 
-        # Tira tabela Cartão
-        condicoes_4 = ~cred_tipo['Tabela'].str.contains('CART')
-        cred_tipo = cred_tipo[condicoes_4]
+        front_consig_trabalhado.loc[front_consig_trabalhado['Saldo'] > -0.01, 'Valor a lançar'] = 0
+        front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Valor a lançar'] > 0].copy()
 
-        # Tira tipo Cartão
-        cred_amor = cred_esteira[~cred_esteira['Tipo'].isin(condicoes_3)]
+        # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
+        '''mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA'
+        front_consig_trabalhado.loc[mask_peculio, 'Valor a lançar'] += 20'''
 
-        # Tira tabela Cartão
-        condicoes_5 = ~cred_amor['Tabela'].str.contains('CART')
-        cred_amor = cred_amor[condicoes_5]
+        # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
+        front_consig_trabalhado['Consignataria'].fillna('', inplace=True)
 
-        # Verifica Amortização em Bancos quitados depois de tirar tipo e tabela cartão
-        cred_amor['Banco(s) quitado(s)'] = cred_amor['Banco(s) quitado(s)'].astype(str)
-        condicoes_6 = cred_amor['Banco(s) quitado(s)'].str.contains('AMOR', na=False)
-        cred_amor['Banco(s) quitado(s)'] = cred_amor['Banco(s) quitado(s)']
-        cred_amor = cred_amor[condicoes_6]
-        credbase_trabalhado = pd.concat([cred_tab_cart, cred_tipo, cred_amor], ignore_index=True)
-
-        # Seleciona a consignatária correta
         if self.consignataria == 'CIASPREV':
-            consig_list = ['BANCO ACC', 'CIASPREV', 'QUERO MAIS CRÉDITO']
-        elif self.consignataria == 'CAPITAL':
-            consig_list = ['BANCO CAPITAL', 'BANCO CAPITAL S.A.', 'CB/CAPITAL', 'CB/CAPITAL	',
-                           'CC BANCO CAPITAL S.A. ',
-                           'CAPITAL', 'Banco CB DIGITAL', 'QUERO MAIS CRÉDITO', 'AKI CAPITAL', 'J.A BANK ', 'J.A BANK',
-                           'CAPITAL*', 'AKRK']
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CIASPREV', na=False)].copy()
+        elif self.consignataria == 'HOJE PREVIDENCIA PRIVADA':
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('HOJE PREVIDENCIA PRIVADA', na=False)].copy()
+        elif self.consignataria == 'CAPITAL CONSIG':
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CAPITAL CONSIG', na=False)].copy()
         elif self.consignataria == 'CLICKBANK':
-            consig_list = ['CB/CLICK BANK', 'CB/CLICK BANK	', 'Banco CB DIGITAL', 'QUERO MAIS CRÉDITO', 'CLICK']
-        elif self.consignataria == 'HOJE':
-            consig_list = ['BANCO HP', 'QUERO MAIS CRÉDITO', 'AKI CAPITAL']
-        elif self.consignataria == 'ABCCARD':
-            consig_list = ['ABCCARD', 'QUERO MAIS CRÉDITO', 'AKI CAPITAL']
-        elif self.consignataria == 'CB/BEM CARTÕES':
-            consig_list = ['CB/BEM CARTÕES', 'QUERO MAIS CRÉDITO', 'BEM CARTÕES', 'AKI CAPITAL']
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CLICKBANK', na=False)].copy()
+        else:
+            print('Consignatária inválida.')
+            return
 
-        credbase_trabalhado = credbase_trabalhado[credbase_trabalhado['Banco'].isin(consig_list)]
 
-        # Tira ponto e traço do CPF
+        # --------------------------------------- TIRA BANCO OUTROS ----------------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Consignataria'].str.contains('OUTROS', na=False)].copy()
 
-        credbase_trabalhado.loc[:, 'Saldo'] = credbase_trabalhado['Codigo_Credbase'].map(
-            conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
+        # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado|CANCELADO', na=False)].copy()
 
-        # Muda o Tipo da coluna Parcela
-        '''credbase_trabalhado['Parcela'] = credbase_trabalhado['Parcela'].str.replace('.', '')
-        credbase_trabalhado['Parcela'] = credbase_trabalhado['Parcela'].str.replace(',', '.')'''
-        credbase_trabalhado['Parcela'] = pd.to_numeric(credbase_trabalhado['Parcela'], errors='coerce').fillna(0)
-
-        # Valor que vai ser lançado
-        # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
-        valor_a_lancar = np.minimum(np.abs(credbase_trabalhado['Saldo']).fillna(float('inf')),
-                                    credbase_trabalhado['Parcela'])
-
-        credbase_trabalhado['Valor a lançar'] = valor_a_lancar
-
-        nome_credbase_trabalhado = f"CREDBASE TRABALHADO {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx"
-        credbase_trabalhado.to_excel(fr"{self.caminho}\{nome_credbase_trabalhado}", index=False)
-
-        return credbase_trabalhado
+        return front_consig_trabalhado
 
     def arquivo_lancamento(self):
         data_averbados = self.trata_averbacao()

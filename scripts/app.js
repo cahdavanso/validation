@@ -19,12 +19,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CONVENIOS_CONSIGLOG = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DE CAJAMAR", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. SÃO GONÇALO", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO"];
 
-    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...CONVENIOS_CONSIGLOG].sort();
+    const CONVENIOS_ZETRA = ["GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
+                   "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL"];
+
+    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_ZETRA].sort();
 
     const FIELDS_CONSIGFACIL = ["FRONT", "CONCILIACAO", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_CODATA = ["FRONT", "CONCILIACAO", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_INSS = ["FRONT", "CONCILIACAO", "AVERBADOS", "CASOS_CAPITAL"];
     const FIELDS_SERHA = ["FRONT", "CONCILIACAO", "AVERBADOS", "TRABALHADO_ANTERIOR", "COMPLEMENTAR", "ORBITAL"];
+    const FIELDS_ZETRA = ["FRONT", "CONCILIACAO", "AVERBADOS", "HISTORICO", "ORBITAL"];
     const FIELDS_CONSIGLOG = ["FRONT", "CONCILIACAO", "AVERBADOS", "ORBITAL"];
 
     const fileDataMap = {}; 
@@ -203,6 +207,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (CONVENIOS_SERHA.includes(convenio)) {
             rubricaArea.classList.remove('hidden');
             currentFields = FIELDS_SERHA;
+        } else if (CONVENIOS_ZETRA.includes(convenio)){
+            consignatariaArea.classList.remove('hidden');
+            currentFields = FIELDS_ZETRA;
         }
         else {
             currentFields = FIELDS_CONSIGFACIL;
@@ -268,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let valid = !!selectedConvenio;
         if (selectedConvenio && CONVENIOS_CODATA.includes(selectedConvenio) && !selectedConsignataria) valid = false;
         else if (selectedConvenio && CONVENIOS_CONSIGLOG.includes(selectedConvenio) && !selectedConsignataria) valid = false;
+        else if (selectedConvenio && CONVENIOS_ZETRA.includes(selectedConvenio) && !selectedConsignataria) valid = false;
         else if (selectedConvenio && CONVENIOS_SERHA.includes(selectedConvenio) && !selectedRubrica) valid = false;
         submitButton.disabled = !hasFiles || !valid;
     };

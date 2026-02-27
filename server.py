@@ -20,6 +20,7 @@ from python.Codata import CODATA
 from python.INSS import INSS
 from python.Serha import SERHA
 from python.Consiglog import CONSIGLOG
+from python.Zetra import ZETRA
 
 app = FastAPI()
 
@@ -57,8 +58,13 @@ INSS_CONVENIO = ["INSS"]
 
 SERHA_CONVENIO = ["GOV. MG - IPSM", "GOV. MG - CBMMG", "GOV. MG - PMMG", "GOV. MG - SEPLAG", "GOV. MG - IPSEMG"]
 
-CONSIGLOG_CONVENIO = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DE CAJAMAR", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. SÃO GONÇALO", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO"]
+CONSIGLOG_CONVENIO = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DE CAJAMAR", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", 
+                      "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. SÃO GONÇALO", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO"]
 
+ZETRA_CONVENIO = [
+         "GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
+         "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL"
+         ]
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
@@ -122,10 +128,11 @@ async def validar_planilhas(
     
     # Todos os campos possíveis do sistema
     AVERBADOS: List[UploadFile] = File(None, alias="AVERBADOS"),
+    RARS: List[UploadFile] = File(None, alias="RARS"),
     CONCILIACAO: List[UploadFile] = File(None, alias="CONCILIACAO"),
     LIQUIDADOS: List[UploadFile] = File(None, alias="LIQUIDADOS"),
     LIMINAR: List[UploadFile] = File(None, alias="LIMINAR"),
-    HISTORICO_DE_REFINS: List[UploadFile] = File(None, alias="HISTORICO_DE_REFINS"),
+    HISTORICO: List[UploadFile] = File(None, alias="HISTORICO"),
     CREDBASE: List[UploadFile] = File(None, alias="CREDBASE"),
     FRONT: List[UploadFile] = File(None, alias="FRONT"),
     FUNCAO: List[UploadFile] = File(None, alias="FUNCAO"),
@@ -165,7 +172,8 @@ async def validar_planilhas(
         conciliacao_df = await read_and_unify_files(CONCILIACAO)
         liquidados_df = await read_and_unify_files(LIQUIDADOS)
         liminar_df = await read_and_unify_files(LIMINAR)
-        historico_df = await read_and_unify_files(HISTORICO_DE_REFINS)
+        rars = await RARS
+        historico_df = await read_and_unify_files(HISTORICO)
         credbase_df = await read_and_unify_files(CREDBASE)
         front_df = await read_and_unify_files(FRONT)
         funcao_df = await read_and_unify_files(FUNCAO)
@@ -220,6 +228,19 @@ async def validar_planilhas(
                 consignataria=consignataria,
                 conciliacao=conciliacao_df,
                 caminho=CAMINHO_SAIDA,
+                orbital=orbital_df
+            )
+        
+        elif convenio in ZETRA_CONVENIO:
+            logging.info("Usando o validador: ZETRA")
+            validador = ZETRA(
+                portal_file_list=rars,
+                convenio=convenio,
+                front=front_df,
+                conciliacao=conciliacao_df,
+                consignataria=consignataria,
+                caminho=CAMINHO_SAIDA,
+                historico=historico_df,
                 orbital=orbital_df
             )
 
