@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const CONVENIOS_CODATA = ["GOV. PB"];
     const CONVENIOS_INSS = ["INSS"];
     const CONVENIOS_CONSIGFACIL = [
-        "GOV. MA", "GOV. PI", "PREF. BAYEUX", "PREF. CAJAMAR",
+        "GOV. MA", "GOV. PE","GOV. PI", "PREF. BAYEUX", "PREF. CAJAMAR",
         "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. DE PORTO VELHO",
         "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
         "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
@@ -20,15 +20,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const CONVENIOS_CONSIGLOG = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DE CAJAMAR", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. SÃO GONÇALO", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO"];
 
     const CONVENIOS_ZETRA = ["GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
-                   "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL"];
+                             "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL"];
 
-    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_ZETRA].sort();
+    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...CONVENIOS_ZETRA, ...CONVENIOS_CONSIGLOG].sort();
 
     const FIELDS_CONSIGFACIL = ["FRONT", "CONCILIACAO", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_CODATA = ["FRONT", "CONCILIACAO", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_INSS = ["FRONT", "CONCILIACAO", "AVERBADOS", "CASOS_CAPITAL"];
     const FIELDS_SERHA = ["FRONT", "CONCILIACAO", "AVERBADOS", "TRABALHADO_ANTERIOR", "COMPLEMENTAR", "ORBITAL"];
-    const FIELDS_ZETRA = ["FRONT", "CONCILIACAO", "AVERBADOS", "HISTORICO", "ORBITAL"];
+    const FIELDS_ZETRA = ["FRONT", "CONCILIACAO", "RARS", "HISTORICO", "ORBITAL"];
     const FIELDS_CONSIGLOG = ["FRONT", "CONCILIACAO", "AVERBADOS", "ORBITAL"];
 
     const fileDataMap = {}; 
@@ -211,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
             consignatariaArea.classList.remove('hidden');
             currentFields = FIELDS_ZETRA;
         }
-        else {
+        else if (CONVENIOS_CONSIGFACIL.includes(convenio)){
             currentFields = FIELDS_CONSIGFACIL;
         }
 
@@ -225,16 +225,29 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadFieldsGrid.innerHTML = '';
         fieldsList.forEach(field => {
             const fieldId = field.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+            
+            // --- IDENTIFICAÇÃO EXATA DO CAMPO ---
+            const isRarField = field.toUpperCase() === "RARS";
+            
+            // Atributos: Se for RARS, aceita pastas e .rar. Se não, apenas planilhas.
+            const attrs = isRarField 
+                ? 'webkitdirectory directory accept=".rar"' 
+                : 'accept=".csv, .xlsx, .xls"';
+                
+            const icon = isRarField ? 'lucide:folder-archive' : 'lucide:file-text';
+            const helpText = isRarField ? '.RAR ou Selecionar Pasta' : '.CSV, .XLSX';
+
             const html = `
                 <div class="upload-group">
                     <label class="form-label">${field}</label>
                     <div class="upload-box" id="drop-area-${fieldId}">
-                        <span class="iconify upload-icon" data-icon="lucide:file-text"></span>
+                        <span class="iconify upload-icon" data-icon="${icon}"></span>
                         <p class="upload-text-main">Arraste aqui</p>
-                        <p class="file-info" id="file-info-${fieldId}">.CSV, .XLSX</p>
-                        <input type="file" multiple accept=".csv, .xlsx, .xls" data-field-id="${fieldId}" id="input-${fieldId}" name="${fieldId}">
+                        <p class="file-info" id="file-info-${fieldId}">${helpText}</p>
+                        <input type="file" multiple ${attrs} data-field-id="${fieldId}" id="input-${fieldId}" name="${fieldId}">
                     </div>
                 </div>`;
+                
             uploadFieldsGrid.insertAdjacentHTML('beforeend', html);
             setupFileHandlers(fieldId);
         });
@@ -273,11 +286,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateSubmitButtonState = () => {
         const hasFiles = Object.keys(fileDataMap).length > 0;
         let valid = !!selectedConvenio;
-        if (selectedConvenio && CONVENIOS_CODATA.includes(selectedConvenio) && !selectedConsignataria) valid = false;
-        else if (selectedConvenio && CONVENIOS_CONSIGLOG.includes(selectedConvenio) && !selectedConsignataria) valid = false;
-        else if (selectedConvenio && CONVENIOS_ZETRA.includes(selectedConvenio) && !selectedConsignataria) valid = false;
-        else if (selectedConvenio && CONVENIOS_SERHA.includes(selectedConvenio) && !selectedRubrica) valid = false;
-        submitButton.disabled = !hasFiles || !valid;
+        if (selectedConvenio && CONVENIOS_CODATA.includes(selectedConvenio)) {
+            if (!selectedConsignataria) valid = false;
+        }
+        else if (selectedConvenio && CONVENIOS_CONSIGLOG.includes(selectedConvenio))  {
+            if (!selectedConsignataria) valid = false;
+        }
+        
+        else if (selectedConvenio && CONVENIOS_ZETRA.includes(selectedConvenio)) {
+            if (!selectedConsignataria) valid = false;
+        }
+
+        else if (selectedConvenio && CONVENIOS_SERHA.includes(selectedConvenio)) {
+            if (!selectedRubrica) valid = false;
+        }
+        submitButton.disabled = !(hasFiles && valid);
     };
 
     // ----------------------------------------------------
@@ -346,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         logToConsole("Enviando dados para o servidor...", 'warning');
-        logToConsole("Enviando dados para o servidor local (localhost:8000)...", 'warning');
+        logToConsole("Enviando dados para o servidor local (localhost:5000)...", 'warning');
         logToConsole("Aguardando processamento do Python... Isso pode levar alguns minutos.", 'warning');
 
         const response = await fetch('/validar', { method: 'POST', body: formData });

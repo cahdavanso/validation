@@ -68,7 +68,7 @@ ZETRA_CONVENIO = [
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
-    "GOV. MA", "GOV. PI", "PREF. BAYEUX", "PREF. CAJAMAR",
+    "GOV. MA", "GOV. PI", "GOV. PE","PREF. BAYEUX", "PREF. CAJAMAR",
     "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. DE PORTO VELHO",
     "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
     "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
@@ -172,7 +172,7 @@ async def validar_planilhas(
         conciliacao_df = await read_and_unify_files(CONCILIACAO)
         liquidados_df = await read_and_unify_files(LIQUIDADOS)
         liminar_df = await read_and_unify_files(LIMINAR)
-        rars = await RARS
+        rars = RARS
         historico_df = await read_and_unify_files(HISTORICO)
         credbase_df = await read_and_unify_files(CREDBASE)
         front_df = await read_and_unify_files(FRONT)
@@ -321,5 +321,5 @@ async def download_file(filename: str):
 # É melhor comentar do que apagar na próxima vez que precisar testar no render
 if __name__ == "__main__":
     # Pega a porta do Render ou usa 5000 se estiver local
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
