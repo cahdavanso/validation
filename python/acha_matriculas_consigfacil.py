@@ -114,6 +114,8 @@ class ACHA_MATRICULA_CONSIGFACIL:
             for cpf in cpfs_unicos:
                 if cpf not in b_lookup:
                     indices_para_marcar = front_tratado[front_tratado['CPF'] == cpf].index
+                    # Force a coluna a ser do tipo 'object' (que aceita strings)
+                    front_tratado['MATRICULA_ENCONTRADA_1'] = front_tratado['MATRICULA_ENCONTRADA_1'].astype(object)
                     front_tratado.loc[indices_para_marcar, 'MATRICULA_ENCONTRADA_1'] = 'CPF não encontrado na averbação (Soma)'
                     # Opcional: Marcar explicitamente nas novas colunas também
                     front_tratado.loc[indices_para_marcar, 'Metodo_Encontrado'] = 'CPF Inexistente'
