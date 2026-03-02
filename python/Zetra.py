@@ -1,5 +1,3 @@
-from idlelib.autocomplete import TRY_A
-
 import pandas as pd
 import zipfile
 import numpy as np
