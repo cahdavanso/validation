@@ -1,7 +1,6 @@
-# from idlelib.autocomplete import TRY_A
+from idlelib.autocomplete import TRY_A
 
 import pandas as pd
-import rarfile
 import zipfile
 import numpy as np
 import re
