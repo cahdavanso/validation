@@ -50,6 +50,7 @@ class CONSIGFACIL:
 
 
         self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
+        self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO'}, inplace=True)
         
         # 5. Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
