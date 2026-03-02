@@ -13,4 +13,3 @@ chardet
 openpyxl
 xlrd
 flask
-tkinter
