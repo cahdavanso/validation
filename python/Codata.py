@@ -30,8 +30,9 @@ class CODATA:
         self.consignataria = consignataria
 
         # Conciliação - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
-        self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()    
-        
+        self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()
+        self.conciliacao.rename(columns={'TIPO OPERACAO': 'PRODUTO', 'TIPO OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO'}, inplace=True)
+
         # Chama a primeira função da cadeia de processamento
         front_trabalhado = self.tratamento_front()
         self.averbados_func(front_trabalhado)
@@ -54,7 +55,8 @@ class CODATA:
                                '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
                                "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
                                "07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES",
-                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES"
+                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "RISCO DA OPERACAO - DEMAIS SITUACOES", "15.0 RISCO DA OPERACAO - DEMAIS SITUACOES",
+                               ""
                               ]
         
         
@@ -67,6 +69,7 @@ class CODATA:
 
         # Atualiza o DataFrame com novos nomes
         conciliacao.columns = cols
+        conciliacao['CONTRATOS'] = conciliacao['CONTRATOS'].astype('float64')
         conciliacao['CONTRATOS'] = conciliacao['CONTRATOS'].astype('Int64')
 
         # Adiciona a coluna de tipo da Conciliação
@@ -108,20 +111,20 @@ class CODATA:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão
-        if self.consignataria == 'CAPITAL':
+        if self.consignataria == 'CAPITAL CONSIG':
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         else:
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Adiantamento Salarial', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO INSPFEM'
 
         # Marca consignatária errada
-        if self.consignataria == 'CAPITAL':
+        if self.consignataria == 'CAPITAL CONSIG':
             front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('INSPFEM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - INSPFEM'
         elif self.consignataria == 'INSPFEM':
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Consignataria'].str.contains('INSPFEM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - CAPITAL'
 
         # Marcar liquidados em StatusContrato
-        if self.consignataria == 'CAPITAL':
-            front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO|ANDAMENTO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
+        if self.consignataria == 'CAPITAL CONSIG':
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
         else:
             front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
@@ -146,7 +149,9 @@ class CODATA:
             print("tratamento_front: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
 
-        if self.consignataria == 'CAPITAL':
+        if self.consignataria == 'CAPITAL CONSIG':
+            # Se houver cartão de crédito no Tipo Operacao do Front, mas estiver diferente no 
+
             # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
             front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
 
@@ -164,7 +169,7 @@ class CODATA:
         
 
         # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
-        if self.consignataria == 'CAPITAL':
+        if self.consignataria == 'CAPITAL CONSIG':
             front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Consignataria'].str.contains('INSPFEM', na=False)].copy()
         elif self.consignataria == 'INSPFEM':
             front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('INSPFEM', na=False)].copy()
@@ -222,6 +227,7 @@ class CODATA:
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
         # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
 
+        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('float64')
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
 
         print('DEBUG: Colunas da conciliação tratada')
@@ -261,7 +267,12 @@ class CODATA:
         # prazo_dict = andam_file.set_index('Código na instituição')['Prazo Total'].to_dict()
 
         andam_file = self.trata_cod_and(self.andamento)
-        # andam_file.to_excel(rf'{self.caminho}\ANDAMENTO_TESTE {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        print(f"DEBUG: Tentando salvar ANDAMENTO em: {self.caminho}")
+        try:
+            andam_file.to_excel(os.path.join(self.caminho, f"ANDAMENTO_TESTE {self.convenio}.xlsx"), index=False)
+            print("DEBUG: Arquivo salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR: {e}")
 
         # Função para decidir o valor da nova modalidade
         def substituir_modalidade():
@@ -482,7 +493,7 @@ class CODATA:
         # CONTSE SEQ
         averbado_novo['CONTSE SEQ'] = averbado_novo.groupby('CPF').cumcount() + 1
 
-        if self.consignataria == 'CAPITAL':
+        if self.consignataria == 'CAPITAL CONSIG':
             soma_condicional_dict_averb = front_consig.groupby('CPF')['Valor a lançar'].sum().to_dict()
             averbado_novo['SOMASE'] = averbado_novo['CPF'].map(soma_condicional_dict_averb)
             averbado_novo['SOMASE'] = averbado_novo['SOMASE'].fillna(0)

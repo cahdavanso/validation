@@ -35,6 +35,8 @@ class INSS:
             return pd.DataFrame()
 
         # Renomeia a primeira coluna para CONTRATOS
+        conciliacao_tratado.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
+        conciliacao_tratado.rename(columns={'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'TIPO OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO'}, inplace=True)
         conciliacao_tratado.rename(columns={conciliacao_tratado.columns[0]: 'CONTRATOS'}, inplace=True)
         
         # Padroniza colunas
@@ -113,7 +115,7 @@ class INSS:
 
         # Adiciona a coluna de tipo da Conciliação
         print(f'colunas de front consig: {front_consig.columns}')
-        tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['TIPO OP'].to_dict())
+        tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas

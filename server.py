@@ -52,14 +52,14 @@ app.add_middleware(
 )
 
 # --- LISTAS DE CONVÊNIOS ---
-CODATA_CONVENIO = ["GOV. PB"]
+CODATA_CONVENIO = ["GOV. PARAÍBA"]
 
 INSS_CONVENIO = ["INSS"]
 
-SERHA_CONVENIO = ["GOV. MG - IPSM", "GOV. MG - CBMMG", "GOV. MG - PMMG", "GOV. MG - SEPLAG", "GOV. MG - IPSEMG"]
+SERHA_CONVENIO = ["GOV. MINAS GERAIS - IPSM", "GOV. MINAS GERAIS - CBMMG", "GOV. MINAS GERAIS - PMMG", "GOV. MINAS GERAIS - SEPLAG", "GOV. MINAS GERAIS - IPSEMG"]
 
-CONSIGLOG_CONVENIO = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DE CAJAMAR", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", 
-                      "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. SÃO GONÇALO", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO"]
+CONSIGLOG_CONVENIO = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. CAJAMAR", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", 
+                      "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. SÃO GONÇALO", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO", "PREF. RIBEIRÃO PRETO"]
 
 ZETRA_CONVENIO = [
          "GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
@@ -68,11 +68,11 @@ ZETRA_CONVENIO = [
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
-    "GOV. MA", "GOV. PI", "GOV. PE","PREF. BAYEUX", "PREF. CAJAMAR",
+    "GOV. MARANHÃO", "GOV. MATO GROSSO", "GOV. PAUÍ", "GOV. PERNAMBUCO","PREF. BAYEUX", "PREF. CAJAMAR",
     "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. DE PORTO VELHO",
     "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
     "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
-    "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RN", "GOV. SC"
+    "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RIO GRANDE DO NORTE", "PREF. NATAL"
 ]
 
 # --- Função Auxiliar de Leitura ---
@@ -128,7 +128,7 @@ async def validar_planilhas(
     
     # Todos os campos possíveis do sistema
     AVERBADOS: List[UploadFile] = File(None, alias="AVERBADOS"),
-    RARS: List[UploadFile] = File(None, alias="RARS"),
+    ZIPS: List[UploadFile] = File(None, alias="ZIPS"),
     CONCILIACAO: List[UploadFile] = File(None, alias="CONCILIACAO"),
     LIQUIDADOS: List[UploadFile] = File(None, alias="LIQUIDADOS"),
     LIMINAR: List[UploadFile] = File(None, alias="LIMINAR"),
@@ -172,7 +172,6 @@ async def validar_planilhas(
         conciliacao_df = await read_and_unify_files(CONCILIACAO)
         liquidados_df = await read_and_unify_files(LIQUIDADOS)
         liminar_df = await read_and_unify_files(LIMINAR)
-        rars = RARS
         historico_df = await read_and_unify_files(HISTORICO)
         credbase_df = await read_and_unify_files(CREDBASE)
         front_df = await read_and_unify_files(FRONT)
@@ -234,7 +233,7 @@ async def validar_planilhas(
         elif convenio in ZETRA_CONVENIO:
             logging.info("Usando o validador: ZETRA")
             validador = ZETRA(
-                portal_file_list=rars,
+                portal_file_path=ZIPS,
                 convenio=convenio,
                 front=front_df,
                 conciliacao=conciliacao_df,
@@ -321,5 +320,5 @@ async def download_file(filename: str):
 # É melhor comentar do que apagar na próxima vez que precisar testar no render
 if __name__ == "__main__":
     # Pega a porta do Render ou usa 5000 se estiver local
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 5000))
     uvicorn.run(app, host="0.0.0.0", port=port)

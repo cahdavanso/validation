@@ -32,7 +32,7 @@ class SERHA:
         conciliacao_falso['RECEBIDO GERAL'] = 0
 
         self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
-        self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO'}, inplace=True)
+        self.conciliacao.rename(columns={'TIPO OPERACAO': 'PRODUTO', 'TIPO OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO'}, inplace=True)
         # Vamos renomear a primeira coluna da conciliação
         self.conciliacao.rename(columns={conciliacao.columns[0]: 'CONTRATOS'}, inplace=True)
 
@@ -86,9 +86,40 @@ class SERHA:
             if self.trabalhado_anterior is not None:
                 for col in self.trabalhado_anterior.columns:
                     if 'Contrato' in col:
-                        contratos_trabalhado_anterior.update(self.trabalhado_anterior[col].dropna().astype(str).str.strip())
+                        # 1. Converte para numérico (lidando com erros)
+                        # 2. Converte para Int64 (remove o .0)
+                        # 3. Converte para string e limpa espaços
+                        col_convertida = (
+                            pd.to_numeric(self.trabalhado_anterior[col], errors='coerce')
+                            .astype(str).str.replace('.0', '', regex=False)
+                            .str.strip()
+                        )
+                        
+                        # Adiciona ao set (removendo o texto 'nan' que o astype(str) gera de valores nulos)
+                        contratos_trabalhado_anterior.update(col_convertida[col_convertida != 'nan'])
+                        print(f'\nColuna {col} processada como string. Qtd contratos: {len(contratos_trabalhado_anterior)}')
             front_beneficio['Tipo Operacao'] = np.where(front_beneficio['Contrato'].astype(str).str.strip().isin(contratos_trabalhado_anterior), 'CARTAO BENEFICIO', front_beneficio['Tipo Operacao'])
             front_consig = front_beneficio.copy()
+        elif self.rubrica == 'CARTÃO':
+            front_cartao = front_consig.copy()
+            front_cartao['Contrato'] = front_cartao['Contrato'].astype(str).str.strip()
+            contratos_trabalhado_anterior = set()
+            if self.trabalhado_anterior is not None:
+                for col in self.trabalhado_anterior.columns:
+                    if 'Contrato' in col:
+                        # 1. Converte para numérico (lidando com erros)
+                        # 2. Converte para Int64 (remove o .0)
+                        # 3. Converte para string e limpa espaços
+                        col_convertida = (
+                            pd.to_numeric(self.trabalhado_anterior[col], errors='coerce')
+                            .astype(str).str.replace('.0', '', regex=False)
+                            .str.strip()
+                        )
+                        
+                        # Adiciona ao set (removendo o texto 'nan' que o astype(str) gera de valores nulos)
+                        contratos_trabalhado_anterior.update(col_convertida[col_convertida != 'nan'])
+            front_cartao['Tipo Operacao'] = np.where(front_cartao['Contrato'].astype(str).str.strip().isin(contratos_trabalhado_anterior), 'CARTAO DE CREDITO', front_cartao['Tipo Operacao'])
+            front_consig = front_cartao.copy()
 
 
         print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
@@ -151,6 +182,7 @@ class SERHA:
             
 
             orbital['Numero de Contrato'] = orbital['Numero de Contrato'].astype(str)
+            orbital = orbital.drop_duplicates(subset='Numero de Contrato', keep='first')
             '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "Validação  desconto final"]}\n')
             print(f'Contrato 301268942 no front: {front_consig_esteiras.loc[front_consig_esteiras["Contrato"] == "301268942", "Prestacao"]}\n')'''
 
@@ -183,6 +215,10 @@ class SERHA:
             # Atribui diretamente
             front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_para_inserir
             front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_para_inserir
+
+
+        # ------------------------------- ALTERA O TIPO SE FOR SEPLAG --------------------------------- #
+
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
@@ -530,6 +566,9 @@ class SERHA:
         :return:
         '''
 
+        if orbital is None:
+            return None
+
         # Pegar do hífen para frente para conseguir pegar a autarquia do self.convenio, porque tem um padrão de "GOV. MG - IPSEMG" ou "GOV. MG - CBMMG"
         autarquia = self.convenio.split('-')[-1].strip()
 
@@ -566,6 +605,8 @@ class SERHA:
             print(f"orbital_tratado: ORBITAL TRABALHADO {self.convenio} salvo com sucesso!")
         except Exception as e:
             print(f"orbital_tratado: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
+
+        # orbital_final = orbital_final.drop_duplicates(subset='CPF/CNPJ', keep='first')
 
         return orbital_final
 
@@ -702,9 +743,9 @@ class SERHA:
 
             print(f"DEBUG: Tentando salvar AVERBADOS GOV MG")
             try:
-                averbados_sem_cancelamento.to_excel(os.path.join(self.caminho, f"AVERBADOS GOV MG PMMG {self.convenio} {self.rubrica}.xlsx"), index=False)
+                averbados_sem_cancelamento.to_excel(os.path.join(self.caminho, f"AVERBADOS {self.convenio} {self.rubrica}.xlsx"), index=False)
             except Exception as e:
-                print(f"DEBUG: ERRO AO SALVAR AVERBADOS GOV MG PMMG {self.convenio}: {e}")
+                print(f"DEBUG: ERRO AO SALVAR AVERBADOS {self.convenio}: {e}")
 
             # print(averbados_cont_la_zero[['CPF Consig.', 'Contrato            ', 'cont la']])
 
@@ -799,7 +840,7 @@ class SERHA:
             # 1. Lista de colunas a verificar
             cols_contratos = ['ContratoOriginal'] + [col for col in trabalhado_mes_passado.columns if
                                                      str(col).startswith('Contrato')]
-            
+                        
             # 2. SELEÇÃO CRUCIAL: Remove colunas com nomes duplicados da nossa lista de interesse
             # Isso garante que se houver dois "ContratoOriginal", apenas o primeiro será pego
             df_filtrado = trabalhado_mes_passado[cols_contratos]
@@ -940,6 +981,8 @@ class SERHA:
 
                 # Puxa as esteiras
                 front_trabalhado['Contrato'] = front_trabalhado['Contrato'].astype(str)
+                # Tira duplicata de contrato só por precaução
+                front_trabalhado = front_trabalhado.drop_duplicates(subset='Contrato', keep='first')
                 trabalhado_mes_atual_tratado[col_parcela] = trabalhado_mes_atual_tratado[col].map(
                     front_trabalhado.set_index('Contrato')['Valor a lançar'])
 
@@ -956,10 +999,15 @@ class SERHA:
         # Orbitall
         orbital = self.trata_orbital(front, self.orbital)
         if orbital is not None:
+            # Vou tentar fazer somase de orbital
+            somase_orbital = orbital.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum().to_dict()
+
             # 1. Mapeamento da coluna ORBITAL (já existente)
-            trabalhado_mes_atual_tratado['ORBITAL'] = trabalhado_mes_atual_tratado["CPF Ponto e Traço"].map(
+            '''trabalhado_mes_atual_tratado['ORBITAL'] = trabalhado_mes_atual_tratado["CPF Ponto e Traço"].map(
                 orbital.set_index('CPF/CNPJ')['VALOR DESCONTO']
-            )
+            )'''
+            trabalhado_mes_atual_tratado['ORBITAL'] = trabalhado_mes_atual_tratado['CPF Ponto e Traço'].map(somase_orbital)
+            # print(f'VALOR SOMASE DE 867.972.636-20\n{somase_orbital['867.972.636-20']}')
 
             # 2. Filtra todas as colunas que começam com "Parcela "
             colunas_parcelas = trabalhado_mes_atual_tratado.filter(like='Parcela ')

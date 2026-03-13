@@ -4,20 +4,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // ----------------------------------------------------
     
     // Grupos de Convênios
-    const CONVENIOS_CODATA = ["GOV. PB"];
+    const CONVENIOS_CODATA = ["GOV. PARAÍBA"];
     const CONVENIOS_INSS = ["INSS"];
     const CONVENIOS_CONSIGFACIL = [
-        "GOV. MA", "GOV. PE","GOV. PI", "PREF. BAYEUX", "PREF. CAJAMAR",
+        "GOV. MARANHÃO", "GOV. MATO GROSSO","GOV. PERNAMBUCO","GOV. PIAUÍ", "PREF. BAYEUX", "PREF. CAJAMAR",
         "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. DE PORTO VELHO",
         "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
         "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
-        "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RN"
+        "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RIO GRANDE DO NORTE", "PREF. NATAL"
     ];
     const CONVENIOS_SERHA = [
-        "GOV. MG - IPSM", "GOV. MG - CBMMG", "GOV. MG - PMMG", "GOV. MG - SEPLAG", "GOV. MG - IPSEMG"
+        "GOV. MINAS GERAIS - IPSM", "GOV. MINAS GERAIS - CBMMG", "GOV. MINAS GERAIS - PMMG", "GOV. MINAS GERAIS - SEPLAG", "GOV. MINAS GERAIS - IPSEMG"
     ];
 
-    const CONVENIOS_CONSIGLOG = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DE CAJAMAR", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. SÃO GONÇALO", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO"];
+    const CONVENIOS_CONSIGLOG = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DE CAJAMAR", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", 
+        "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. SÃO GONÇALO", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO", "PREF. RIBEIRÃO PRETO"];
 
     const CONVENIOS_ZETRA = ["GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
                              "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL"];
@@ -28,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const FIELDS_CODATA = ["FRONT", "CONCILIACAO", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_INSS = ["FRONT", "CONCILIACAO", "AVERBADOS", "CASOS_CAPITAL"];
     const FIELDS_SERHA = ["FRONT", "CONCILIACAO", "AVERBADOS", "TRABALHADO_ANTERIOR", "COMPLEMENTAR", "ORBITAL"];
-    const FIELDS_ZETRA = ["FRONT", "CONCILIACAO", "RARS", "HISTORICO", "ORBITAL"];
+    const FIELDS_ZETRA = ["FRONT", "CONCILIACAO", "ZIPS", "HISTORICO", "ORBITAL"];
     const FIELDS_CONSIGLOG = ["FRONT", "CONCILIACAO", "AVERBADOS", "ORBITAL"];
 
     const fileDataMap = {}; 
@@ -227,15 +228,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const fieldId = field.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
             
             // --- IDENTIFICAÇÃO EXATA DO CAMPO ---
-            const isRarField = field.toUpperCase() === "RARS";
+            const isZipField = field.toUpperCase() === "ZIPS";
             
-            // Atributos: Se for RARS, aceita pastas e .rar. Se não, apenas planilhas.
-            const attrs = isRarField 
-                ? 'webkitdirectory directory accept=".rar"' 
+            // Atributos: Se for ZIPS, aceita pastas e .zip. Se não, apenas planilhas.
+            const attrs = isZipField 
+                ? 'webkitdirectory directory accept=".zip"' 
                 : 'accept=".csv, .xlsx, .xls"';
                 
-            const icon = isRarField ? 'lucide:folder-archive' : 'lucide:file-text';
-            const helpText = isRarField ? '.RAR ou Selecionar Pasta' : '.CSV, .XLSX';
+            const icon = isZipField ? 'lucide:folder-archive' : 'lucide:file-text';
+            const helpText = isZipField ? '.ZIP ou Selecionar Pasta' : '.CSV, .XLSX';
 
             const html = `
                 <div class="upload-group">

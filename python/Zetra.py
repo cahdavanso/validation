@@ -5,6 +5,7 @@ import re
 from thefuzz import fuzz
 from datetime import datetime
 import os
+import io
 from io import StringIO
 import openpyxl
 
@@ -18,11 +19,11 @@ class ZETRA:
 
         self.consignataria = consignataria
 
-        self.averbados = self.processar_arquivos_rar(portal_file_path)
+        self.averbados = self.processar_arquivos_zip(portal_file_path)
 
         self.front = front
 
-        self.historico = historico if historico else None
+        self.historico = historico if historico is not None else None
 
         conciliacao_falso = pd.DataFrame(
             columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25', 'RECEBIDO GERAL'])
@@ -35,9 +36,11 @@ class ZETRA:
         conciliacao_falso['ST JUL 25'] = 'DESCONTO TOTAL'
         conciliacao_falso['RECEBIDO GERAL'] = 0
 
-        self.conciliacao = conciliacao if conciliacao else conciliacao_falso
+        self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
+        self.conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
+        self.conciliacao.rename(columns={'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'TIPO OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO'}, inplace=True)
 
-        self.orbital = orbital if orbital else None
+        self.orbital = orbital if orbital is not None else None
 
         self.condicoes_1 = ['02.03 AGUARDANDO PROCESSAMENTO CARTAO', '11 FORMALIZACAO', '11 FORMALIZAA\x87A\x83O', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', "11 FORMALIZAAÂ\x87AÂ\x83O",
                                '14.0 RISCO DA OPERACAO - OBITO', 'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
@@ -52,87 +55,72 @@ class ZETRA:
         # --- TABELA DE CONFIGURAÇÃO (Baseada na sua imagem) ---
         # 0 significa que o campo não existe ou deve ser ignorado
         self.LAYOUT_CONFIG = {
-            "PREF ACAILANDIA": {"MAT": 12, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 3, "VAL": 10, "PRZ": 3,
+            "PREF. AÇAILÂNDIA": {"MAT": 12, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 3, "VAL": 10, "PRZ": 3,
                                 "COMP": 6, "OP": 1},
-            "PREF BELO HORIZONTE": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 4, "VAL": 10, "PRZ": 3,
+            "PREF. BELO HORIZONTE": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 4, "VAL": 10, "PRZ": 3,
                                     "COMP": 6, "OP": 1},
-            "PREF MACAE": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 4, "VAL": 10, "PRZ": 3,
+            "PREF. MACAÉ": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 4, "VAL": 10, "PRZ": 3,
                            "COMP": 6, "OP": 1},
-            "PREF PIRACICABA": {"MAT": 10, "CPF": 11, "NOME": 0, "EST": 3, "ORG": 3, "COD": 4, "VAL": 10, "PRZ": 3,
+            "PREF. PIRACICABA": {"MAT": 10, "CPF": 11, "NOME": 0, "EST": 3, "ORG": 3, "COD": 4, "VAL": 10, "PRZ": 3,
                                 "COMP": 6, "OP": 1},
             "PREVIPALMAS": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 4, "COD": 5, "VAL": 10, "PRZ": 3,
                             "COMP": 6, "OP": 1},
             "IGEPREV": {"MAT": 20, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 5, "VAL": 10, "PRZ": 3, "COMP": 6,
                         "OP": 1},
-            "GOV RJ": {"MAT": 13, "CPF": 11, "NOME": 50, "EST": 2, "ORG": 0, "COD": 25, "VAL": 10, "PRZ": 0, "COMP": 6,
+            "GOV. RIO DE JANEIRO": {"MAT": 13, "CPF": 11, "NOME": 50, "EST": 2, "ORG": 0, "COD": 25, "VAL": 10, "PRZ": 0, "COMP": 6,
                        "OP": 1},
-            "GOV ES": {"MAT": 12, "CPF": 11, "NOME": 50, "EST": 0, "ORG": 0, "COD": 24, "VAL": 10, "PRZ": 3, "COMP": 6,
+            "GOV. ESPÍRITO SANTO": {"MAT": 12, "CPF": 11, "NOME": 50, "EST": 0, "ORG": 0, "COD": 24, "VAL": 10, "PRZ": 3, "COMP": 6,
                        "OP": 1},
+            "PREF. CAMPINAS": {"MAT": 10, "ORG": 2, "COD": 3, "OP": 1, "PRZ": 2, "VAL": 10, "COMP": 8}
         }
 
         self.arquivo_lancamento()
 
-    def processar_arquivos_rar(self, diretorio_alvo):
-        """
-        Lê arquivos .rar, extrai CSVs específicos, remove as 3 últimas linhas,
-        concatena e trata as colunas de data.
-        """
+    def processar_arquivos_zip(self, lista_zips):
         lista_dfs = []
-        print(f'diretorio_alvo: {diretorio_alvo}\n')
-        # Verifica se o diretório existe
-        if not os.path.exists(diretorio_alvo):
-            print(f"Erro: O diretório '{diretorio_alvo}' não foi encontrado.")
-            return None
 
-        # Percorre todos os arquivos da pasta
-        for nome_arquivo in os.listdir(diretorio_alvo):
-            if nome_arquivo.lower().endswith('.zip'):
-                caminho_completo = os.path.join(diretorio_alvo, nome_arquivo)
-                print(f"Lendo arquivo: {nome_arquivo}")
+        print(f'Lista Zips: {lista_zips}')
+        
+        # Se não for uma lista (ex: um único arquivo), transforma em lista
+        if not isinstance(lista_zips, list):
+            lista_zips = [lista_zips]
 
-                try:
-                    # Abre o arquivo RAR
-                    with zipfile.ZipFile(caminho_completo) as zf:
-                        # Percorre os arquivos dentro do RAR
-                        for arquivo_interno in zf.namelist():
-                            nome_upper = arquivo_interno.upper()
-
-                            # Verifica critérios: ser CSV e ter as palavras chaves
-                            # Assumi que é para pegar arquivos que tenham OU Alteração OU Inclusão
-                            if arquivo_interno.lower().endswith('.csv') and \
-                                    ("ALTERACAO" in nome_upper or "INCLUSAO" in nome_upper):
-
-                                print(f"  -> Processando CSV interno: {arquivo_interno}")
-
-                                # Lê o conteúdo do arquivo diretamente da memória
-                                with zf.open(arquivo_interno) as f:
-                                    # Dica: CSVs brasileiros geralmente usam encoding 'latin1' ou 'ansi' e separador ';'
-                                    # Se der erro de leitura, tente encoding='utf-8'
+        for arquivo_upload in lista_zips:
+            try:
+                # O pulo do gato: lemos o conteúdo do upload para a memória (BytesIO)
+                conteudo_zip = io.BytesIO(arquivo_upload.file.read())
+                
+                with zipfile.ZipFile(conteudo_zip) as zf:
+                    for arquivo_interno in zf.namelist():
+                        nome_upper = arquivo_interno.upper()
+                        
+                        if arquivo_interno.lower().endswith('.csv') and \
+                        ("ALTERACAO" in nome_upper or "INCLUSAO" in nome_upper):
+                            
+                            with zf.open(arquivo_interno) as f:
+                                # Lendo o CSV direto da memória
+                                if self.convenio != 'IGEPREV':
                                     df_temp = pd.read_csv(f, sep=';', encoding='latin1')
+                                else:
+                                    df_temp = pd.read_excel(f, header=5)
+                                    df_temp = df_temp.iloc[:-5]
+                                    df_temp = df_temp.dropna(axis=1, how='all')
+                                    df_temp.insert(0, "Matrícula", "", True)
 
-                                    # --- REMOVE AS 3 ÚLTIMAS LINHAS ---
-                                    if len(df_temp) > 3:
-                                        df_temp = df_temp.iloc[:-3]
-                                    else:
-                                        print(
-                                            f"     Aviso: Arquivo {arquivo_interno} tem menos de 3 linhas. Ignorado.")
-                                        continue
-
+                                    # Expand=True transforma o resultado em duas colunas novas
+                                    # n=1 garante que ele só separe no PRIMEIRO separador encontrado
+                                    df_temp[['Matrícula', 'Servidor']] = df_temp['Servidor'].str.split(' - ', n=1, expand=True)
+                                
+                                if len(df_temp) > 3:
+                                    df_temp = df_temp.iloc[:-3]
                                     lista_dfs.append(df_temp)
+                                    
+            except Exception as e:
+                print(f"Erro ao processar arquivo vindo do navegador: {e}")
 
-                except zipfile.BadZipfile:
-                    print("ERRO CRÍTICO: UnRAR não encontrado. Verifique a configuração do rarfile.UNRAR_TOOL.")
-                    return None
-                except Exception as e:
-                    print(f"Erro ao processar {nome_arquivo}: {e}")
-
-        # Se não encontrou nada, retorna vazio
         if not lista_dfs:
-            print("Nenhum arquivo correspondente foi encontrado ou processado.")
             return pd.DataFrame()
 
-        # --- CONCATENAÇÃO ---
-        print("Concatenando DataFrames...")
         df_final = pd.concat(lista_dfs, ignore_index=True)
 
         nome_averbado = f"RELATORIO CARTAO {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}"
@@ -176,6 +164,9 @@ class ZETRA:
 
             # Remove duplicatas por ID.ADE
             averbacao_completa.drop_duplicates(subset=['Id. ADE'], keep='first', inplace=True)
+
+            # Transforma toda a coluna de Vlr novo em string
+            averbacao_completa['Vlr novo'] = averbacao_completa['Vlr novo'].astype(str).str.replace(".", ",")
         else:
             print("Aviso: Coluna 'Data ocor.' não encontrada no DataFrame final.")
 
@@ -235,14 +226,14 @@ class ZETRA:
 
             
 
-            orbital['Numero de Contrato'] = orbital['Numero de Contrato'].astype(str)
+            orbital['Numero Contrato'] = orbital['Numero Contrato'].astype(str)
             '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "Validação  desconto final"]}\n')
             print(f'Contrato 301268942 no front: {front_consig_esteiras.loc[front_consig_esteiras["Contrato"] == "301268942", "Prestacao"]}\n')'''
 
 
             # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
             # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
-            mapa_orbital = orbital.set_index('Numero de Contrato')['Validação  desconto final']
+            mapa_orbital = orbital.set_index('Numero Contrato')['Valor da Parcela']
             # --- ETAPA 3: Definir quem vai ser alterado ---
             filtro_esteira = front_consig_esteiras['Esteira'] == '99 CARTAO UTILIZADO'
 
@@ -270,7 +261,7 @@ class ZETRA:
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
-        front_consig_validado_termino = self.validacao_termino_front(front_consig_esteiras)
+        front_consig_validado_termino = self.validacao_termino(front_consig_esteiras)
         front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > -0.01, 'OBS'] = 'NÃO LANÇAR - SALDO POSITIVO'
 
         # Marca o que é ação judicial
@@ -280,6 +271,12 @@ class ZETRA:
 
         # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
         front_consig_validado_termino['Consignataria'].fillna('', inplace=True)
+
+        # Renomear nomes dos bancos no front porque estão vindo com 0 na frente
+        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CAPITAL CONSIG ", "CAPITAL CONSIG")
+        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CLICKBANK ", "CLICKBANK")
+        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CIASPREV ", "CIASPREV")
+        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("HOJE PREVIDENCIA PRIVADA ", "HOJE PREVIDENCIA PRIVADA")
 
         if self.consignataria == 'CIASPREV':
             front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'CIASPREV') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
@@ -302,9 +299,9 @@ class ZETRA:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão Conciliação
-        if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS']:
+        if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS', 'PREF. BELO HORIZONTE', 'PREF. CAMPINAS']:
             print(f'Convenio é {self.convenio}')
-            print(f'Convenio está em PREF GOIÂNIA ou PREF. DUQUE DE CAXIAS? {self.convenio in ["PREF. GOIÂNIA", "PREF. DUQUE DE CAXIAS"]}')
+            print(f'Convenio está em PREF GOIÂNIA, PREF. DUQUE DE CAXIAS, , PREF. BELO HORIZONTE? {self.convenio in ["PREF. GOIÂNIA", "PREF. DUQUE DE CAXIAS", 'PREF. BELO HORIZONTE']}')
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         else:
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
@@ -318,73 +315,17 @@ class ZETRA:
         # Salva com os NÃO LANÇAR
         print(f"tratamento_front_preliminar: Tentando salvar FRONT SEMI TRABALHADO em: {self.caminho}")
         try:
-            front_consig_validado_termino.to_excel(os.path.join(self.caminho, f"FRONT SEMI TRABALHADO {self.convenio}.xlsx"), index=False)
+            front_consig_validado_termino.to_excel(fr'{self.caminho}\FRONT SEMI TRABALHADO {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
             print("tratamento_front_preliminar: Arquivo salvo com sucesso!")
         except Exception as e:
-            print(f"DEBUG: ERRO AO SALVAR: {e}")
+            print(f"DEBUG: ERRO AO SALVAR FRONT SEMI TRABALHADO: {e}")
 
         # --------------------------------------------------------------------------------------------- #
         return front_consig_validado_termino
         
-    def tratamento_front(self):
-        front_consig = self.tratamento_front_preliminar()
-
-        if front_consig is False:
-            print("tratamento_front: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
-            return False
-
-        # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
-
-        # Separar o que não é cartão de crédito da conciliação
-        # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
-
-        # Pegar o que é CARTAO DE CREDITO do front
-        # condicao_cartao = ['CARTAO DE CREDITO']
-        # front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['dsTipoOperacao'].isin(condicao_cartao)].copy()
-        # Faz concat dos dois dataframes
-        front_consig_trabalhado = front_consig_cartao_conciliacao.copy()
-
-        # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Acao Judicial'] != 1].copy()
-
-        # ---------------------------------- TIRAR ÓBITO DO FRONT ---------------------------------- #
-        # front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Obito'] != 1].copy()
-        
-        # ------------------------------------ INSERE A COLUNA DE SALDO ------------------------------------- #
-
-        front_consig_trabalhado.loc[front_consig_trabalhado['Saldo'] > -0.01, 'Valor a lançar'] = 0
-        front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Valor a lançar'] > 0].copy()
-
-        # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
-        '''mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA'
-        front_consig_trabalhado.loc[mask_peculio, 'Valor a lançar'] += 20'''
-
-        # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
-        front_consig_trabalhado['Consignataria'].fillna('', inplace=True)
-
-        if self.consignataria == 'CIASPREV':
-            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CIASPREV', na=False)].copy()
-        elif self.consignataria == 'HOJE PREVIDENCIA PRIVADA':
-            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('HOJE PREVIDENCIA PRIVADA', na=False)].copy()
-        elif self.consignataria == 'CAPITAL CONSIG':
-            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CAPITAL CONSIG', na=False)].copy()
-        elif self.consignataria == 'CLICKBANK':
-            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CLICKBANK', na=False)].copy()
-        else:
-            print('Consignatária inválida.')
-            return
-
-
-        # --------------------------------------- TIRA BANCO OUTROS ----------------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Consignataria'].str.contains('OUTROS', na=False)].copy()
-
-        # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado|CANCELADO', na=False)].copy()
-
-        return front_consig_trabalhado
 
     def trata_conciliacao(self):
+        print(f'trata_conciliacao foi acionado')
         conciliacao_tratado = self.conciliacao
         # Converte para lista de colunas
 
@@ -429,6 +370,7 @@ class ZETRA:
         return conciliacao_tratado
 
     def validacao_termino(self, front):
+        print(f'validacao_termino acionado')
         front_copy = front.copy()
         conciliacao_tratado = self.trata_conciliacao()
 
@@ -452,6 +394,11 @@ class ZETRA:
 
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Prestacao" seja escolhida)
+        front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace(".", "")
+        front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace(",", ".")
+        front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
+        print(f'\nTeste de Prestacao:\n{front_copy['Prestacao'].head()}\n')
+        print(f'Tipo de prestacao: {front_copy['Prestacao'].dtype}')
         valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['Prestacao'])
 
         front_copy['Valor a lançar'] = valor_a_lancar
@@ -485,6 +432,7 @@ class ZETRA:
             return re.sub(r'[^0-9a-zA-Z]', '', texto)  # Mantém letras e números
 
         # --- Passo 1: Criar o mapa de referência (sem alterações) ---
+        print(f'df_limpo: {df_limpo}')
         df_limpo['Contrato'] = df_limpo['Contrato'].astype(str).str.strip()
         print("Criando mapa de referência CPF -> Contratos...")
         cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict()
@@ -632,25 +580,43 @@ class ZETRA:
     def orbital_tratado(self, orbital, front_so_orbital):
         if orbital is None:
             return None
+        
+        orbital_preparado = pd.DataFrame(columns=['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela'])
 
-        if self.convenio == 'PREF PIRACICABA':
+        if self.convenio == 'PREF. PIRACICABA':
             orbital_preparado = orbital.loc[
                 orbital['Descrição EMPREGADOR'].str.contains('PREF PIRACICABA', case=False, na=False),
                 ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
             ].copy()
-        elif self.convenio == 'PREF PIRACICABA SEMAE':
+        elif self.convenio == 'PREF. PIRACICABA SEMAE':
             orbital_preparado = orbital.loc[
                 orbital['Descrição EMPREGADOR'].str.contains('PREF PIRA SEMAE', case=False, na=False),
                 ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
             ].copy()
-        elif self.convenio == 'GOV RJ':
+        elif self.convenio == 'GOV. RIO DE JANEIRO':
             orbital_preparado = orbital.loc[
                 orbital['Descrição EMPREGADOR'].str.contains('GOV RJ|GOV RJ DG|GOV RJ SEG|GOV RJ M NEG', case=False, na=False),
                 ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
             ].copy()
-        front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+        elif self.convenio == 'PREF. CAMPINAS':
+            orbital_preparado = orbital.loc[
+                orbital['Descrição EMPREGADOR'].str.contains('PREF CAMPINAS', case=False, na=False),
+                ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
+            ].copy()
+
+        orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+
+        if 'NÃO LANÇAR - ORBITAL' not in front_so_orbital['OBS'].values:
+            print('Não há registros de ORBITAL para tratar.')
+            return None
 
         # front_so_orbital['Proposta'] = front_so_orbital['Proposta'].astype(str).str.strip()
+
+        front_so_orbital = front_so_orbital.loc[
+            front_so_orbital['OBS'] == 'NÃO LANÇAR - ORBITAL',
+            ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
+        
+        front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
         # front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace('.', '', regex=False)
         front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace(',', '.', regex=False)
@@ -671,17 +637,32 @@ class ZETRA:
 
     def trata_averbacao(self):
         # PUXA OS ARQUIVOS À SEREM TRATADOS
+        print('trata_averbacao foi acionado')
         data = self.unifica_historico_averb()
-        front = self.front
+        front = self.tratamento_front_preliminar()
         consig = self.consignataria
-        orbital_tratado = self.orbital_tratado(self.orbital, self.funcao_bruto)
+        orbital_tratado = self.orbital_tratado(self.orbital, front)
         convenio = self.convenio
 
+        if self.convenio == 'IGEPREV':
+            data.insert(0, 'Órgão', '1', True)
+            data.insert(13, 'Categoria', '', True)
+            data.insert(14, 'Id. órgão', '1', True)
+            data.insert(15, 'Órgão.1', '1', True)
+
         # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
+        data.rename(columns={'Matrícula (ID Funcional + Vínculo)': 'Matrícula'}, inplace=True)
+        data.rename(columns={'Situação do contrato': 'Situação'}, inplace=True)
         colunas = ['Órgão', 'Matrícula', 'Servidor', 'CPF', 'Situação', 'Categoria', 'Consignatária', 'Id. órgão',
                    'Órgão.1', 'Id. serviço', 'Serviço', 'Nº ADE', 'Id. ADE', 'Data inc.', 'Vlr ant.', 'Vlr novo']
 
         data_averbados_bruto = data[colunas]
+
+        # Vou tentar colocar a coluna de Orbital aqui no meio mesmo
+        if orbital_tratado is not None:
+            mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
+            data_averbados_bruto['ORBITAL'] = ''
+            data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF'].map(mask_orbital)
 
         data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, front)
 
@@ -691,9 +672,14 @@ class ZETRA:
 
         # Operações liquidadas. Tratando NRº OPER EDITADO
         # OP LIQUIDADO
-        oper_liq = front[front['Status'].str.contains('Liquidado|CANCELADO')]
-        contratos_tratados_liq = oper_liq['Contrato'].astype(str).str.slice(0, 9)
-        oper_liq.insert(1, "Nº OPERAÇÃO EDITADO", contratos_tratados_liq, True)
+        try:
+            oper_liq = front[front['Status'].str.contains('Liquidado|CANCELADO')]
+            contratos_tratados_liq = oper_liq['Contrato'].astype(str).str.slice(0, 9)
+            oper_liq.insert(1, "Nº OPERAÇÃO EDITADO", contratos_tratados_liq, True)
+        except ValueError:
+            oper_liq = pd.DataFrame()
+            oper_liq["Nº OPERAÇÃO EDITADO"] = ''
+            oper_liq["Contrato"] = ''
 
         tutela = front[front['Acao Judicial'] == 'SIM']
 
@@ -710,11 +696,6 @@ class ZETRA:
 
         # print(f"Colunas de contrato identificadas para análise: {colunas_com_contratos}")
 
-        # Vou tentar colocar a coluna de Orbital aqui no meio mesmo
-        if orbital_tratado is not None:
-            mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
-            data_averbados_bruto['ORBITAL'] = ''
-            data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF_Formatado'].map(mask_orbital)
 
         # --- 2. Loop único para criar as colunas de Esteira e Valor para CADA contrato ---
         # O enumerate nos dá um índice numérico (i) para criar nomes de coluna únicos.
@@ -744,8 +725,12 @@ class ZETRA:
 
             # --- PASSO 2: PREPARAÇÃO E LIMPEZA DE DADOS ---
             # Agora que todas as colunas foram criadas, garantimos que sejam numéricas para os cálculos.
+            if data_averbados[f'Valor_Unif_{i}'].dtype != 'float64':
+                data_averbados[f'Valor_Unif_{i}'] = data_averbados[f'Valor_Unif_{i}'].astype(str).str.replace(".", '')
+                data_averbados[f'Valor_Unif_{i}'] = data_averbados[f'Valor_Unif_{i}'].astype(str).str.replace(",", '.')
+
             data_averbados[f'Valor_Unif_{i}'] = pd.to_numeric(data_averbados[f'Valor_Unif_{i}'],
-                                                              errors='coerce').fillna(0)
+                                                            errors='coerce').fillna(0)
             data_averbados[f'Saldo {i}'] = pd.to_numeric(data_averbados[f'Saldo {i}'], errors='coerce').fillna(-np.inf)
 
             # --- PASSO 3: CONSTRUIR AS CONDIÇÕES E APLICAR A LÓGICA ---
@@ -805,19 +790,22 @@ class ZETRA:
 
         # --- 5. Cria a coluna Lançar ---
         print(f'CONSIGNATARIA: {self.consignataria}')
-        if consig == 'HOJE':
+        if consig == 'HOJE PREVIDENCIA PRIVADA':
             data_averbados = self.adiciona_peculio(data_averbados)
         else:
             data_averbados['Lançar'] = np.minimum(data_averbados['Soma'], data_averbados['Vlr novo'])
             data_averbados.loc[condicao_liminar, 'Lançar'] = 0
 
+        # Remoção de duplicatas por matrícula
+        data_averbados.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
+
         # print("Cálculos de Soma e Diferença finalizados.")
-        data_averbados.to_excel(fr'{self.caminho}\TRABALHADO CARTAO {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
+        data_averbados.to_excel(fr'{self.caminho}\TRABALHADO CARTAO {convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
 
         return data_averbados
 
     def tratamento_front(self, averbado_trabalhado):
-
+        print('tratamento_front foi acionado.')
         front_consig = self.tratamento_front_preliminar()
 
         if front_consig is False:
@@ -923,20 +911,33 @@ class ZETRA:
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado|CANCELADO', na=False)].copy()
 
+        # Salva com os NÃO LANÇAR
+        print(f"tratamento_front_preliminar: Tentando salvar FRONT TRABALHADO em: {self.caminho}")
+        try:
+            front_consig_trabalhado.to_excel(fr'{self.caminho}\FRONT TRABALHADO {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
+            print("tratamento_front: Arquivo salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR FRONT TRABALHADO: {e}")
+
         return front_consig_trabalhado
 
     def arquivo_lancamento(self):
+        print(f'arquivo_lancamento foi acionado')
         data_averbados = self.trata_averbacao()
+        if self.convenio == 'IGEPREV':
+            convenio = f'IGEPREV {self.consignataria}'
+        else:
+            convenio = self.convenio
 
-        codigo_desconto_dict = {"PREF ACAILANDIA": "382", "GOV. RJ": "4541CARTAO DE CREDITO I", "IGEPREV CAPITAL": "04072",
-                                "IGEPREV CIASPREV": "02470", "PREF PIRACICABA": "5600", "PREF PIRACICABA - SEMAE": "675",
-                                "PREV PIRACICABA": "6277", "PREF BELO HORIZONTE CB": "204U", "BELO HORIZONTE CC": "204V",
-                                "PREF MACAE": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894"}
+        codigo_desconto_dict = {"PREF. AÇAILÂNDIA": "382", "GOV. RIO DE JANEIRO": "4541CARTAO DE CREDITO I", "IGEPREV CAPITAL": "04072",
+                                "IGEPREV CIASPREV": "02470", "PREF. PIRACICABA": "5600", "PREF. PIRACICABA - SEMAE": "675",
+                                "PREV. PIRACICABA": "6277", "PREF. BELO HORIZONTE CB": "204U", "PREF. BELO HORIZONTE CC": "204V",
+                                "PREF. MACAE": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894", "PREF. CAMPINAS": "011"}
 
-        estab_dict = {"PREF ACAILANDIA": "001", "IGEPREV CAPITAL": "001", "IGEPREV CIASPREV": "001",
-                      "PREF PIRACICABA": "001", "PREF PIRACICABA - SEMAE": "002",
-                      "PREV PIRACICABA": "001", "PREF BELO HORIZONTE CB": "001", "BELO HORIZONTE CC": "001",
-                      "PREF MACAE": "001", "PREVIPALMAS CAPITAL": "001", "PREVIPALMAS CIASPREV": "001"}
+        estab_dict = {"PREF. AÇAILÂNDIA": "001", "IGEPREV CAPITAL": "001", "IGEPREV CIASPREV": "001",
+                      "PREF. PIRACICABA": "001", "PREF. PIRACICABA - SEMAE": "002", "PREF. CAMPINAS": "",
+                      "PREV. PIRACICABA": "001", "PREF. BELO HORIZONTE CB": "001", "PREF. BELO HORIZONTE CC": "001",
+                      "PREF. MACAE": "001", "PREVIPALMAS CAPITAL": "001", "PREVIPALMAS CIASPREV": "001"}
 
         emp_dict_gov_rj = {"ADMINISTRAÇÃO DIRETA (GOVERNO ESTADO)": "01",
                            "ENCARGOS GERAIS DO ESTADO": "01",
@@ -968,17 +969,18 @@ class ZETRA:
 
 
         try:
-            codigo_de_desconto = codigo_desconto_dict[self.convenio]
+            codigo_de_desconto = codigo_desconto_dict[convenio]
         except KeyError:
-            print(f'\nConvênio {self.convenio} não consta no dicionário de "Códigos de Desconto!"')
+            print(f'\nConvênio {convenio} não consta no dicionário de "Códigos de Desconto!"')
             return
 
-        estabelecimento = estab_dict[self.convenio]
+        estabelecimento = estab_dict[convenio] if convenio != "GOV. RIO DE JANEIRO" else None
 
         # Cria o novo DataFrame
         data_averbados['Matrícula'] = data_averbados['Matrícula'].astype(int)
         # print(f'\ndata_averbados - matricula\n{data_averbados['Matrícula']}')
-        credbase_trabalhado = self.credbase_trabalhado_func(data_averbados)
+        front_trabalhado = self.tratamento_front(data_averbados)
+        
         temp = data_averbados[data_averbados['Lançar'] > 0]
         colunas_alancar = ['Órgão', 'Matrícula', 'Servidor', 'CPF', 'Situação', 'Categoria', 'Consignatária', 'Id. órgão',
                    'Órgão.1', 'Id. serviço', 'Serviço', 'Nº ADE', 'Id. ADE', 'Data inc.', 'Vlr ant.', 'Vlr novo', 'Lançar']
@@ -992,7 +994,7 @@ class ZETRA:
         # Calcula o Somase Cred
         data_averbados['SOMASE CRED'] = ''
 
-        soma_condicional_dict_averb = credbase_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
+        soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
         data_averbados['SOMASE CRED'] = data_averbados['CPF'].map(soma_condicional_dict_averb)
         data_averbados['SOMASE CRED'] = data_averbados['SOMASE CRED'].map('{:.2f}'.format).astype(float)
 
@@ -1000,17 +1002,17 @@ class ZETRA:
         data_averbados['DIFF'] = data_averbados['SOMASE CRED'] - data_averbados['SOMASE']
 
         # SOMASE NO CREDBASE TRABALHADO
-        cred_somase = credbase_trabalhado.groupby('CPF')['Valor a lançar'].transform('sum')
-        credbase_trabalhado.insert(16, 'SOMASE CRED', cred_somase, True)
-        credbase_trabalhado['SOMASE CRED'] = credbase_trabalhado['SOMASE CRED'].map('{:.2f}'.format).astype(float)
+        cred_somase = front_trabalhado.groupby('CPF')['Valor a lançar'].transform('sum')
+        front_trabalhado.insert(16, 'SOMASE CRED', cred_somase, True)
+        front_trabalhado['SOMASE CRED'] = front_trabalhado['SOMASE CRED'].map('{:.2f}'.format).astype(float)
 
-        credbase_trabalhado.insert(17, 'SOMASE AVERB', '', True)
-        credbase_trabalhado.insert(18, 'DIFF', '', True)
+        front_trabalhado.insert(17, 'SOMASE AVERB', '', True)
+        front_trabalhado.insert(18, 'DIFF', '', True)
 
         # Somase Averb no Credbase Trabalhado
         soma_condicional_dict_cred = data_averbados.groupby('CPF')['Lançar'].sum().to_dict()
-        credbase_trabalhado['SOMASE AVERB'] = credbase_trabalhado['CPF'].map(soma_condicional_dict_cred)
-        credbase_trabalhado['DIFF'] = credbase_trabalhado['SOMASE CRED'] - credbase_trabalhado['SOMASE AVERB'].astype(
+        front_trabalhado['SOMASE AVERB'] = front_trabalhado['CPF'].map(soma_condicional_dict_cred)
+        front_trabalhado['DIFF'] = front_trabalhado['SOMASE CRED'] - front_trabalhado['SOMASE AVERB'].astype(
             float)
 
         # Arredonda os números
@@ -1025,8 +1027,8 @@ class ZETRA:
         a_lancar.insert(8, "COMPETÊNCIA", "", True)
         a_lancar.insert(9, "CÓDIGO DA OPERAÇÃO", "", True)
 
-        a_lancar["ESTABELECIMENTO"] = estabelecimento if self.convenio != 'GOV RJ' else a_lancar['Órgão.1'].map(emp_dict_gov_rj)
-        a_lancar['ÓRGÃO'] = a_lancar['Id. órgão'] if self.convenio != 'GOV RJ' else a_lancar['Órgão.1']
+        a_lancar["ESTABELECIMENTO"] = estabelecimento if self.convenio != 'GOV. RIO DE JANEIRO' else a_lancar['Órgão.1'].map(emp_dict_gov_rj)
+        a_lancar['ÓRGÃO'] = a_lancar['Id. órgão'] if self.convenio != 'GOV. RIO DE JANEIRO' else a_lancar['Órgão.1']
         a_lancar['CÓDIGO DE DESCONTO'] = codigo_de_desconto
 
         self.process_layout(a_lancar, self.caminho)
@@ -1092,15 +1094,15 @@ class ZETRA:
         # Note que agora o segundo argumento vem do dicionário 'regras'
 
         matricula = self.format_number(df['Matrícula'], regras['MAT'])
-        cpf = self.format_cpf(df['CPF'], regras['CPF'])
-        nome = self.format_text(df['Servidor'], regras['NOME'])
-        estab = self.format_number(df['ESTABELECIMENTO'], regras['EST'])
+        cpf = self.format_cpf(df['CPF'], regras['CPF']) if not self.convenio == 'PREF. CAMPINAS' else ''
+        nome = self.format_text(df['Servidor'], regras['NOME']) if not self.convenio == 'PREF. CAMPINAS' else ''
+        estab = self.format_number(df['ESTABELECIMENTO'], regras['EST']) if not self.convenio == 'PREF. CAMPINAS' else ''
         orgao = self.format_number(df['ÓRGÃO'], regras['ORG'])
-        cod_desc = self.format_number(df['CÓDIGO DE DESCONTO'], regras['COD']) if not self.convenio in ['GOV RJ', 'PREF MACAE'] else self.format_text(df['CÓDIGO DE DESCONTO'], regras['COD'])
+        cod_desc = self.format_number(df['CÓDIGO DE DESCONTO'], regras['COD']) if not self.convenio in ['GOV. RIO DE JANEIRO', 'PREF. MACAE'] else self.format_text(df['CÓDIGO DE DESCONTO'], regras['COD'])
         valor = self.format_currency(df['Lançar'], regras['VAL'])
 
         # Campos calculados na hora (Data e Constantes)
-        competencia_atual = f'{str(datetime.now().month).zfill(2)}{datetime.now().year}'
+        competencia_atual = f'{str(datetime.now().month).zfill(2)}{datetime.now().year}' if not self.convenio == 'PREF. CAMPINAS' else f'{str(datetime.now().day).zfill(2)}{str(datetime.now().month).zfill(2)}{datetime.now().year}'
 
         # Como Prazo e Operação são constantes mas podem ter tamanho variável:
         prazo = self.format_constant('1', regras['PRZ'])  # Assumi '1' como padrão, ajuste se for coluna
@@ -1108,14 +1110,16 @@ class ZETRA:
         operacao = self.format_constant('I', regras['OP'])  # 'I' de Inclusão
 
         # 3. Concatena tudo
-        if self.convenio in ['PREF ACAILANDIA', 'PREF MACAE', 'PREVIPALMAS', 'PREF BELO HORIZONTE']:
+        if self.convenio in ['PREF. AÇAILÂNDIA', 'PREF. MACAÉ', 'PREVIPALMAS', 'PREF. BELO HORIZONTE']:
             layout = (matricula + cpf + nome + estab + orgao + cod_desc + valor + prazo + comp + operacao)
-        elif self.convenio == 'GOV RJ':
+        elif self.convenio == 'GOV. RIO DE JANEIRO':
             layout = (matricula + cpf + nome + cod_desc + estab + valor + comp + operacao)
-        elif self.convenio.astype(str).str.contains('PIRACICABA'):
+        elif 'PIRACICABA' in self.convenio :
             layout = (matricula + cpf + estab + orgao + cod_desc + valor + prazo + comp + operacao)
-        elif self.convenio == 'GOV ES':
+        elif self.convenio == 'GOV. ESPÍRITO SANTO':
             layout = (matricula + cpf + nome + cod_desc + valor + prazo + comp + operacao)
+        elif self.convenio == 'PREF. CAMPINAS':
+            layout = (matricula + orgao + cod_desc + operacao + prazo + valor + comp)
         else:
             print('Nenhum convênio conhecido foi apresentado para criar o arquivo de lançamento...')
             print(f'Convênio solicitado: {self.convenio}')
@@ -1125,6 +1129,7 @@ class ZETRA:
 
     def save_layout(self, layout, output_dir):
         # Nome do arquivo agora usa o convênio dinâmico
+        print('save_layout processado')
         file_name = f'LANCAMENTO {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.txt'
         file_path = f'{output_dir}/{file_name}'
         np.savetxt(file_path, layout.values, fmt='%s')

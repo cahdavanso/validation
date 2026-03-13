@@ -50,6 +50,8 @@ class CONSIGLOG:
         front_consig = self.front.copy()
 
         conciliacao = self.conciliacao.copy()
+        conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
+        conciliacao.rename(columns={'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'TIPO OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO'}, inplace=True)
 
         orbital = self.orbital
 
@@ -140,6 +142,12 @@ class CONSIGLOG:
         front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
 
         # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
+        # Renomear nomes dos bancos no front porque estão vindo com 0 na frente
+        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CAPITAL CONSIG ", "CAPITAL CONSIG")
+        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CLICKBANK ", "CLICKBANK")
+        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CIASPREV ", "CIASPREV")
+        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("HOJE PREVIDENCIA PRIVADA ", "HOJE PREVIDENCIA PRIVADA")
+
         front_consig_validado_termino['Consignataria'].fillna('', inplace=True)
 
         if self.consignataria == 'CIASPREV':
