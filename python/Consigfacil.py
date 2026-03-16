@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import re
+from thefuzz import fuzz
 import logging
 import os
 import chardet
@@ -52,7 +53,7 @@ class CONSIGFACIL:
         self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
         self.conciliacao.rename(columns={'PRESTAÇÃO ORIGINAL': 'PRESTAÇÃO'}, inplace=True)
         self.conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
-        self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO'}, inplace=True)
+        self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO'}, inplace=True)
         
         # 5. Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
@@ -86,7 +87,7 @@ class CONSIGFACIL:
                                '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
                                "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
                                "07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES",
-                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES"
+                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "RISCO DA OPERACAO - DEMAIS SITUACOES"
                               ]
         
         
@@ -133,11 +134,23 @@ class CONSIGFACIL:
         # Marca tudo que é orbital
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
-        # Marcar o que não é cartão Conciliação
-        front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
-
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
+
+        # Marcar tudo que contem prazo como Não cartão
+        # 1. Cria a máscara para quem está com o PRAZO vazio (ou NaN)
+        mask_vazio_prazo = front_consig_validado_termino['PRAZO'].isna() | (front_consig_validado_termino['PRAZO'] == '') | (front_consig_validado_termino['PRAZO'] == 1) | (front_consig_validado_termino['PRAZO'] == 0)
+
+        # 2. Quem NÃO tem prazo (vazio) -> É Cartão
+        front_consig_validado_termino.loc[mask_vazio_prazo, 'Tipo Operacao'] = 'CARTAO DE CREDITO'
+
+        # 3. Quem TEM prazo (não vazio) -> NÃO é cartão (ex: Empréstimo ou Operação Comum)
+        # Usamos o ~ dentro do .loc para inverter a máscara
+        front_consig_validado_termino.loc[~mask_vazio_prazo, 'Tipo Operacao'] = 'CARTAO BENEFICIO' # Ou o nome que desejar
+
+        # Marcar o que não é cartão Conciliação
+        front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+
 
         # Marcar liquidados em StatusContrato
         front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
@@ -165,7 +178,7 @@ class CONSIGFACIL:
             return False
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
+        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -302,7 +315,9 @@ class CONSIGFACIL:
         # modalidade_dict = andam_file.set_index('Código na instituição')['Modalidade'].to_dict()
         # prazo_dict = andam_file.set_index('Código na instituição')['Prazo Total'].to_dict()
 
-        andam_file = self.trata_cod_and(self.andamento)
+        # andam_file = self.trata_cod_and(self.andamento)
+        andam_file = self.extrair_contratos_com_referencia(self.andamento, self.front)
+
         # andam_file.to_excel(rf'{self.caminho}\ANDAMENTO_TESTE {self.convenio} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # Função para decidir o valor da nova modalidade
@@ -437,6 +452,127 @@ class CONSIGFACIL:
             data_averbados = pd.concat([antes, df_contratos_separados, depois], axis=1)
 
         return data_averbados
+    
+    def extrair_contratos_com_referencia(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
+        print("Iniciando o processo de extração de contratos...")
+
+        def limpar_contrato(texto: str) -> str:
+            if not isinstance(texto, str):
+                texto = str(texto)
+            return re.sub(r'[^0-9a-zA-Z]', '', texto).replace(" ", "")
+
+        # --- Passo 1: Preparar Mapas de Referência ---
+        df_limpo['Contrato'] = df_limpo['Contrato'].astype(str).str.strip()
+        df_limpo['CCB'] = df_limpo['CCB'].astype(str).str.strip()
+        
+        # Novo Mapa para Parcela (Melhoria 1)
+        # Criamos um dicionário onde a chave é o CPF e o valor é uma lista de tuplas (Valor, Contrato)
+        df_limpo['Prestacao'] = df_limpo['Prestacao'].astype(str).str.replace(".", "")
+        df_limpo['Prestacao'] = df_limpo['Prestacao'].astype(str).str.replace(",", ".")
+        df_limpo['Prestacao'] = pd.to_numeric(df_limpo['Prestacao'], errors='coerce')
+        cpf_parcelas = df_limpo.groupby('CPF').apply(
+            lambda x: list(zip(x['Prestacao'].round(2), x['Contrato']))
+        ).to_dict()
+
+        cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict()
+        cpf_operacao = df_limpo.groupby('CPF')['CCB'].apply(list).to_dict()
+
+        # --- Passo 2: Lógica de Extração ---
+        def encontrar_contratos_na_linha(row):
+            cpf = row['CPF']
+            texto_contratos_sujo = str(row['Código na instituição']).strip()
+            valor_parcela_suja = round(float(row.get('Valor da Parcela', 0)), 2)
+
+            # MELHORIA 1: Se o código estiver vazio, tenta achar pela parcela
+            if not texto_contratos_sujo or texto_contratos_sujo.lower() == 'nan' or texto_contratos_sujo == '':
+                lista_parcelas_validas = cpf_parcelas.get(cpf, [])
+                for valor_ref, contrato_ref in lista_parcelas_validas:
+                    if valor_parcela_suja == valor_ref:
+                        return [contrato_ref] # Retorna o contrato da parcela idêntica
+                return []
+
+            # (Mantém a lógica original de Fuzzy para quem tem texto no código)
+            contratos_validos_para_cpf = cpf_contratos.get(cpf, [])
+            operacoes_validas_para_cpf = cpf_operacao.get(cpf, [])
+            if not contratos_validos_para_cpf: return []
+
+            partes_sujas = [p for p in re.split(r'[/,;\s]+', texto_contratos_sujo) if p]
+            encontrados_nesta_linha = []
+            contratos_disponiveis = list(contratos_validos_para_cpf)
+            operacoes_disponiveis = list(operacoes_validas_para_cpf)
+            LIMIAR_SEGURO = 80
+
+            for parte in partes_sujas:
+                parte_limpa = limpar_contrato(parte)
+                if not parte_limpa or len(parte_limpa) < 3: continue
+
+                melhor_match_para_parte = None
+                maior_score_ponderado = 0
+
+                for i, contrato_valido in enumerate(contratos_disponiveis):
+                    operacao_valida = operacoes_disponiveis[i] if i < len(operacoes_disponiveis) else ""
+                    alvos = [(contrato_valido, 'CONTRATO'), (operacao_valida, 'OPERACAO')]
+
+                    for alvo_texto, tipo_alvo in alvos:
+                        if not alvo_texto: continue
+                        alvo_limpo = limpar_contrato(alvo_texto)
+                        score_base = 0
+
+                        if alvo_limpo.endswith(parte_limpa):
+                            score_base = 100
+                        else:
+                            score_partial = fuzz.partial_ratio(parte_limpa, alvo_limpo)
+                            if score_partial >= LIMIAR_SEGURO:
+                                score_base = score_partial
+                            else:
+                                score_ratio = fuzz.ratio(parte_limpa, alvo_limpo)
+                                if score_ratio >= LIMIAR_SEGURO:
+                                    score_base = score_ratio
+
+                        if score_base >= LIMIAR_SEGURO:
+                            score_final = score_base + (1 if tipo_alvo == 'CONTRATO' else 0)
+                            if score_final > maior_score_ponderado:
+                                maior_score_ponderado = score_final
+                                melhor_match_para_parte = contrato_valido
+
+                if melhor_match_para_parte:
+                    encontrados_nesta_linha.append(melhor_match_para_parte)
+                    if melhor_match_para_parte in contratos_disponiveis:
+                        idx = contratos_disponiveis.index(melhor_match_para_parte)
+                        del contratos_disponiveis[idx]
+                        if idx < len(operacoes_disponiveis): del operacoes_disponiveis[idx]
+
+            return encontrados_nesta_linha
+
+        # --- Passo 3: Aplicação e Reordenação (Melhoria 2) ---
+        df_sujo['Código na instituição'] = df_sujo['Código na instituição'].astype(str).str.replace('nan', '')
+        df_sujo['Valor da Parcela'] = df_sujo['Valor da Parcela'].astype(str).str.replace(".", "")
+        df_sujo['Valor da Parcela'] = df_sujo['Valor da Parcela'].astype(str).str.replace(",", ".")
+        df_sujo['Valor da Parcela'] = pd.to_numeric(df_sujo['Valor da Parcela'], errors='coerce')
+        lista_de_contratos_encontrados = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
+
+        df_contratos_novos = pd.DataFrame(lista_de_contratos_encontrados.tolist(), index=df_sujo.index)
+        novas_colunas = [f'Contrato Editado {i + 1}' for i in df_contratos_novos.columns]
+        df_contratos_novos.columns = novas_colunas
+
+        # Reordenação Dinâmica
+        cols_originais = df_sujo.columns.tolist()
+        if 'Código na instituição' in cols_originais:
+            idx_ref = cols_originais.index('Código na instituição') + 1
+            # Reconstrói a ordem: Tudo até o código + Novos Contratos + Resto
+            ordem_final = cols_originais[:idx_ref] + novas_colunas + cols_originais[idx_ref:]
+            df_resultado = pd.concat([df_sujo, df_contratos_novos], axis=1)[ordem_final]
+        else:
+            df_resultado = pd.concat([df_sujo, df_contratos_novos], axis=1)
+
+        # --- Salvar ---
+        try:
+            caminho_final = os.path.join(self.caminho, "Relatório Averbados Contratos tratados.xlsx")
+            df_resultado.to_excel(caminho_final, index=False)
+        except Exception as e:
+            print(f"ERRO AO SALVAR: {e}")
+
+        return df_resultado
 
     def orbital_tratado(self, front_para_separar):
         if self.convenio == 'PREF CAJAMAR':
@@ -467,7 +603,6 @@ class CONSIGFACIL:
     def averbados_func(self, front):
         # Contse do Credbase no relatório de averbados
         front_consig = front.copy()
-        front_preliminar = self.tratamento_front_preliminar
         averbados = self.averbados
 
         if front_consig is False:
@@ -487,7 +622,9 @@ class CONSIGFACIL:
             # 2. Reorganiza o DataFrame com a nova lista
             averbados = averbados[nova_ordem]
 
-        front_preliminar = ACHA_MATRICULA_CONSIGFACIL(averbados, front_consig)
+        acha_matriculas = ACHA_MATRICULA_CONSIGFACIL(averbados, front_consig)
+        front_preliminar = acha_matriculas.acha_matricula()
+        print(f'FRONT COM MATRICULAS TRATADAS:\n{front_preliminar}')
 
         # Remover de Averbados algumas colunas
         colunas_para_remover = ['Validade', 'Saldo de reserva', 'Data', 'IP', 'Código', '%']
@@ -496,10 +633,13 @@ class CONSIGFACIL:
 
         # Adicionar outras colunas em Averbados
         # averbados.insert(5, 'CONCAT', '', True)
-        averbados['VALOR A LANÇAR'] = ''
-        averbados['CONTSE'] = ''
+        averbados['VALOR A LANÇAR MATRICULA'] = ''
+        averbados['VALOR A LANÇAR CPF'] = ''
+        averbados['CONTSE MAT'] = ''
+        averbados['CONTSE CPF'] = ''
         averbados['CONTSE SEQ'] = ''
-        averbados['SOMASE CRED'] = ''
+        averbados['PARCELA FRONT'] = ''
+        averbados['PARCELA CPF'] = ''
         # averbados['VALOR ATRIBUIDO'] = ''
         # averbados['FALTA ATRIBUIR'] = ''
         # averbados['DIFF'] = ''
@@ -508,16 +648,16 @@ class CONSIGFACIL:
         # Tira valor vazio do Valor da Reserva
         mask_nao = (averbados['Valor da reserva'] == 0) | (averbados['Valor da reserva'].isna())
         averbados.loc[mask_nao, 'OBS'] = 'NÃO'
+        averbados = averbados[averbados['OBS'] != "NÃO"]
 
         # Separa o que não é NÃO em outra planilha
         # averbado_novo = averbados[averbados['OBS'] != 'NÃO'].copy()
         averbado_novo = averbados.copy()
 
-        # CONTSE
-        averbado_novo['CONTSE'] = averbado_novo.groupby('CPF')['CPF'].transform('count')
+        # CONTSEs
+        averbado_novo['CONTSE MAT'] = averbado_novo.groupby('Matrícula')['Matrícula'].transform('count')
+        averbado_novo['CONTSE CPF'] = averbado_novo.groupby('CPF')['CPF'].transform('count')
 
-        # CONTSE SEQ
-        averbado_novo['CONTSE SEQ'] = averbado_novo.groupby('CPF').cumcount() + 1
 
         # Se for PREF. BAYEUX adiciona mais 20 reais para cada contrato
         '''if self.convenio in ['PREF. BAYEUX', 'PREF. PAÇO DO LUMIAR']:
@@ -525,13 +665,31 @@ class CONSIGFACIL:
                 credbase.loc[idx, 'Valor a lançar'] = credbase.loc[idx, 'Valor a lançar'] + 20
         elif self.convenio == 'GOV. MA':
             credbase.loc[credbase['Banco'] == 'BANCO HP', 'Valor a lançar'] += 20'''
+        
+         # Transforma matricula de averbados em inteiro
+        try:
+            averbado_novo['Matrícula'] = averbado_novo['Matrícula'].astype('int64')
+        except Exception as e:
+            averbado_novo['Matrícula'] = pd.to_numeric(averbado_novo['Matrícula'].astype('int64'), errors='coerce')
+
 
         # SOMASE
-        soma_condicional_dict_averb = front_consig.groupby('CPF')['Valor a lançar'].sum().to_dict()
+        # Apenas remove o ".0" das matrículas que são números, mantendo os textos
+        front_preliminar['MATRICULA_ENCONTRADA_1'] = pd.to_numeric(front_preliminar['MATRICULA_ENCONTRADA_1'], errors='coerce').astype('Int64')
+        
+        front_preliminar['SOMASE LOCAL POR MATRICULA']  = front_preliminar.groupby('MATRICULA_ENCONTRADA_1')['Valor a lançar'].transform('sum')
+        soma_condicional_dict_averb = front_preliminar.groupby('CPF')['SOMASE LOCAL POR MATRICULA'].sum().to_dict()
+
+        # A mesma coisa de cima só que com CPF
+        front_preliminar['SOMASE LOCAL POR CPF']  = front_preliminar.groupby('CPF')['Valor a lançar'].transform('sum')
+        soma_condicional_dict_averb_cpf = front_preliminar.groupby('CPF')['SOMASE LOCAL POR CPF'].sum().to_dict()
 
         if self.convenio in ['PREF CAJAMAR', 'GOV MT']:
             # Orbitall
             orbitall = self.orbital_tratado(front_preliminar)
+            
+            averbado_novo['PARCELA FRONT'] = averbado_novo['CPF'].map(soma_condicional_dict_averb)
+            averbado_novo['PARCELA_CPF'] = averbado_novo['CPF'].map(soma_condicional_dict_averb_cpf)
             # 3. Soma por CPF no orbital
             somase_orbital = orbitall.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
 
@@ -540,13 +698,31 @@ class CONSIGFACIL:
                 soma_condicional_dict_averb
                 .add(somase_orbital, fill_value=0)
             )
+            soma_total_cpf = (soma_condicional_dict_averb_cpf.add(somase_orbital, fill_value=0))
 
-            averbado_novo['SOMASE CRED'] = averbado_novo['CPF'].map(soma_total)
+            averbado_novo['PARCELA FRONT'] = averbado_novo['CPF'].map(soma_total)
+            averbado_novo['PARCELA CPF'] = averbado_novo['CPF'].map(soma_total_cpf)
             # print(type(averbado_novo.loc[0, 'SOMASE']))
-            averbado_novo['SOMASE CRED'] = averbado_novo['SOMASE CRED'].fillna(0)
+            averbado_novo['PARCELA FRONT'] = averbado_novo['PARCELA FRONT'].fillna(0)
+            averbado_novo['PARCELA CPF'] = averbado_novo['PARCELA CPF'].fillna(0)
         else:
-            averbado_novo['SOMASE CRED'] = averbado_novo['CPF'].map(soma_condicional_dict_averb)
-            averbado_novo['SOMASE CRED'] = averbado_novo['SOMASE CRED'].fillna(0)
+            # Puxa para o averbado_novo o valor que está no Front
+            # front_preliminar['MATRICULA_ENCONTRADA_1'] = front_preliminar['MATRICULA_ENCONTRADA_1'].astype('int64')
+            parcelas_front = front_preliminar.groupby('MATRICULA_ENCONTRADA_1')['Valor a lançar'].sum().to_dict()
+            parcelas_front_cpf = front_preliminar.groupby('CPF')['Valor a lançar'].sum().to_dict()
+            averbado_novo['PARCELA FRONT'] = averbado_novo['Matrícula'].map(parcelas_front).fillna(0)
+            averbado_novo['PARCELA CPF'] = averbado_novo['CPF'].map(parcelas_front_cpf).fillna(0)
+
+        # Remove a coluna de SOMASE LOCAL POR MATRICULA
+        front_preliminar.drop(columns=['SOMASE LOCAL POR MATRICULA'], inplace=True)
+        front_preliminar.drop(columns=['SOMASE LOCAL POR CPF'], inplace=True)
+
+
+        # =============================================================================
+        #                  LANÇAR PELO O QUE O CLIENTE DEVE DO FRONT
+        # =============================================================================
+        averbado_novo['VALOR A LANÇAR MATRICULA'] = averbado_novo['PARCELA FRONT'] / averbado_novo['CONTSE MAT']
+        averbado_novo['VALOR A LANÇAR CPF'] = averbado_novo['PARCELA CPF'] / averbado_novo['CONTSE CPF']
 
 
         # =============================================================================
@@ -555,8 +731,8 @@ class CONSIGFACIL:
 
         # IMPORTANTE: Garanta que as colunas de valores são numéricas, não texto.
         # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
-        averbado_novo['Valor da reserva'] = pd.to_numeric(averbado_novo['Valor da reserva'], errors='coerce').fillna(0)
-        averbado_novo['SOMASE CRED'] = pd.to_numeric(averbado_novo['SOMASE CRED'], errors='coerce').fillna(0)
+        # averbado_novo['Valor da reserva'] = pd.to_numeric(averbado_novo['Valor da reserva'], errors='coerce').fillna(0)
+        # averbado_novo['SOMASE CRED'] = pd.to_numeric(averbado_novo['SOMASE CRED'], errors='coerce').fillna(0)
 
         # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
         # da ordem atual do DataFrame. Se precisar de uma ordem específica,
@@ -564,28 +740,35 @@ class CONSIGFACIL:
 
         # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
         # Esta é a "mágica" que substitui a necessidade de um loop.
-        averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF')['Valor da reserva'].cumsum()
+        # averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF')['Valor da reserva'].cumsum()
 
         # 2. Calcula o valor que JÁ FOI ALOCADO para as linhas ANTERIORES.
         # É a soma acumulada até a linha atual, menos o valor da própria linha.
-        alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Valor da reserva']
+        # alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Valor da reserva']
 
         # 3. Calcula o saldo restante do SOMASE ANTES de processar a linha atual.
-        saldo_restante = averbado_novo['SOMASE CRED'] - alocado_anteriormente
+        # saldo_restante = averbado_novo['SOMASE CRED'] - alocado_anteriormente
 
         # 4. O valor a lançar é o MÍNIMO entre o que a reserva da linha pede e o saldo que ainda temos.
         # Usamos .clip(0) para garantir que o saldo não seja negativo (se já estourou, é 0).
-        valor_a_lancar = np.minimum(averbado_novo['Valor da reserva'], saldo_restante.clip(0))
+        # valor_a_lancar = np.minimum(averbado_novo['Valor da reserva'], saldo_restante.clip(0))
 
         # 5. Atribui o resultado final arredondado às colunas.
-        averbado_novo['VALOR A LANÇAR'] = valor_a_lancar.round(2)
+        averbado_novo['VALOR A LANÇAR MATRICULA'] = averbado_novo['VALOR A LANÇAR MATRICULA'].round(2)
+        averbado_novo['VALOR A LANÇAR CPF'] = averbado_novo['VALOR A LANÇAR CPF'].round(2)
         # averbado_novo['VALOR ATRIBUIDO'] = valor_a_lancar.round(2)
 
         # 6. Preenche a coluna OBS para linhas que não receberam nada.
-        averbado_novo.loc[averbado_novo['VALOR A LANÇAR'] == 0, 'OBS'] = 'NÃO'
+        averbado_novo.loc[averbado_novo['VALOR A LANÇAR MATRICULA'] == 0, 'OBS'] = 'NÃO'
+        averbado_novo.loc[averbado_novo['VALOR A LANÇAR CPF'] == 0, 'OBS'] = 'NÃO'
 
         # 7. (Opcional) Remove a coluna auxiliar que criamos.
         # averbado_novo = averbado_novo.drop(columns=['SOMA ACUMULADA DA RESERVA'])
+
+        try:
+            front_preliminar.to_excel(os.path.join(self.caminho, f'FRONT COM MATRICULAS TRATADAS {self.convenio}.xlsx'), index=False)
+        except Exception as e:
+            print(f'DEBUG: ERRO AO SALVAR FRONT COM MATRICULAS TRATADAS: {e}')
 
         print('DEBUG: Averbados após cálculo vetorizado:')
         try:

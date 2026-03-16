@@ -23,17 +23,12 @@ class ACHA_MATRICULA_CONSIGFACIL:
         # averbação bruto
         self.averbacao_bruto = averbado_trabalhado
 
-        df_front = self.front_trabalhado
-
-        df_averbacao = self.averbacao_bruto
-
-        self.acha_matricula(df_front, df_averbacao)
-
-
     # Aqui vai a função de procurar as matrículas corretas por similaridmat
-    def acha_matricula(self, front: pd.DataFrame, averbacao: pd.DataFrame):
-        # --- PREPARAÇÃO INICIAL ---
+    def acha_matricula(self):
+        front = self.front_trabalhado
+        averbacao = self.averbacao_bruto
 
+        # --- PREPARAÇÃO INICIAL ---
         print("Iniciando o processo de extração das matrículas...")
 
         # --- DEFINIÇÃO DAS FUNÇÕES AUXILIARES ---
