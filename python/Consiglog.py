@@ -28,6 +28,9 @@ class CONSIGLOG:
         conciliacao_falso['RECEBIDO GERAL'] = 0
 
         self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
+        self.conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
+        self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
+                                         'PRODUTO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO'}, inplace=True)
         self.orbital = orbital
 
         self.caminho = caminho
@@ -39,7 +42,7 @@ class CONSIGLOG:
                                '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
                                "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
                                "07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES",
-                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES"]
+                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "RISCO DA OPERACAO - DEMAIS SITUACOES"]
 
 
         self.arquivo_lancamento()
@@ -50,8 +53,6 @@ class CONSIGLOG:
         front_consig = self.front.copy()
 
         conciliacao = self.conciliacao.copy()
-        conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
-        conciliacao.rename(columns={'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'TIPO OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO'}, inplace=True)
 
         orbital = self.orbital
 
@@ -360,12 +361,16 @@ class CONSIGLOG:
             df_limpo['Contrato'] = df_limpo['Contrato'].astype(str).str.strip()
             df_limpo['CCB'] = df_limpo['CCB'].astype(str).str.strip()
             print("Criando mapa de referência CPF -> Contratos...")
+            
             cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict()
             cpf_operacao = df_limpo.groupby('CPF')['CCB'].apply(list).to_dict()
             # print(f'Mapa contratos:\n{cpf_contratos}')
 
             # --- Passo 2: Definir a função que será aplicada em cada linha (LÓGICA ALTERADA) ---
             def encontrar_contratos_na_linha(row):
+                cpf = row['CPF_Formatado']
+                texto_contratos_sujo = str(row['Contrato Original']).strip()
+            
                 cpf = row['CPF_Formatado']
                 texto_contratos_sujo = str(row['Contrato Original'])
 
@@ -569,7 +574,65 @@ class CONSIGLOG:
             print(f"orbital_tratado: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
 
         return orbital_final
+    
+    def adiciona_contratos_faltando(self, averbado_contratos_faltantes, front_semi):
+        # 1. Normalização do CPF no DataFrame B (Removendo caracteres não numéricos)
+        # front_semi['CPF_clean'] = front_semi['CPF'].astype(str).str.replace(r'\D', '', regex=True)
 
+        # 2. Preparação do DataFrame B para os diferentes cenários de valor
+        # Vamos criar DataFrames auxiliares para cada regra de negócio
+        # Isso evita confusão com múltiplos joins no mesmo objeto
+        front_semi_base = front_semi[['CPF', 'Prestacao', 'Contrato']].drop_duplicates(subset=['CPF', 'Prestacao'])
+
+        # Criamos as variações no B para "fingir" que o valor já tem o seguro embutido
+        front_semi_exact = front_semi_base.copy()
+        front_semi_plus20 = front_semi_base.copy()
+        front_semi_plus20['Prestacao_Ajustada'] = front_semi_plus20['Prestacao'] + 20
+        front_semi_plus40 = front_semi_base.copy()
+        front_semi_plus40['Prestacao_Ajustada'] = front_semi_plus40['Prestacao'] + 40
+
+        # 3. Execução dos Merges no DataFrame A
+        # Primeiro, tentamos o match exato (valor igual)
+        averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
+            front_semi_exact, 
+            left_on=['CPF_Formatado', 'Valor Prestacao'], 
+            right_on=['CPF', 'Prestacao'], 
+            how='left'
+        )
+
+        # Preenchemos a coluna "Contrato Original" com o que achamos no primeiro merge
+        averbado_contratos_faltantes['Contrato Original'] = averbado_contratos_faltantes['Contrato Original'].fillna(averbado_contratos_faltantes['Contrato'])
+        averbado_contratos_faltantes.drop(columns=['CPF', 'Prestacao', 'Contrato'], inplace=True)
+
+        # Segundo merge: Caso de +20 reais
+        averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
+            front_semi_plus20, 
+            left_on=['CPF_Formatado', 'Valor Prestacao'], 
+            right_on=['CPF', 'Prestacao_Ajustada'], 
+            how='left', 
+            suffixes=('', '_20')
+        )
+
+        averbado_contratos_faltantes['Contrato Original'] = averbado_contratos_faltantes['Contrato Original'].fillna(averbado_contratos_faltantes['Contrato'])
+        averbado_contratos_faltantes.drop(columns=['CPF', 'Prestacao', 'Contrato', 'Prestacao_Ajustada'], inplace=True)
+
+        # Terceiro merge: Caso de +40 reais
+        averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
+            front_semi_plus40, 
+            left_on=['CPF_Formatado', 'Valor Prestacao'], 
+            right_on=['CPF', 'Prestacao_Ajustada'], 
+            how='left', 
+            suffixes=('', '_40')
+        )
+
+        averbado_contratos_faltantes['Contrato Original'] = averbado_contratos_faltantes['Contrato Original'].fillna(averbado_contratos_faltantes['Contrato'])
+
+        averbado_contratos_faltantes.drop(columns=['CPF', 'Prestacao', 'Contrato', 'Prestacao_Ajustada'], inplace=True)
+
+        # Limpeza final das colunas auxiliares
+        # averbado_contratos_faltantes = averbado_contratos_faltantes[['C P F', 'Valor Prestação', 'Contrato Original']]
+
+        return averbado_contratos_faltantes
 
     def trata_averbacao(self):
         # PUXA OS ARQUIVOS À SEREM TRATADOS
@@ -634,7 +697,7 @@ class CONSIGLOG:
             print(f'data_averbados_bruto tipo {data_averbados_bruto['Qt Prestacao'].dtype}')
             print(f'\ndata_averbados_bruto unico {data_averbados_bruto['Qt Prestacao'].unique()}')
 
-            data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, front)
+            data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
 
             semi_front = front[front['Esteira'].isin(self.condicoes_1)]
             semi_front['Contrato'] = semi_front['Contrato'].astype(str).str.strip()
@@ -784,14 +847,17 @@ class CONSIGLOG:
 
         data_averbados_bruto.insert(4, 'CPF_Formatado', cpf_formatado, True)
 
-        data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, front)
-
         semi_front = self.tratamento_front_preliminar()
         if semi_front is False:
             print("trata_averbacao_2: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
+        
+        data_averbados_bruto = self.adiciona_contratos_faltando(data_averbados_bruto, semi_front)
 
         semi_front['Contrato'] = semi_front['Contrato'].astype(str).str.strip()
+
+
+        data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
 
         conciliacao_tratado = self.trata_conciliacao()
 

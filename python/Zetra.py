@@ -71,7 +71,10 @@ class ZETRA:
                        "OP": 1},
             "GOV. ESPÍRITO SANTO": {"MAT": 12, "CPF": 11, "NOME": 50, "EST": 0, "ORG": 0, "COD": 24, "VAL": 10, "PRZ": 3, "COMP": 6,
                        "OP": 1},
-            "PREF. CAMPINAS": {"MAT": 10, "ORG": 2, "COD": 3, "OP": 1, "PRZ": 2, "VAL": 10, "COMP": 8}
+            "PREF. CAMPINAS": {"MAT": 10, "ORG": 2, "COD": 3, "OP": 1, "PRZ": 2, "VAL": 10, "COMP": 8},
+
+            "GOV. PARANÁ": {"MAT": 20, "CPF": 11, "NOME": 50, "EST": 3, "ID_ORG": 10, "COD": 4, "VAL": 10, "PRZ": 3, "COMP": 6,
+                            "OP": 1}
         }
 
         self.arquivo_lancamento()
@@ -162,8 +165,8 @@ class ZETRA:
             # Ordena pelos mais recentes (Decrescente)
             averbacao_completa = averbacao_completa.sort_values(by=['Data', 'Hora'], ascending=[False, False])
 
-            # Remove duplicatas por ID.ADE
-            averbacao_completa.drop_duplicates(subset=['Id. ADE'], keep='first', inplace=True)
+            # Remove duplicatas por Matrícula
+            averbacao_completa.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
 
             # Transforma toda a coluna de Vlr novo em string
             averbacao_completa['Vlr novo'] = averbacao_completa['Vlr novo'].astype(str).str.replace(".", ",")
@@ -299,7 +302,7 @@ class ZETRA:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão Conciliação
-        if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS', 'PREF. BELO HORIZONTE', 'PREF. CAMPINAS']:
+        if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS', 'PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']:
             print(f'Convenio é {self.convenio}')
             print(f'Convenio está em PREF GOIÂNIA, PREF. DUQUE DE CAXIAS, , PREF. BELO HORIZONTE? {self.convenio in ["PREF. GOIÂNIA", "PREF. DUQUE DE CAXIAS", 'PREF. BELO HORIZONTE']}')
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
@@ -603,6 +606,11 @@ class ZETRA:
                 orbital['Descrição EMPREGADOR'].str.contains('PREF CAMPINAS', case=False, na=False),
                 ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
             ].copy()
+        elif self.convenio == 'GOV. PARANÁ':
+            orbital_preparado = orbital.loc[
+                orbital['Descrição EMPREGADOR'].str.contains('GOV PR DG|GOV PARANA|GOV PARANA SEG', case=False, na=False),
+                ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
+            ].copy()
 
         orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
@@ -649,6 +657,9 @@ class ZETRA:
             data.insert(13, 'Categoria', '', True)
             data.insert(14, 'Id. órgão', '1', True)
             data.insert(15, 'Órgão.1', '1', True)
+        if self.convenio == 'GOV. PARANÁ':
+            data.insert(14, 'Id. serviço', '', True)
+            data.insert(15, 'Serviço', '', True)
 
         # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
         data.rename(columns={'Matrícula (ID Funcional + Vínculo)': 'Matrícula'}, inplace=True)
@@ -663,6 +674,78 @@ class ZETRA:
             mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
             data_averbados_bruto['ORBITAL'] = ''
             data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF'].map(mask_orbital)
+
+        def distribuicao_valores(averbado_trabalhado, front_trabalhar):
+            # IMPORTANTE: Garanta que as colunas de valores são numéricas, não texto.
+            # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
+            averbado_novo = averbado_trabalhado
+            # Remoção de duplicatas por matrícula
+            averbado_novo.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
+            
+            front_preliminar = front_trabalhar.copy()
+
+            soma_condicional_dict_averb = front_preliminar.groupby('CPF')['Valor a lançar'].sum().to_dict()
+
+            soma_total = (
+                soma_condicional_dict_averb
+                .add(mask_orbital, fill_value=0)
+            )
+
+            averbado_novo['Vlr novo'] = pd.to_numeric(averbado_novo['Vlr novo'], errors='coerce').fillna(0)
+            averbado_novo['SOMASE FRONT'] = averbado_novo['CPF'].map(soma_total)
+            averbado_novo['SOMASE FRONT'] = pd.to_numeric(averbado_novo['SOMASE FRONT'], errors='coerce').fillna(0)
+
+            # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
+            # da ordem atual do DataFrame. Se precisar de uma ordem específica,
+            # um .sort_values() viria aqui.
+
+            # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
+            # Esta é a "mágica" que substitui a necessidade de um loop.
+            averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF')['Vlr novo'].cumsum()
+
+            # 2. Calcula o valor que JÁ FOI ALOCADO para as linhas ANTERIORES.
+            # É a soma acumulada até a linha atual, menos o valor da própria linha.
+            alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Vlr novo']
+            averbado_novo['ALOCADO ANTERIORMENTE'] = alocado_anteriormente
+
+            # 3. Calcula o saldo restante do SOMASE ANTES de processar a linha atual.
+            saldo_restante = averbado_novo['SOMASE FRONT'] - alocado_anteriormente
+
+            # 4. O valor a lançar é o MÍNIMO entre o que a reserva da linha pede e o saldo que ainda temos.
+            # Usamos .clip(0) para garantir que o saldo não seja negativo (se já estourou, é 0).
+            valor_a_lancar = np.minimum(averbado_novo['Vlr novo'], saldo_restante.clip(0))
+
+            # 5. Atribui o resultado final arredondado às colunas.
+            averbado_novo['VALOR A LANÇAR MATRICULA'] = averbado_novo['VALOR A LANÇAR MATRICULA'].round(2)
+            # averbado_novo['VALOR A LANÇAR CPF'] = averbado_novo['VALOR A LANÇAR CPF'].round(2)
+            averbado_novo['VALOR ATRIBUIDO'] = valor_a_lancar.round(2)
+
+            # 6. Preenche a coluna OBS para linhas que não receberam nada.
+            averbado_novo.loc[averbado_novo['VALOR A LANÇAR MATRICULA'] == 0, 'OBS'] = 'NÃO'
+            # averbado_novo.loc[averbado_novo['VALOR A LANÇAR CPF'] == 0, 'OBS'] = 'NÃO'
+
+            # 7. Vamos criar a coluna Diff para lançar os parciais
+            somase_lancar = averbado_novo.groupby('CPF')['VALOR ATRIBUIDO'].transform('sum')
+            averbado_novo['DIFF'] = somase_lancar - averbado_novo['SOMASE CRED']
+            averbado_novo['DIFF'] = averbado_novo['DIFF'].round(2)
+
+            # 8. Adiciona a coluna de SITUAÇÃO DE DESCONTO para TOTAL ou PARCIAL
+            averbado_novo['SITUAÇÃO DE DESCONTO'] = ''
+            averbado_novo.loc[averbado_novo['DIFF'] < 0, 'SITUAÇÃO DE DESCONTO'] = 'PARCIAL'
+            averbado_novo.loc[averbado_novo['DIFF'] >= 0, 'SITUAÇÃO DE DESCONTO'] = 'TOTAL'
+
+            # 9. Novo Lançar total
+            averbado_novo['NOVO LANÇAR TOTAL'] = averbado_novo['Valor da reserva'] - averbado_novo['DIFF']
+
+            return averbado_novo
+        
+        if self.convenio == 'GOV. PARANÁ':
+            data_averbados = distribuicao_valores(data, front)
+
+            # print("Cálculos de Soma e Diferença finalizados.")
+            data_averbados.to_excel(fr'{self.caminho}\TRABALHADO CARTAO {convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
+
+            return data_averbados
 
         data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, front)
 
@@ -912,7 +995,7 @@ class ZETRA:
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado|CANCELADO', na=False)].copy()
 
         # Salva com os NÃO LANÇAR
-        print(f"tratamento_front_preliminar: Tentando salvar FRONT TRABALHADO em: {self.caminho}")
+        print(f"tratamento_front: Tentando salvar FRONT TRABALHADO em: {self.caminho}")
         try:
             front_consig_trabalhado.to_excel(fr'{self.caminho}\FRONT TRABALHADO {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
             print("tratamento_front: Arquivo salvo com sucesso!")
@@ -932,12 +1015,14 @@ class ZETRA:
         codigo_desconto_dict = {"PREF. AÇAILÂNDIA": "382", "GOV. RIO DE JANEIRO": "4541CARTAO DE CREDITO I", "IGEPREV CAPITAL": "04072",
                                 "IGEPREV CIASPREV": "02470", "PREF. PIRACICABA": "5600", "PREF. PIRACICABA - SEMAE": "675",
                                 "PREV. PIRACICABA": "6277", "PREF. BELO HORIZONTE CB": "204U", "PREF. BELO HORIZONTE CC": "204V",
-                                "PREF. MACAE": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894", "PREF. CAMPINAS": "011"}
+                                "PREF. MACAE": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894", "PREF. CAMPINAS": "011",
+                                "GOV. PARANÁ": "5408"}
 
         estab_dict = {"PREF. AÇAILÂNDIA": "001", "IGEPREV CAPITAL": "001", "IGEPREV CIASPREV": "001",
                       "PREF. PIRACICABA": "001", "PREF. PIRACICABA - SEMAE": "002", "PREF. CAMPINAS": "",
                       "PREV. PIRACICABA": "001", "PREF. BELO HORIZONTE CB": "001", "PREF. BELO HORIZONTE CC": "001",
-                      "PREF. MACAE": "001", "PREVIPALMAS CAPITAL": "001", "PREVIPALMAS CIASPREV": "001"}
+                      "PREF. MACAE": "001", "PREVIPALMAS CAPITAL": "001", "PREVIPALMAS CIASPREV": "001",
+                      "GOV. PARANÁ": "002"}
 
         emp_dict_gov_rj = {"ADMINISTRAÇÃO DIRETA (GOVERNO ESTADO)": "01",
                            "ENCARGOS GERAIS DO ESTADO": "01",
@@ -1058,6 +1143,11 @@ class ZETRA:
         if length == 0: return ""
         s = series.astype(str).str.upper().apply(lambda x: x.ljust(length))
         return s.str[:length]
+    
+    def format_id_orgao(self, series, length):
+        if length == 0: return ""
+        s = series.astype(str).str.upper().apply(lambda x: x.ljust(length))
+        return s.str[:length]
 
     def format_currency(self, series, length):
         """
@@ -1096,8 +1186,9 @@ class ZETRA:
         matricula = self.format_number(df['Matrícula'], regras['MAT'])
         cpf = self.format_cpf(df['CPF'], regras['CPF']) if not self.convenio == 'PREF. CAMPINAS' else ''
         nome = self.format_text(df['Servidor'], regras['NOME']) if not self.convenio == 'PREF. CAMPINAS' else ''
-        estab = self.format_number(df['ESTABELECIMENTO'], regras['EST']) if not self.convenio == 'PREF. CAMPINAS' else ''
-        orgao = self.format_number(df['ÓRGÃO'], regras['ORG'])
+        estab = self.format_number(df['ESTABELECIMENTO'], regras['EST']) if not self.convenio in ['PREF. CAMPINAS', 'GOV. PARANÁ'] else ''
+        id_orgao = self.format_id_orgao(df['Id. órgão'], regras['ID_ORG']) if self.convenio == 'GOV. PARANÁ' else ''
+        orgao = self.format_number(df['ÓRGÃO'], regras['ORG']) if not self.convenio == 'GOV. PARANÁ' else '' 
         cod_desc = self.format_number(df['CÓDIGO DE DESCONTO'], regras['COD']) if not self.convenio in ['GOV. RIO DE JANEIRO', 'PREF. MACAE'] else self.format_text(df['CÓDIGO DE DESCONTO'], regras['COD'])
         valor = self.format_currency(df['Lançar'], regras['VAL'])
 
@@ -1120,6 +1211,8 @@ class ZETRA:
             layout = (matricula + cpf + nome + cod_desc + valor + prazo + comp + operacao)
         elif self.convenio == 'PREF. CAMPINAS':
             layout = (matricula + orgao + cod_desc + operacao + prazo + valor + comp)
+        elif self.convenio == 'GOV. PARANÁ':
+            layout = (matricula + cpf + nome + estab + cod_desc + id_orgao + valor + prazo + comp + operacao)
         else:
             print('Nenhum convênio conhecido foi apresentado para criar o arquivo de lançamento...')
             print(f'Convênio solicitado: {self.convenio}')

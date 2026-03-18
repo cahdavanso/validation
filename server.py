@@ -72,7 +72,8 @@ CONSIGFACIL_CONVENIOS = [
     "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. DE PORTO VELHO",
     "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
     "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
-    "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RIO GRANDE DO NORTE", "PREF. NATAL"
+    "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RIO GRANDE DO NORTE", "PREF. NATAL",
+    "PREF. TUTÓIA"
 ]
 
 # --- Função Auxiliar de Leitura ---
@@ -320,5 +321,5 @@ async def download_file(filename: str):
 # É melhor comentar do que apagar na próxima vez que precisar testar no render
 if __name__ == "__main__":
     # Pega a porta do Render ou usa 5000 se estiver local
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)

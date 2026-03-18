@@ -26,10 +26,11 @@ class CONSIGFACIL:
         # Mantendo a conversão de tipo original:
         if 'Valor da reserva' in self.averbados.columns:
             # Parcela de Averbados já serão floats
-            self.averbados['Valor da reserva'] = self.averbados['Valor da reserva'].astype(str).str.replace(".", "")
-            self.averbados['Valor da reserva'] = self.averbados['Valor da reserva'].str.replace(",", ".")
-            self.averbados['Valor da reserva'] = pd.to_numeric(self.averbados['Valor da reserva'], errors="coerce")
-            self.averbados['Valor da reserva'] = pd.to_numeric(self.averbados['Valor da reserva'], errors="coerce")
+            if self.averbados['Valor da reserva'].dtype != 'float64':
+                self.averbados['Valor da reserva'] = self.averbados['Valor da reserva'].astype(str).str.replace(".", "")
+                self.averbados['Valor da reserva'] = self.averbados['Valor da reserva'].str.replace(",", ".")
+                self.averbados['Valor da reserva'] = pd.to_numeric(self.averbados['Valor da reserva'], errors="coerce")
+                self.averbados['Valor da reserva'] = pd.to_numeric(self.averbados['Valor da reserva'], errors="coerce")
         else:
             # Garante a coluna caso venha vazio, para não quebrar a lógica original
             self.averbados['Valor da reserva'] = 0.0
@@ -53,7 +54,8 @@ class CONSIGFACIL:
         self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
         self.conciliacao.rename(columns={'PRESTAÇÃO ORIGINAL': 'PRESTAÇÃO'}, inplace=True)
         self.conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
-        self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO'}, inplace=True)
+        self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
+                                         'PRODUTO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO'}, inplace=True)
         
         # 5. Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
@@ -634,12 +636,13 @@ class CONSIGFACIL:
         # Adicionar outras colunas em Averbados
         # averbados.insert(5, 'CONCAT', '', True)
         averbados['VALOR A LANÇAR MATRICULA'] = ''
-        averbados['VALOR A LANÇAR CPF'] = ''
+        # averbados['VALOR A LANÇAR CPF'] = ''
         averbados['CONTSE MAT'] = ''
         averbados['CONTSE CPF'] = ''
         averbados['CONTSE SEQ'] = ''
         averbados['PARCELA FRONT'] = ''
-        averbados['PARCELA CPF'] = ''
+        averbados['SOMASE CRED'] = ''
+        # averbados['PARCELA CPF'] = ''
         # averbados['VALOR ATRIBUIDO'] = ''
         # averbados['FALTA ATRIBUIR'] = ''
         # averbados['DIFF'] = ''
@@ -682,14 +685,14 @@ class CONSIGFACIL:
 
         # A mesma coisa de cima só que com CPF
         front_preliminar['SOMASE LOCAL POR CPF']  = front_preliminar.groupby('CPF')['Valor a lançar'].transform('sum')
-        soma_condicional_dict_averb_cpf = front_preliminar.groupby('CPF')['SOMASE LOCAL POR CPF'].sum().to_dict()
+        # soma_condicional_dict_averb_cpf = front_preliminar.groupby('CPF')['SOMASE LOCAL POR CPF'].sum().to_dict()
 
         if self.convenio in ['PREF CAJAMAR', 'GOV MT']:
             # Orbitall
             orbitall = self.orbital_tratado(front_preliminar)
             
             averbado_novo['PARCELA FRONT'] = averbado_novo['CPF'].map(soma_condicional_dict_averb)
-            averbado_novo['PARCELA_CPF'] = averbado_novo['CPF'].map(soma_condicional_dict_averb_cpf)
+            # averbado_novo['PARCELA_CPF'] = averbado_novo['CPF'].map(soma_condicional_dict_averb_cpf)
             # 3. Soma por CPF no orbital
             somase_orbital = orbitall.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
 
@@ -698,72 +701,101 @@ class CONSIGFACIL:
                 soma_condicional_dict_averb
                 .add(somase_orbital, fill_value=0)
             )
-            soma_total_cpf = (soma_condicional_dict_averb_cpf.add(somase_orbital, fill_value=0))
+            # soma_total_cpf = (soma_condicional_dict_averb_cpf.add(somase_orbital, fill_value=0))
 
             averbado_novo['PARCELA FRONT'] = averbado_novo['CPF'].map(soma_total)
-            averbado_novo['PARCELA CPF'] = averbado_novo['CPF'].map(soma_total_cpf)
+            # averbado_novo['PARCELA CPF'] = averbado_novo['CPF'].map(soma_total_cpf)
             # print(type(averbado_novo.loc[0, 'SOMASE']))
             averbado_novo['PARCELA FRONT'] = averbado_novo['PARCELA FRONT'].fillna(0)
-            averbado_novo['PARCELA CPF'] = averbado_novo['PARCELA CPF'].fillna(0)
+            # averbado_novo['PARCELA CPF'] = averbado_novo['PARCELA CPF'].fillna(0)
         else:
             # Puxa para o averbado_novo o valor que está no Front
             # front_preliminar['MATRICULA_ENCONTRADA_1'] = front_preliminar['MATRICULA_ENCONTRADA_1'].astype('int64')
             parcelas_front = front_preliminar.groupby('MATRICULA_ENCONTRADA_1')['Valor a lançar'].sum().to_dict()
+            somase_cred = front_preliminar.groupby('CPF')['Valor a lançar'].sum().to_dict()
             parcelas_front_cpf = front_preliminar.groupby('CPF')['Valor a lançar'].sum().to_dict()
             averbado_novo['PARCELA FRONT'] = averbado_novo['Matrícula'].map(parcelas_front).fillna(0)
-            averbado_novo['PARCELA CPF'] = averbado_novo['CPF'].map(parcelas_front_cpf).fillna(0)
+            averbado_novo['SOMASE CRED'] = averbado_novo['CPF'].map(somase_cred).fillna(0)
+            # averbado_novo['PARCELA CPF'] = averbado_novo['CPF'].map(parcelas_front_cpf).fillna(0)
 
         # Remove a coluna de SOMASE LOCAL POR MATRICULA
         front_preliminar.drop(columns=['SOMASE LOCAL POR MATRICULA'], inplace=True)
-        front_preliminar.drop(columns=['SOMASE LOCAL POR CPF'], inplace=True)
+        # front_preliminar.drop(columns=['SOMASE LOCAL POR CPF'], inplace=True)
 
 
         # =============================================================================
         #                  LANÇAR PELO O QUE O CLIENTE DEVE DO FRONT
         # =============================================================================
+        averbado_novo['Valor da reserva'] = pd.to_numeric(averbado_novo['Valor da reserva'], errors='coerce').fillna(0)
         averbado_novo['VALOR A LANÇAR MATRICULA'] = averbado_novo['PARCELA FRONT'] / averbado_novo['CONTSE MAT']
-        averbado_novo['VALOR A LANÇAR CPF'] = averbado_novo['PARCELA CPF'] / averbado_novo['CONTSE CPF']
+        # averbado_novo['VALOR A LANÇAR CPF'] = averbado_novo['PARCELA CPF'] / averbado_novo['CONTSE CPF']
 
 
         # =============================================================================
         #        INÍCIO DA NOVA LÓGICA VETORIZADA (SUBSTITUI O SEU LOOP 'FOR')
         # =============================================================================
 
-        # IMPORTANTE: Garanta que as colunas de valores são numéricas, não texto.
-        # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
-        # averbado_novo['Valor da reserva'] = pd.to_numeric(averbado_novo['Valor da reserva'], errors='coerce').fillna(0)
-        # averbado_novo['SOMASE CRED'] = pd.to_numeric(averbado_novo['SOMASE CRED'], errors='coerce').fillna(0)
+        def distribuicao_valores(averbado_trabalhado):
+            # IMPORTANTE: Garanta que as colunas de valores são numéricas, não texto.
+            # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
+            averbado_novo = averbado_trabalhado
 
-        # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
-        # da ordem atual do DataFrame. Se precisar de uma ordem específica,
-        # um .sort_values() viria aqui.
+            averbado_novo['Valor da reserva'] = pd.to_numeric(averbado_novo['Valor da reserva'], errors='coerce').fillna(0)
+            averbado_novo['SOMASE CRED'] = pd.to_numeric(averbado_novo['SOMASE CRED'], errors='coerce').fillna(0)
 
-        # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
-        # Esta é a "mágica" que substitui a necessidade de um loop.
-        # averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF')['Valor da reserva'].cumsum()
+            # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
+            # da ordem atual do DataFrame. Se precisar de uma ordem específica,
+            # um .sort_values() viria aqui.
 
-        # 2. Calcula o valor que JÁ FOI ALOCADO para as linhas ANTERIORES.
-        # É a soma acumulada até a linha atual, menos o valor da própria linha.
-        # alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Valor da reserva']
+            # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
+            # Esta é a "mágica" que substitui a necessidade de um loop.
+            averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF')['Valor da reserva'].cumsum()
 
-        # 3. Calcula o saldo restante do SOMASE ANTES de processar a linha atual.
-        # saldo_restante = averbado_novo['SOMASE CRED'] - alocado_anteriormente
+            # 2. Calcula o valor que JÁ FOI ALOCADO para as linhas ANTERIORES.
+            # É a soma acumulada até a linha atual, menos o valor da própria linha.
+            alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Valor da reserva']
+            averbado_novo['ALOCADO ANTERIORMENTE'] = alocado_anteriormente
 
-        # 4. O valor a lançar é o MÍNIMO entre o que a reserva da linha pede e o saldo que ainda temos.
-        # Usamos .clip(0) para garantir que o saldo não seja negativo (se já estourou, é 0).
-        # valor_a_lancar = np.minimum(averbado_novo['Valor da reserva'], saldo_restante.clip(0))
+            # 3. Calcula o saldo restante do SOMASE ANTES de processar a linha atual.
+            saldo_restante = averbado_novo['SOMASE CRED'] - alocado_anteriormente
 
-        # 5. Atribui o resultado final arredondado às colunas.
-        averbado_novo['VALOR A LANÇAR MATRICULA'] = averbado_novo['VALOR A LANÇAR MATRICULA'].round(2)
-        averbado_novo['VALOR A LANÇAR CPF'] = averbado_novo['VALOR A LANÇAR CPF'].round(2)
-        # averbado_novo['VALOR ATRIBUIDO'] = valor_a_lancar.round(2)
+            # 4. O valor a lançar é o MÍNIMO entre o que a reserva da linha pede e o saldo que ainda temos.
+            # Usamos .clip(0) para garantir que o saldo não seja negativo (se já estourou, é 0).
+            valor_a_lancar = np.minimum(averbado_novo['Valor da reserva'], saldo_restante.clip(0))
 
-        # 6. Preenche a coluna OBS para linhas que não receberam nada.
-        averbado_novo.loc[averbado_novo['VALOR A LANÇAR MATRICULA'] == 0, 'OBS'] = 'NÃO'
-        averbado_novo.loc[averbado_novo['VALOR A LANÇAR CPF'] == 0, 'OBS'] = 'NÃO'
+            # 5. Atribui o resultado final arredondado às colunas.
+            averbado_novo['VALOR A LANÇAR MATRICULA'] = averbado_novo['VALOR A LANÇAR MATRICULA'].round(2)
+            # averbado_novo['VALOR A LANÇAR CPF'] = averbado_novo['VALOR A LANÇAR CPF'].round(2)
+            averbado_novo['VALOR ATRIBUIDO'] = valor_a_lancar.round(2)
 
-        # 7. (Opcional) Remove a coluna auxiliar que criamos.
+            # 6. Preenche a coluna OBS para linhas que não receberam nada.
+            averbado_novo.loc[averbado_novo['VALOR A LANÇAR MATRICULA'] == 0, 'OBS'] = 'NÃO'
+            # averbado_novo.loc[averbado_novo['VALOR A LANÇAR CPF'] == 0, 'OBS'] = 'NÃO'
+
+            # 7. Vamos criar a coluna Diff para lançar os parciais
+            somase_lancar = averbado_novo.groupby('CPF')['VALOR ATRIBUIDO'].transform('sum')
+            averbado_novo['DIFF'] = somase_lancar - averbado_novo['SOMASE CRED']
+            averbado_novo['DIFF'] = averbado_novo['DIFF'].round(2)
+
+            # 8. Adiciona a coluna de SITUAÇÃO DE DESCONTO para TOTAL ou PARCIAL
+            averbado_novo['SITUAÇÃO DE DESCONTO'] = ''
+            averbado_novo.loc[averbado_novo['DIFF'] < 0, 'SITUAÇÃO DE DESCONTO'] = 'PARCIAL'
+            averbado_novo.loc[averbado_novo['DIFF'] >= 0, 'SITUAÇÃO DE DESCONTO'] = 'TOTAL'
+
+            # 9. Novo Lançar total
+            averbado_novo['NOVO LANÇAR TOTAL'] = averbado_novo['Valor da reserva'] - averbado_novo['DIFF']
+
+            return averbado_novo
+
+            # 7. (Opcional) Remove a coluna auxiliar que criamos.
         # averbado_novo = averbado_novo.drop(columns=['SOMA ACUMULADA DA RESERVA'])
+
+        averbado_finalizado = distribuicao_valores(averbado_novo)
+        
+        if (averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL').any():
+            averbado_finalizado.loc[averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL', 'Valor da reserva'] = averbado_finalizado['NOVO LANÇAR TOTAL']
+            averbado_finalizado = distribuicao_valores(averbado_finalizado)
+        
 
         try:
             front_preliminar.to_excel(os.path.join(self.caminho, f'FRONT COM MATRICULAS TRATADAS {self.convenio}.xlsx'), index=False)
@@ -772,6 +804,6 @@ class CONSIGFACIL:
 
         print('DEBUG: Averbados após cálculo vetorizado:')
         try:
-            averbado_novo.to_excel(os.path.join(self.caminho, f"AVERBADO TRABALHADO {self.convenio}.xlsx"), index=False)
+            averbado_finalizado.to_excel(os.path.join(self.caminho, f"AVERBADO TRABALHADO {self.convenio}.xlsx"), index=False)
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR AVERBADOS TRABALHADO: {e}")
