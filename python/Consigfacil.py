@@ -307,6 +307,8 @@ class CONSIGFACIL:
 
         return front_copy
     
+    
+    
     def andamento_func_front(self, front):
         # Andamento
         if self.andamento is None:
@@ -317,8 +319,9 @@ class CONSIGFACIL:
         # modalidade_dict = andam_file.set_index('Código na instituição')['Modalidade'].to_dict()
         # prazo_dict = andam_file.set_index('Código na instituição')['Prazo Total'].to_dict()
 
-        # andam_file = self.trata_cod_and(self.andamento)
-        andam_file = self.extrair_contratos_com_referencia(self.andamento, self.front)
+        andam_file = self.adiciona_contratos_faltando(self.andamento, front)
+
+        andam_file = self.extrair_contratos_com_referencia(andam_file, self.front)
 
         # andam_file.to_excel(rf'{self.caminho}\ANDAMENTO_TESTE {self.convenio} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
@@ -380,80 +383,75 @@ class CONSIGFACIL:
         front.loc[cond_prazo & (front['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - PRAZO'
 
         return front
+    
+    def adiciona_contratos_faltando(self, andamento_contratos_faltantes, front_semi):
+        # 1. Preparação do DataFrame B (Front)
+        # Removemos duplicatas de contrato para garantir unicidade real no B
+        front_base = front_semi[['CPF', 'Prestacao', 'Contrato']].drop_duplicates(subset=['Contrato']).copy()
+        
+        # Criamos a contagem de ocorrência para CPF + Valor no Front (B)
+        front_base['id_ocorrencia'] = front_base.groupby(['CPF', 'Prestacao']).cumcount()
 
-    def separar_contratos(self, contrato):
-        # Inicializa uma lista para armazenar os contratos separados
-        contratos_separados = []
-        posicao = 0
+        # 2. Preparação do DataFrame A (Andamento)
+        # Criamos a contagem de ocorrência no A também para servir de chave de busca
+        # Importante: A contagem deve ser baseada nas mesmas colunas que usaremos no merge
+        contratos_de_andamento = andamento_contratos_faltantes['Código na instituição']
+        andamento_contratos_faltantes.insert(2, "Contrato de Andamento", contratos_de_andamento, True)
+        andamento_contratos_faltantes = andamento_contratos_faltantes.drop_duplicates(subset='Código', keep='first')
 
-        while posicao < len(contrato):
-            # Verifica se o contrato começa com "200" ou "300" e tem 9 ou 10 dígitos
-            if (contrato[posicao:posicao + 3] in ["200", "300", "201","301", "302"]) and (len(contrato) - posicao >= 9):
-                if len(contrato) - posicao >= 10 and contrato[posicao + 9].isdigit():
-                    # Corrige contratos de 10 dígitos para 9 dígitos removendo o último dígito
-                    contratos_separados.append(contrato[posicao:posicao + 9])
-                    posicao += 10
-                else:
-                    contratos_separados.append(contrato[posicao:posicao + 9])
-                    posicao += 9
-            # Verifica se o contrato tem 6 dígitos
-            elif len(contrato) - posicao >= 6 and contrato[posicao:posicao + 6].isdigit():
-                contratos_separados.append(contrato[posicao:posicao + 6])
-                posicao += 6
-            elif len(contrato) - posicao >= 5 and contrato[posicao:posicao + 5].isdigit():
-                contratos_separados.append(contrato[posicao:posicao + 5])
-                posicao += 5
-            elif len(contrato) - posicao >= 4 and contrato[posicao:posicao + 4].isdigit():
-                contratos_separados.append(contrato[posicao:posicao + 4])
-                posicao += 4
-            else:
-                posicao += 1
+        print(f'Dtype Contrato de Andamento:\n{andamento_contratos_faltantes['Contrato de Andamento'].dtype}')
+        print(f'Dtype Front:\n{front_base['Contrato'].dtype}')
 
-        # Retorna os contratos separados por barras
-        return '/'.join(contratos_separados)
+        # 1. Pegamos a lista (ou Series) de contratos que já estão no andamento
+        contratos_ja_existentes = andamento_contratos_faltantes['Contrato de Andamento']
 
-    def trata_cod_and(self, andamentos):
-        # PUXA OS ARQUIVOS À SEREM TRATADOS
-        data_averbados = andamentos
-        # print(data_averbados.columns)
+        # 2. Filtramos o front_base: "Mantenha apenas onde o Contrato NÃO ESTÁ nos existentes"
+        front_base = front_base[~front_base['Contrato'].isin(contratos_ja_existentes)]
 
-        # SUBSTITUIMOS CARACTER POR NADA
-        contrato_editado = data_averbados['Código na instituição'].fillna('').astype(str).apply(
-            lambda x: ''.join(char for char in x if char.isdigit() or char in rejeitados))
+        if andamento_contratos_faltantes['Valor da Parcela'].dtype != 'float64':
+            andamento_contratos_faltantes['Valor da Parcela'] = andamento_contratos_faltantes['Valor da Parcela'].astype(str).str.replace(".", "")
+            andamento_contratos_faltantes['Valor da Parcela'] = andamento_contratos_faltantes['Valor da Parcela'].astype(str).str.replace(",", ".")
+            andamento_contratos_faltantes['Valor da Parcela'] = pd.to_numeric(andamento_contratos_faltantes['Valor da Parcela'], errors='coerce')
+        andamento_contratos_faltantes['id_ocorrencia'] = andamento_contratos_faltantes.groupby(['CPF', 'Valor da Parcela']).cumcount()
 
-        contrato_editado = contrato_editado.replace('//', '/', regex=True)
 
-        # INSERE A COLUNA CONTRATO EDITADO COM OS NÚMEROS JÁ TRATADOS
-        if "Contrato Editado" not in data_averbados.columns:
-            data_averbados.insert(2, "Contrato Editado", contrato_editado, True)
+        # --- LÓGICA DE MERGE ---
 
-        data_averbados['Contrato Editado'] = data_averbados['Contrato Editado'].apply(self.separar_contratos)
+        # Função auxiliar para evitar repetição de código nos 3 cenários (+0, +20, +40)
+        def executa_merge_ajustado(df_alvo, df_fonte, valor_ajuste=0):
+            df_fonte_temp = df_fonte.copy()
+            if valor_ajuste != 0:
+                df_fonte_temp['Prestacao'] = df_fonte_temp['Prestacao'] + valor_ajuste
+            
+            # Merge considerando CPF, Valor E o ID da ocorrência
+            res = df_alvo.merge(
+                df_fonte_temp,
+                left_on=['CPF', 'Valor da Parcela', 'id_ocorrencia'],
+                right_on=['CPF', 'Prestacao', 'id_ocorrencia'],
+                how='left',
+                suffixes=('', f'_{valor_ajuste}')
+            )
+            
+            # Preenche o código e limpa colunas temporárias
+            res['Contrato de Andamento'] = res['Contrato de Andamento'].fillna(res['Contrato'])
+            return res.drop(columns=['Prestacao', 'Contrato'], errors='ignore')
 
-        # Verifica se há contratos separados para dividir em novas colunas
-        if data_averbados['Contrato Editado'].str.contains('/').any():
-            # Separa os contratos em novas colunas
-            df_contratos_separados = data_averbados['Contrato Editado'].str.split('/', expand=True)
+        # Execução dos 3 cenários
+        # Cenário 1: Valor Exato
+        andamento_contratos_faltantes = executa_merge_ajustado(andamento_contratos_faltantes, front_base, 0)
+        
+        # Cenário 2: +20 reais
+        andamento_contratos_faltantes = executa_merge_ajustado(andamento_contratos_faltantes, front_base, 20)
+        
+        # Cenário 3: +40 reais
+        andamento_contratos_faltantes = executa_merge_ajustado(andamento_contratos_faltantes, front_base, 40)
 
-            # Cria listas de nomes de colunas para contratos
-            contrato_cols = [f'Contrato_{i + 1}' for i in range(df_contratos_separados.shape[1])]
-            df_contratos_separados.columns = contrato_cols
+        # Limpeza final
+        if 'id_ocorrencia' in andamento_contratos_faltantes.columns:
+            andamento_contratos_faltantes.drop(columns=['id_ocorrencia'], inplace=True)
+            
+        return andamento_contratos_faltantes
 
-            # Converte para int (cuidado com valores nulos ou não numéricos)
-            '''for col in contrato_cols:
-                df_contratos_separados[col] = pd.to_numeric(df_contratos_separados[col], errors='coerce').astype(
-                    'Int64')  # Int64 permite nulos'''
-
-            # Descobre a posição da coluna 'Contrato Editado'
-            col_index = data_averbados.columns.get_loc('Contrato Editado')
-
-            # Divide o DataFrame original em duas partes
-            antes = data_averbados.iloc[:, :col_index + 1]  # Inclui 'Contrato Editado'
-            depois = data_averbados.iloc[:, col_index + 1:]
-
-            # Concatena com os novos dados no meio
-            data_averbados = pd.concat([antes, df_contratos_separados, depois], axis=1)
-
-        return data_averbados
     
     def extrair_contratos_com_referencia(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
         print("Iniciando o processo de extração de contratos...")
@@ -482,7 +480,7 @@ class CONSIGFACIL:
         # --- Passo 2: Lógica de Extração ---
         def encontrar_contratos_na_linha(row):
             cpf = row['CPF']
-            texto_contratos_sujo = str(row['Código na instituição']).strip()
+            texto_contratos_sujo = str(row['Contrato de Andamento']).strip()
             valor_parcela_suja = round(float(row.get('Valor da Parcela', 0)), 2)
 
             # MELHORIA 1: Se o código estiver vazio, tenta achar pela parcela
@@ -547,10 +545,11 @@ class CONSIGFACIL:
             return encontrados_nesta_linha
 
         # --- Passo 3: Aplicação e Reordenação (Melhoria 2) ---
-        df_sujo['Código na instituição'] = df_sujo['Código na instituição'].astype(str).str.replace('nan', '')
-        df_sujo['Valor da Parcela'] = df_sujo['Valor da Parcela'].astype(str).str.replace(".", "")
-        df_sujo['Valor da Parcela'] = df_sujo['Valor da Parcela'].astype(str).str.replace(",", ".")
-        df_sujo['Valor da Parcela'] = pd.to_numeric(df_sujo['Valor da Parcela'], errors='coerce')
+        df_sujo['Contrato de Andamento'] = df_sujo['Contrato de Andamento'].astype(str).str.replace('nan', '')
+        if df_sujo['Valor da Parcela'].dtype != 'float64':
+            df_sujo['Valor da Parcela'] = df_sujo['Valor da Parcela'].astype(str).str.replace(".", "")
+            df_sujo['Valor da Parcela'] = df_sujo['Valor da Parcela'].astype(str).str.replace(",", ".")
+            df_sujo['Valor da Parcela'] = pd.to_numeric(df_sujo['Valor da Parcela'], errors='coerce')
         lista_de_contratos_encontrados = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
 
         df_contratos_novos = pd.DataFrame(lista_de_contratos_encontrados.tolist(), index=df_sujo.index)
@@ -559,8 +558,8 @@ class CONSIGFACIL:
 
         # Reordenação Dinâmica
         cols_originais = df_sujo.columns.tolist()
-        if 'Código na instituição' in cols_originais:
-            idx_ref = cols_originais.index('Código na instituição') + 1
+        if 'Contrato de Andamento' in cols_originais:
+            idx_ref = cols_originais.index('Contrato de Andamento') + 1
             # Reconstrói a ordem: Tudo até o código + Novos Contratos + Resto
             ordem_final = cols_originais[:idx_ref] + novas_colunas + cols_originais[idx_ref:]
             df_resultado = pd.concat([df_sujo, df_contratos_novos], axis=1)[ordem_final]

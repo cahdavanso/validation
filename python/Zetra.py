@@ -49,7 +49,8 @@ class ZETRA:
                                "07.2 TED DEVOLVIDA A\x80\x93 PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "11 FORMALIZAA\x87A\x83O", "07.1.1 QUITACAO - CORRECAO DE CCB",
                                "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "10.7 CONTRATO NA\x83O AVERBADO - AGUARDANDO RESOLUA\x87A\x83O", "11 FORMALIZAAÂ‡AÂƒO",
                                "10.5 AGUARDANDO AVERBACAO COMPRA OUTROS CONVENIOS", "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "07.2 TED DEVOLVIDA AÂ\x80Â\x93 PAGAMENTO AO CLIENTE",
-                               "RISCO DA OPERAAÂ\x87AÂ\x82O-DEMAIS SITUAAÂ\x87AÂ\x95ES", "10.7 CONTRATO NAÂ\x83O AVERBADO - AGUARDANDO RESOLUAÂ\x87AÂ\x83O", "RISCO DA OPERACAO - DEMAIS SITUACOES"
+                               "RISCO DA OPERAAÂ\x87AÂ\x82O-DEMAIS SITUAAÂ\x87AÂ\x95ES", "10.7 CONTRATO NAÂ\x83O AVERBADO - AGUARDANDO RESOLUAÂ\x87AÂ\x83O", "RISCO DA OPERACAO - DEMAIS SITUACOES",
+                               "15.0 RISCO DA OPERACAO - DEMAIS SITUACOES"
                               ]
 
         # --- TABELA DE CONFIGURAÇÃO (Baseada na sua imagem) ---
@@ -664,10 +665,17 @@ class ZETRA:
         # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
         data.rename(columns={'Matrícula (ID Funcional + Vínculo)': 'Matrícula'}, inplace=True)
         data.rename(columns={'Situação do contrato': 'Situação'}, inplace=True)
+
+        print(f'data antes de separar as colunas:\n{data.columns}')
         colunas = ['Órgão', 'Matrícula', 'Servidor', 'CPF', 'Situação', 'Categoria', 'Consignatária', 'Id. órgão',
                    'Órgão.1', 'Id. serviço', 'Serviço', 'Nº ADE', 'Id. ADE', 'Data inc.', 'Vlr ant.', 'Vlr novo']
 
         data_averbados_bruto = data[colunas]
+        print(f'data depois de separar as colunas:\n{data_averbados_bruto.columns}')
+        print(f'Colunas de data:\n{data_averbados_bruto.columns}')
+        # Tentando remover .0 do final dos contratos
+        mask_ponto_zero = data_averbados_bruto['Id. ADE'].dtype == 'float64'
+        data_averbados_bruto.loc[mask_ponto_zero, 'Id. ADE'] = data_averbados_bruto.loc[mask_ponto_zero, 'Id. ADE'].astype('Int64')
 
         # Vou tentar colocar a coluna de Orbital aqui no meio mesmo
         if orbital_tratado is not None:
@@ -684,15 +692,18 @@ class ZETRA:
             
             front_preliminar = front_trabalhar.copy()
 
-            soma_condicional_dict_averb = front_preliminar.groupby('CPF')['Valor a lançar'].sum().to_dict()
+            soma_series_averb = front_preliminar.groupby('CPF')['Valor a lançar'].sum()
 
-            soma_total = (
-                soma_condicional_dict_averb
-                .add(mask_orbital, fill_value=0)
-            )
+            # 2. Agora o .add() vai funcionar, pois soma_series_averb ainda é um objeto Pandas
+            # Supondo que mask_orbital também seja uma Series de CPFs e valores
+            # soma_total = soma_series_averb.add(mask_orbital, fill_value=0)
 
-            averbado_novo['Vlr novo'] = pd.to_numeric(averbado_novo['Vlr novo'], errors='coerce').fillna(0)
-            averbado_novo['SOMASE FRONT'] = averbado_novo['CPF'].map(soma_total)
+            if averbado_novo['Vlr novo'].dtype != 'float64':
+                averbado_novo['Vlr novo'] = averbado_novo['Vlr novo'].astype(str).str.replace(".", "")
+                averbado_novo['Vlr novo'] = averbado_novo['Vlr novo'].astype(str).str.replace(",", ".")
+                averbado_novo['Vlr novo'] = pd.to_numeric(averbado_novo['Vlr novo'], errors='coerce').fillna(0)
+
+            averbado_novo['SOMASE FRONT'] = averbado_novo['CPF'].map(soma_series_averb)
             averbado_novo['SOMASE FRONT'] = pd.to_numeric(averbado_novo['SOMASE FRONT'], errors='coerce').fillna(0)
 
             # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
@@ -716,31 +727,15 @@ class ZETRA:
             valor_a_lancar = np.minimum(averbado_novo['Vlr novo'], saldo_restante.clip(0))
 
             # 5. Atribui o resultado final arredondado às colunas.
-            averbado_novo['VALOR A LANÇAR MATRICULA'] = averbado_novo['VALOR A LANÇAR MATRICULA'].round(2)
-            # averbado_novo['VALOR A LANÇAR CPF'] = averbado_novo['VALOR A LANÇAR CPF'].round(2)
-            averbado_novo['VALOR ATRIBUIDO'] = valor_a_lancar.round(2)
+            averbado_novo['Lançar'] = valor_a_lancar.round(2)
 
             # 6. Preenche a coluna OBS para linhas que não receberam nada.
-            averbado_novo.loc[averbado_novo['VALOR A LANÇAR MATRICULA'] == 0, 'OBS'] = 'NÃO'
-            # averbado_novo.loc[averbado_novo['VALOR A LANÇAR CPF'] == 0, 'OBS'] = 'NÃO'
-
-            # 7. Vamos criar a coluna Diff para lançar os parciais
-            somase_lancar = averbado_novo.groupby('CPF')['VALOR ATRIBUIDO'].transform('sum')
-            averbado_novo['DIFF'] = somase_lancar - averbado_novo['SOMASE CRED']
-            averbado_novo['DIFF'] = averbado_novo['DIFF'].round(2)
-
-            # 8. Adiciona a coluna de SITUAÇÃO DE DESCONTO para TOTAL ou PARCIAL
-            averbado_novo['SITUAÇÃO DE DESCONTO'] = ''
-            averbado_novo.loc[averbado_novo['DIFF'] < 0, 'SITUAÇÃO DE DESCONTO'] = 'PARCIAL'
-            averbado_novo.loc[averbado_novo['DIFF'] >= 0, 'SITUAÇÃO DE DESCONTO'] = 'TOTAL'
-
-            # 9. Novo Lançar total
-            averbado_novo['NOVO LANÇAR TOTAL'] = averbado_novo['Valor da reserva'] - averbado_novo['DIFF']
+            averbado_novo.loc[averbado_novo['Lançar'] == 0, 'OBS'] = 'NÃO'
 
             return averbado_novo
         
         if self.convenio == 'GOV. PARANÁ':
-            data_averbados = distribuicao_valores(data, front)
+            data_averbados = distribuicao_valores(data_averbados_bruto, front)
 
             # print("Cálculos de Soma e Diferença finalizados.")
             data_averbados.to_excel(fr'{self.caminho}\TRABALHADO CARTAO {convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
@@ -897,6 +892,7 @@ class ZETRA:
 
         # CORREÇÃO 2: Garante que a coluna-chave principal seja string e sem espaços
         front_consig['Contrato'] = front_consig['Contrato'].astype(str).str.strip()
+        print(f'comprimento de front_consig\n{len(front_consig)}')
 
         # ----------------------------- TRATAR AS ESTEIRAS DE CREDBASE TRABALHADO --------------------------------------
 
@@ -946,7 +942,12 @@ class ZETRA:
         # --------------------------------------------------------------------------------------------------------------
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
+        if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS', 'PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']:
+            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)].copy()
+        else:
+            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
+
+        print(f'comprimento de front_consig_cartao_conciliacao de Separa apenas o que retornou como "cartão de crédito"\n{len(front_consig_cartao_conciliacao)}')
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -960,6 +961,8 @@ class ZETRA:
         # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Acao Judicial'] != 1].copy()
 
+        print(f'comprimento de front_consig_trabalhado de tirar ação judicial\n{len(front_consig_trabalhado)}')
+
         # ---------------------------------- TIRAR ÓBITO DO FRONT ---------------------------------- #
         # front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Obito'] != 1].copy()
         
@@ -967,6 +970,8 @@ class ZETRA:
 
         front_consig_trabalhado.loc[front_consig_trabalhado['Saldo'] > -0.01, 'Valor a lançar'] = 0
         front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Valor a lançar'] > 0].copy()
+
+        print(f'comprimento de front_consig_trabalhado de insere coluna de saldo\n{len(front_consig_trabalhado)}')
 
         # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
         '''mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA'
@@ -986,6 +991,8 @@ class ZETRA:
         else:
             print('Consignatária inválida.')
             return
+        
+        print(f'comprimento de front_consig_trabalhado de escolhe consignatária\n{len(front_consig_trabalhado)}')
 
 
         # --------------------------------------- TIRA BANCO OUTROS ----------------------------------------- #
@@ -993,6 +1000,8 @@ class ZETRA:
 
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado|CANCELADO', na=False)].copy()
+
+        print(f'comprimento de front_consig_trabalhado de tira liquidados\n{len(front_consig_trabalhado)}')
 
         # Salva com os NÃO LANÇAR
         print(f"tratamento_front: Tentando salvar FRONT TRABALHADO em: {self.caminho}")
