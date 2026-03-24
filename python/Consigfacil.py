@@ -319,9 +319,12 @@ class CONSIGFACIL:
         # modalidade_dict = andam_file.set_index('Código na instituição')['Modalidade'].to_dict()
         # prazo_dict = andam_file.set_index('Código na instituição')['Prazo Total'].to_dict()
 
-        andam_file = self.adiciona_contratos_faltando(self.andamento, front)
+        andam_file, front_base = self.adiciona_contratos_faltando(self.andamento, front)
 
         andam_file = self.extrair_contratos_com_referencia(andam_file, self.front)
+
+        # Novamente usar o adiciona_contratos_faltando só que dessa vez para o Contrato Editado 1 que tem celulas vazias
+        andam_file, front_base = self.adiciona_contratos_faltando(andam_file, front_base, "Contrato Editado 1")
 
         # andam_file.to_excel(rf'{self.caminho}\ANDAMENTO_TESTE {self.convenio} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
@@ -384,7 +387,7 @@ class CONSIGFACIL:
 
         return front
     
-    def adiciona_contratos_faltando(self, andamento_contratos_faltantes, front_semi):
+    def adiciona_contratos_faltando(self, andamento_contratos_faltantes, front_semi, esteira='Código na instituição'):
         # 1. Preparação do DataFrame B (Front)
         # Removemos duplicatas de contrato para garantir unicidade real no B
         front_base = front_semi[['CPF', 'Prestacao', 'Contrato']].drop_duplicates(subset=['Contrato']).copy()
@@ -395,18 +398,38 @@ class CONSIGFACIL:
         # 2. Preparação do DataFrame A (Andamento)
         # Criamos a contagem de ocorrência no A também para servir de chave de busca
         # Importante: A contagem deve ser baseada nas mesmas colunas que usaremos no merge
-        contratos_de_andamento = andamento_contratos_faltantes['Código na instituição']
-        andamento_contratos_faltantes.insert(2, "Contrato de Andamento", contratos_de_andamento, True)
+        if esteira == 'Código na instituição':
+            contratos_de_andamento = andamento_contratos_faltantes['Código na instituição']
+            andamento_contratos_faltantes.insert(2, "Contrato de Andamento", contratos_de_andamento, True)
+            esteira = "Contrato de Andamento"
         andamento_contratos_faltantes = andamento_contratos_faltantes.drop_duplicates(subset='Código', keep='first')
 
-        print(f'Dtype Contrato de Andamento:\n{andamento_contratos_faltantes['Contrato de Andamento'].dtype}')
+        front_base['Contrato'] = front_base['Contrato'].astype(str)
+
+        # 1. Identificamos quais células são puramente numéricas (floats ou ints)
+        # O errors='coerce' transforma textos em NaN (vazio) apenas para esta validação
+
+        print(f'Dtype Contrato de Andamento:\n{andamento_contratos_faltantes[esteira].dtype}')
         print(f'Dtype Front:\n{front_base['Contrato'].dtype}')
 
         # 1. Pegamos a lista (ou Series) de contratos que já estão no andamento
-        contratos_ja_existentes = andamento_contratos_faltantes['Contrato de Andamento']
+        contratos_ja_existentes = andamento_contratos_faltantes[esteira]
+
+        #Contrato 302009782 existe em contratos já existentes?
+        print(f'Contrato 302009782 existe em contratos_ja_existentes?\n{'302009782' in contratos_ja_existentes}')
 
         # 2. Filtramos o front_base: "Mantenha apenas onde o Contrato NÃO ESTÁ nos existentes"
         front_base = front_base[~front_base['Contrato'].isin(contratos_ja_existentes)]
+
+        # Contrato 302009782 existe em front_base?
+        contratos_em_front_base = front_base['Contrato']
+        print(f'Contrato 302009782 existe em front_base?\n{'302009782' in contratos_em_front_base}')
+
+        # Quais contratos estão atrelados ao CPF 691.960.954-15 em andamento_contratos_faltantes?
+        print(f'CPF 691.960.954-15 está em andamento_contratos_faltantes?\n{andamento_contratos_faltantes[andamento_contratos_faltantes['CPF'] == '691.960.954-15']}')
+
+        # Quais contratos estão atrelados ao CPF 691.960.954-15 em front_base?
+        print(f'CPF 691.960.954-15 está em front_base?\n{front_base[front_base['CPF'] == '691.960.954-15']}')
 
         if andamento_contratos_faltantes['Valor da Parcela'].dtype != 'float64':
             andamento_contratos_faltantes['Valor da Parcela'] = andamento_contratos_faltantes['Valor da Parcela'].astype(str).str.replace(".", "")
@@ -433,7 +456,7 @@ class CONSIGFACIL:
             )
             
             # Preenche o código e limpa colunas temporárias
-            res['Contrato de Andamento'] = res['Contrato de Andamento'].fillna(res['Contrato'])
+            res[esteira] = res[esteira].fillna(res['Contrato'])
             return res.drop(columns=['Prestacao', 'Contrato'], errors='ignore')
 
         # Execução dos 3 cenários
@@ -449,8 +472,23 @@ class CONSIGFACIL:
         # Limpeza final
         if 'id_ocorrencia' in andamento_contratos_faltantes.columns:
             andamento_contratos_faltantes.drop(columns=['id_ocorrencia'], inplace=True)
+
+        # 1. Identificamos o que é numérico
+        mask_numerico = pd.to_numeric(andamento_contratos_faltantes[esteira], errors='coerce').notna()
+
+        # 2. Convertemos apenas as linhas da máscara
+        if mask_numerico.any():
+            # Convertemos para float, arredondamos para evitar 123.0000004 e transformamos em int
+            valores_convertidos = (
+                pd.to_numeric(andamento_contratos_faltantes.loc[mask_numerico, esteira])
+                .round(0)          # Garante que 123.0 vire 123
+                .astype(np.int64)  # Usa o int do numpy que é mais direto
+                .astype(str)       # Transforma em texto para remover o .0 definitivo
+            )
             
-        return andamento_contratos_faltantes
+            andamento_contratos_faltantes.loc[mask_numerico, esteira] = valores_convertidos
+            
+        return andamento_contratos_faltantes, front_base
 
     
     def extrair_contratos_com_referencia(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
