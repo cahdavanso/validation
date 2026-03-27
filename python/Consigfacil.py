@@ -6,6 +6,7 @@ from thefuzz import fuzz
 import logging
 import os
 import chardet
+from itertools import combinations
 from python.acha_matriculas_consigfacil import ACHA_MATRICULA_CONSIGFACIL
 
 # Mantendo variáveis globais do original
@@ -89,7 +90,8 @@ class CONSIGFACIL:
                                '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
                                "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
                                "07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES",
-                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "RISCO DA OPERACAO - DEMAIS SITUACOES"
+                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "RISCO DA OPERACAO - DEMAIS SITUACOES", "RISCO DA OPERACAO - DEMAIS SITUACOEES",
+                               "15.0 RISCO DA OPERACAO - DEMAIS SITUACOES"
                               ]
         
         
@@ -295,9 +297,10 @@ class CONSIGFACIL:
         # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
 
         front_copy.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
-        front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace('.', '', regex=False)
-        front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
-        front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
+        if front_copy['Prestacao'].dtype != 'float64':
+            front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace('.', '', regex=False)
+            front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
+            front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
 
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
@@ -319,12 +322,14 @@ class CONSIGFACIL:
         # modalidade_dict = andam_file.set_index('Código na instituição')['Modalidade'].to_dict()
         # prazo_dict = andam_file.set_index('Código na instituição')['Prazo Total'].to_dict()
 
-        andam_file, front_base = self.adiciona_contratos_faltando(self.andamento, front)
+        self.andamento = self.andamento[self.andamento['Modalidade'] != 'Cartão de Crédito']
 
-        andam_file = self.extrair_contratos_com_referencia(andam_file, self.front)
+        andam_file, front_base = self.processar_contratos_otimizado(self.andamento, front)
+
+        andam_file = self.extrair_contratos_com_referencia(andam_file, front)
 
         # Novamente usar o adiciona_contratos_faltando só que dessa vez para o Contrato Editado 1 que tem celulas vazias
-        andam_file, front_base = self.adiciona_contratos_faltando(andam_file, front_base, "Contrato Editado 1")
+        andam_file, front_base = self.processar_contratos_otimizado(andam_file, front)
 
         # andam_file.to_excel(rf'{self.caminho}\ANDAMENTO_TESTE {self.convenio} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
@@ -349,7 +354,7 @@ class CONSIGFACIL:
             # 4. Tira casos que são previdencia e igual a 20, 40, 60
             andam_file_sem_prev_seguro = andam_file[~(((andam_file['Modalidade'] == 'Previdência') | (
                     andam_file['Modalidade'] == 'Seguros') | (andam_file['Modalidade'] == 'Mensalidade'))
-                                                    & ((andam_file['Valor da Parcela'] == 20) | (
+                                                    & ((andam_file['Valor da Parcela'] <= 20) | (
                             andam_file['Valor da Parcela'] == 40)
                                                         | (andam_file['Valor da Parcela'] == 60)))]
 
@@ -423,13 +428,13 @@ class CONSIGFACIL:
 
         # Contrato 302009782 existe em front_base?
         contratos_em_front_base = front_base['Contrato']
-        print(f'Contrato 302009782 existe em front_base?\n{'302009782' in contratos_em_front_base}')
+        '''print(f'Contrato 302009782 existe em front_base?\n{'302009782' in contratos_em_front_base}')
 
         # Quais contratos estão atrelados ao CPF 691.960.954-15 em andamento_contratos_faltantes?
         print(f'CPF 691.960.954-15 está em andamento_contratos_faltantes?\n{andamento_contratos_faltantes[andamento_contratos_faltantes['CPF'] == '691.960.954-15']}')
 
         # Quais contratos estão atrelados ao CPF 691.960.954-15 em front_base?
-        print(f'CPF 691.960.954-15 está em front_base?\n{front_base[front_base['CPF'] == '691.960.954-15']}')
+        print(f'CPF 691.960.954-15 está em front_base?\n{front_base[front_base['CPF'] == '691.960.954-15']}')'''
 
         if andamento_contratos_faltantes['Valor da Parcela'].dtype != 'float64':
             andamento_contratos_faltantes['Valor da Parcela'] = andamento_contratos_faltantes['Valor da Parcela'].astype(str).str.replace(".", "")
@@ -489,6 +494,165 @@ class CONSIGFACIL:
             andamento_contratos_faltantes.loc[mask_numerico, esteira] = valores_convertidos
             
         return andamento_contratos_faltantes, front_base
+    
+
+    def busca_greedy_backtracking(self, alvo, itens, max_contratos=5):
+        """
+        Implementa a lógica sugerida: 
+        1. Ordena decrescente.
+        2. Tenta o maior como 'âncora' e vai somando os menores.
+        3. Se passar do alvo, descarta e tenta a próxima âncora.
+        """
+        # Trabalhar com inteiros para precisão e velocidade total
+        alvo_int = int(round(alvo * 100))
+        # Filtra apenas itens que sozinhos não passam do alvo e ordena DECRESCENTE
+        opcoes = sorted([(c, int(round(v * 100))) for c, v in itens if v <= alvo], 
+                        key=lambda x: x[1], reverse=True)
+        
+        solucao = []
+
+        def buscar(index_inicio, alvo_restante, caminho):
+            # Se o alvo chegou a zero, achamos a combinação perfeita
+            if alvo_restante == 0:
+                solucao.append(list(caminho))
+                return True
+            
+            # Limite de segurança para não somar contratos demais (ajustável)
+            if len(caminho) >= max_contratos or alvo_restante < 0:
+                return False
+
+            for i in range(index_inicio, len(opcoes)):
+                contrato, valor = opcoes[i]
+                
+                # Se o valor atual é maior que o que falta, pula para o próximo menor
+                if valor > alvo_restante:
+                    continue
+                
+                caminho.append(contrato)
+                # Tenta somar os próximos itens menores a partir daqui
+                if buscar(i + 1, alvo_restante - valor, caminho):
+                    return True
+                # Se não deu certo com esse item, "desfaz" (backtrack) e tenta o próximo menor
+                caminho.pop()
+                
+            return False
+
+        if buscar(0, alvo_int, []):
+            return "/".join(map(str, solucao[0]))
+        return None
+
+    def processar_contratos_otimizado(self, df_andamento, df_front):
+        # --- Padronização ---
+        df_andamento_original = df_andamento.copy()
+        df_andamento = df_andamento.drop_duplicates(subset=['Código']).copy()
+        for df in [df_andamento, df_front]:
+            df['CPF'] = df['CPF'].astype(str).str.strip()
+
+        df_front['Contrato'] = df_front['Contrato'].astype(str)
+
+        df_front['Valor a lançar com peculio'] = df_front['Valor a lançar']
+
+        # df_front.loc[df_front['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA', 'Valor a lançar com peculio'] += 20
+        
+        if df_andamento['Valor da Parcela'].dtype != 'float64':
+            df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(str).str.replace(".", "")
+            df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(str).str.replace(",", ".")
+            df_andamento['Valor da Parcela'] = pd.to_numeric(df_andamento['Valor da Parcela'], errors='coerce')
+        df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(float).round(2)
+
+        if df_front['Valor a lançar com peculio'].dtype != 'float64':
+            df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(str).str.replace(".", "")
+            df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(str).str.replace(",", ".")
+            df_front['Valor a lançar com peculio'] = pd.to_numeric(df_front['Valor a lançar com peculio'], errors='coerce')
+        df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(float).round(2)
+
+        if 'Contrato de Andamento' not in df_andamento_original.columns:
+            df_andamento.insert(2, 'Contrato de Andamento', '', True)
+            df_andamento['Contrato de Andamento'] = df_andamento['Código na instituição']
+        
+        # Contratos que já vieram preenchidos são removidos do front
+        ocupados = df_andamento['Código na instituição'].dropna().unique()
+        df_front_dispo = df_front[~df_front['Contrato'].isin(ocupados)].copy()
+
+        contratos_usados = set()
+
+        if 'Contrato de Andamento' not in df_andamento_original:
+            vazios = df_andamento[df_andamento['Contrato de Andamento'].isna() | (df_andamento['Contrato de Andamento'] == "")]
+            print(f'Comprimento de vazios Contrato de Andamento:{len(vazios)}')
+        else:
+            vazios = df_andamento[df_andamento['Contrato Editado 1'].isna() | (df_andamento['Contrato Editado 1'] == "")]
+            print(f'Comprimento de vazios Contrato Editado 1:{len(vazios)}')
+
+    
+        for cpf, grupo in vazios.groupby('CPF'):
+            if cpf == '47604131387' or cpf == '476.041.313-87':
+                print(f"\n--- DEBUG CPF: {cpf} ---")
+                print(f"Parcelas no Andamento: {grupo['Valor da Parcela']}")
+                print(f"Soma no Andamento: {grupo['Valor da Parcela'].sum()}")
+                print(f"Linhas no Andamento:\n{grupo}")
+                
+                # Ver o que o código achou no Front para ele
+                possibilidades = df_front_dispo[df_front_dispo['CPF'] == cpf]
+                print(f"Possibilidades no Front:\n{possibilidades[['Contrato', 'Valor a lançar com peculio']]}")
+
+            soma_andamento = grupo['Valor da Parcela'].sum()
+            
+            possibilidades = df_front_dispo[
+                (df_front_dispo['CPF'] == cpf) & 
+                (~df_front_dispo['Contrato'].isin(contratos_usados))
+            ]
+            
+            if possibilidades.empty: 
+                continue
+            
+            lista_itens_front = list(possibilidades[['Contrato', 'Valor a lançar com peculio']].itertuples(index=False, name=None))
+            
+            alvo_final = round(soma_andamento, 2)
+
+
+            
+            # Tenta achar um contrato ou combinação no front que cubra a SOMA do grupo
+            resultado = self.busca_greedy_backtracking(alvo_final, lista_itens_front)
+            
+            if resultado:
+                # Se achou, preenche TODAS as linhas desse grupo no andamento original
+                indices_grupo = grupo.index
+                df_andamento.loc[indices_grupo, 'Contrato de Andamento'] = resultado
+                # Marca contratos como usados
+                for c in resultado.split("/"):
+                    contratos_usados.add(c)
+
+        # --- ETAPA RESIDUAL: Tenta preencher o que sobrou linha a linha (Lógica anterior) ---
+        # Recalculamos os vazios após o processamento por grupo
+        if 'Contrato de Andamento' not in df_andamento_original.columns:
+            vazios_restantes = df_andamento[df_andamento['Contrato de Andamento'].isna() | (df_andamento['Contrato de Andamento'] == "")]
+        else:
+            vazios_restantes = df_andamento[df_andamento['Contrato Editado 1'].isna() | (df_andamento['Contrato Editado 1'] == "")]
+        
+        for idx, row in vazios_restantes.iterrows():
+            cpf = row['CPF']
+            valor = row['Valor da Parcela']
+            
+            possibilidades = df_front_dispo[
+                (df_front_dispo['CPF'] == cpf) & 
+                (~df_front_dispo['Contrato'].isin(contratos_usados))
+            ]
+            
+            if possibilidades.empty: continue
+            lista_itens = list(possibilidades[['Contrato', 'Valor a lançar com peculio']].itertuples(index=False, name=None))
+            
+            alvo_final = round(valor, 2)
+            resultado = self.busca_greedy_backtracking(alvo_final, lista_itens)
+            if resultado:
+                if 'Contrato de Andamento' not in df_andamento_original.columns:
+                    df_andamento.at[idx, 'Contrato de Andamento'] = resultado
+                else:
+                    df_andamento.at[idx, 'Contrato Editado 1'] = resultado
+                for c in resultado.split("/"):
+                    contratos_usados.add(c)
+
+        df_front_final = df_front_dispo[~df_front_dispo['Contrato'].isin(contratos_usados)]
+        return df_andamento, df_front_final
 
     
     def extrair_contratos_com_referencia(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
@@ -505,11 +669,12 @@ class CONSIGFACIL:
         
         # Novo Mapa para Parcela (Melhoria 1)
         # Criamos um dicionário onde a chave é o CPF e o valor é uma lista de tuplas (Valor, Contrato)
-        df_limpo['Prestacao'] = df_limpo['Prestacao'].astype(str).str.replace(".", "")
-        df_limpo['Prestacao'] = df_limpo['Prestacao'].astype(str).str.replace(",", ".")
-        df_limpo['Prestacao'] = pd.to_numeric(df_limpo['Prestacao'], errors='coerce')
+        if df_limpo['Valor a lançar'].dtype != 'float64':
+            df_limpo['Valor a lançar'] = df_limpo['Valor a lançar'].astype(str).str.replace(".", "")
+            df_limpo['Valor a lançar'] = df_limpo['Valor a lançar'].astype(str).str.replace(",", ".")
+            df_limpo['Valor a lançar'] = pd.to_numeric(df_limpo['Valor a lançar'], errors='coerce')
         cpf_parcelas = df_limpo.groupby('CPF').apply(
-            lambda x: list(zip(x['Prestacao'].round(2), x['Contrato']))
+            lambda x: list(zip(x['Valor a lançar'].round(2), x['Contrato']))
         ).to_dict()
 
         cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict()

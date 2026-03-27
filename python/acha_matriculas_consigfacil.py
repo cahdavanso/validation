@@ -116,6 +116,8 @@ class ACHA_MATRICULA_CONSIGFACIL:
                     front_tratado.loc[indices_para_marcar, 'Metodo_Encontrado'] = 'CPF Inexistente'
                     continue
 
+                print(f'Comprimento CPF em acha_matriculas: {len(cpfs_unicos)}')
+
                 itens_a_combinar = list(front_tratado[front_tratado['CPF'] == cpf][['Prestacao']].itertuples())
                 
                 while itens_a_combinar:
