@@ -313,187 +313,75 @@ class CONSIGFACIL:
     
     
     def andamento_func_front(self, front):
-        # Andamento
+        # 1. VALIDAÇÃO E TRATAMENTO INICIAL (O que vem primeiro)
         if self.andamento is None:
             return front
 
+        # Criamos cópias para evitar SettingWithCopyWarning
+        self.andamento = self.andamento[self.andamento['Prazo Total'] != 1].copy()
+        
+        # Padronização de valores numéricos para os filtros funcionarem
+        if self.andamento['Valor da Parcela'].dtype != 'float64':
+            self.andamento['Valor da Parcela'] = self.andamento['Valor da Parcela'].astype(str)\
+                .str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+            self.andamento['Valor da Parcela'] = pd.to_numeric(self.andamento['Valor da Parcela'], errors='coerce')
 
-        # Primeiro, criamos um dicionário de correspondência
-        # modalidade_dict = andam_file.set_index('Código na instituição')['Modalidade'].to_dict()
-        # prazo_dict = andam_file.set_index('Código na instituição')['Prazo Total'].to_dict()
+        # Filtro de Previdência/Seguros/Mensalidade (Valores 20, 40, 60)
+        # Criamos uma base de referência limpa para o mapeamento de prazos no final
+        andam_referencia_prazos = self.andamento[~(((self.andamento['Modalidade'] == 'Previdência') | (
 
-        self.andamento = self.andamento[self.andamento['Modalidade'] != 'Cartão de Crédito']
+                    self.andamento['Modalidade'] == 'Seguros') | (self.andamento['Modalidade'] == 'Mensalidade'))
 
-        andam_file, front_base = self.processar_contratos_otimizado(self.andamento, front)
+                                                    & ((self.andamento['Valor da Parcela'] <= 20) | (
 
-        andam_file = self.extrair_contratos_com_referencia(andam_file, front)
+                            self.andamento['Valor da Parcela'] == 40)
 
-        # Novamente usar o adiciona_contratos_faltando só que dessa vez para o Contrato Editado 1 que tem celulas vazias
+                                                        | (self.andamento['Valor da Parcela'] == 60)))]
+        
+
+        # Tentando buscar contratos únicos usando CPF e Valor de Parcela (Busca) - Primeira etapa do motor de busca
+        andam_file = self.processar_contrato_simples(andam_referencia_prazos, front)
+
+        # 2. PROCESSAMENTO DE CONTRATOS E REFERÊNCIAS (O motor de busca)
+        # Primeira passada: Busca direta e por grupos de CPF
         andam_file, front_base = self.processar_contratos_otimizado(andam_file, front)
 
-        # andam_file.to_excel(rf'{self.caminho}\ANDAMENTO_TESTE {self.convenio} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        # Segunda etapa: Extração por referência (texto/campos extras)
+        andam_file = self.extrair_contratos_com_referencia(andam_file, front)
 
-        # Função para decidir o valor da nova modalidade
-        def substituir_modalidade():
-            # 1. Identifica todas as colunas com 'Contrato' no nome
-            colunas_contratos = [col for col in andam_file.columns if 'Contrato' in col]
+        # Terceira passada: Tenta encaixar o que sobrou após as referências
+        andam_file, front_base = self.processar_contratos_otimizado(andam_file, front)
 
-            # 2. Cria uma coluna 'Prazo' vazia no Credbase
-            if 'PRAZO' not in front.columns:
-                front['PRAZO'] = None
-
-            # 3. Cria um dicionário auxiliar: contrato → prazo
-            contrato_para_prazo = {}
-
-            if andam_file['Valor da Parcela'].dtype == 'object':
-                andam_file['Valor da Parcela'] = andam_file['Valor da Parcela'].str.replace(".", '')
-                andam_file['Valor da Parcela'] = andam_file['Valor da Parcela'].str.replace(",", '.')
-                andam_file['Valor da Parcela'] = pd.to_numeric(andam_file['Valor da Parcela'], errors='coerce')
-                # print(f'Modalidade e Parcela do Código 407337: {andam_file.loc[andam_file['Código'] == 407337, ['Modalidade', 'Valor da Parcela']]}')
-
-            # 4. Tira casos que são previdencia e igual a 20, 40, 60
-            andam_file_sem_prev_seguro = andam_file[~(((andam_file['Modalidade'] == 'Previdência') | (
-                    andam_file['Modalidade'] == 'Seguros') | (andam_file['Modalidade'] == 'Mensalidade'))
-                                                    & ((andam_file['Valor da Parcela'] <= 20) | (
-                            andam_file['Valor da Parcela'] == 40)
-                                                        | (andam_file['Valor da Parcela'] == 60)))]
-
-            # print(andam_file_sem_prev_seguro['Serviço'].unique())
-
-            '''print(f'Andamento completo: {len(andam_file)}')
-            print(f'Andamento sem previdência: {len(andam_file_sem_prev_seguro)}')'''
-
-            # Para cada linha no arquivo de andamentos, verifica todas as colunas de contrato
-            for _, row in andam_file_sem_prev_seguro.iterrows():
-                prazo = row.get('Prazo Total')  # Pode ser 'Prazo Total' dependendo do nome
+        # 3. EXTRAÇÃO DOS PRAZOS (Por último, com os contratos já preenchidos)
+        
+        # Identifica colunas que agora podem ter contratos (Código na instituição, Contrato de Andamento, etc)
+        colunas_contratos = [col for col in andam_file.columns if 'Contrato' in col or 'Código' in col]
+        
+        # Cria o dicionário contrato -> prazo baseado no que foi preenchido/encontrado
+        contrato_para_prazo = {}
+        for _, row in andam_file.iterrows():
+            prazo = row.get('Prazo Total')
+            if pd.notna(prazo):
+                # Verificamos todas as colunas de contrato da linha para mapear o prazo
                 for col in colunas_contratos:
-                    contrato = row.get(col)
-                    if pd.notna(contrato):
-                        contrato_para_prazo[str(contrato).strip()] = prazo
+                    id_contrato = row.get(col)
+                    if pd.notna(id_contrato):
+                        contrato_para_prazo[str(id_contrato).strip()] = prazo
 
-            print('DEBUG: Dicionário contrato - prazo criado a partir do andamento:')
-            try:
-                andam_file_sem_prev_seguro.to_excel(os.path.join(self.caminho, f"ANDAMENTO GERAL {self.convenio}.xlsx"), index=False)
-            except Exception as e:
-                print(f"DEBUG: ERRO AO SALVAR ANDAMENTO GERAL: {e}")
-
-            # 4. Aplica a busca no Credbase
-            return front['Contrato'].astype(str).str.strip().map(contrato_para_prazo)
-
-        # Aplica a função ao DataFrame front
-        front['PRAZO'] = substituir_modalidade()
-
-        status_andamento = front['PRAZO'].fillna('')
-
-        cond_prazo = ~status_andamento.isin(['', '0', '1', 0, 1])
-
-        # Aplica a condição: se qualquer uma for verdadeira, OBS = 'NÃO'; caso contrário, OBS = ''
+        # Aplica o mapeamento no Front usando os contratos que o processo encontrou
+        front['PRAZO'] = front['Contrato'].astype(str).str.strip().map(contrato_para_prazo)
+        
+        # Regra de Negócio Final: Marcação de OBS
+        status_prazo = front['PRAZO'].fillna('')
+        cond_prazo = ~status_prazo.isin(['', '1', 1])
         front.loc[cond_prazo & (front['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - PRAZO'
 
+        try:
+            andam_file.to_excel(os.path.join(self.caminho, f"ANDAMENTO GERAL {self.convenio}.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR ANDAMENTO GERAL: {e}")
+
         return front
-    
-    def adiciona_contratos_faltando(self, andamento_contratos_faltantes, front_semi, esteira='Código na instituição'):
-        # 1. Preparação do DataFrame B (Front)
-        # Removemos duplicatas de contrato para garantir unicidade real no B
-        front_base = front_semi[['CPF', 'Prestacao', 'Contrato']].drop_duplicates(subset=['Contrato']).copy()
-        
-        # Criamos a contagem de ocorrência para CPF + Valor no Front (B)
-        front_base['id_ocorrencia'] = front_base.groupby(['CPF', 'Prestacao']).cumcount()
-
-        # 2. Preparação do DataFrame A (Andamento)
-        # Criamos a contagem de ocorrência no A também para servir de chave de busca
-        # Importante: A contagem deve ser baseada nas mesmas colunas que usaremos no merge
-        if esteira == 'Código na instituição':
-            contratos_de_andamento = andamento_contratos_faltantes['Código na instituição']
-            andamento_contratos_faltantes.insert(2, "Contrato de Andamento", contratos_de_andamento, True)
-            esteira = "Contrato de Andamento"
-        andamento_contratos_faltantes = andamento_contratos_faltantes.drop_duplicates(subset='Código', keep='first')
-
-        front_base['Contrato'] = front_base['Contrato'].astype(str)
-
-        # 1. Identificamos quais células são puramente numéricas (floats ou ints)
-        # O errors='coerce' transforma textos em NaN (vazio) apenas para esta validação
-
-        print(f'Dtype Contrato de Andamento:\n{andamento_contratos_faltantes[esteira].dtype}')
-        print(f'Dtype Front:\n{front_base['Contrato'].dtype}')
-
-        # 1. Pegamos a lista (ou Series) de contratos que já estão no andamento
-        contratos_ja_existentes = andamento_contratos_faltantes[esteira]
-
-        #Contrato 302009782 existe em contratos já existentes?
-        print(f'Contrato 302009782 existe em contratos_ja_existentes?\n{'302009782' in contratos_ja_existentes}')
-
-        # 2. Filtramos o front_base: "Mantenha apenas onde o Contrato NÃO ESTÁ nos existentes"
-        front_base = front_base[~front_base['Contrato'].isin(contratos_ja_existentes)]
-
-        # Contrato 302009782 existe em front_base?
-        contratos_em_front_base = front_base['Contrato']
-        '''print(f'Contrato 302009782 existe em front_base?\n{'302009782' in contratos_em_front_base}')
-
-        # Quais contratos estão atrelados ao CPF 691.960.954-15 em andamento_contratos_faltantes?
-        print(f'CPF 691.960.954-15 está em andamento_contratos_faltantes?\n{andamento_contratos_faltantes[andamento_contratos_faltantes['CPF'] == '691.960.954-15']}')
-
-        # Quais contratos estão atrelados ao CPF 691.960.954-15 em front_base?
-        print(f'CPF 691.960.954-15 está em front_base?\n{front_base[front_base['CPF'] == '691.960.954-15']}')'''
-
-        if andamento_contratos_faltantes['Valor da Parcela'].dtype != 'float64':
-            andamento_contratos_faltantes['Valor da Parcela'] = andamento_contratos_faltantes['Valor da Parcela'].astype(str).str.replace(".", "")
-            andamento_contratos_faltantes['Valor da Parcela'] = andamento_contratos_faltantes['Valor da Parcela'].astype(str).str.replace(",", ".")
-            andamento_contratos_faltantes['Valor da Parcela'] = pd.to_numeric(andamento_contratos_faltantes['Valor da Parcela'], errors='coerce')
-        andamento_contratos_faltantes['id_ocorrencia'] = andamento_contratos_faltantes.groupby(['CPF', 'Valor da Parcela']).cumcount()
-
-
-        # --- LÓGICA DE MERGE ---
-
-        # Função auxiliar para evitar repetição de código nos 3 cenários (+0, +20, +40)
-        def executa_merge_ajustado(df_alvo, df_fonte, valor_ajuste=0):
-            df_fonte_temp = df_fonte.copy()
-            if valor_ajuste != 0:
-                df_fonte_temp['Prestacao'] = df_fonte_temp['Prestacao'] + valor_ajuste
-            
-            # Merge considerando CPF, Valor E o ID da ocorrência
-            res = df_alvo.merge(
-                df_fonte_temp,
-                left_on=['CPF', 'Valor da Parcela', 'id_ocorrencia'],
-                right_on=['CPF', 'Prestacao', 'id_ocorrencia'],
-                how='left',
-                suffixes=('', f'_{valor_ajuste}')
-            )
-            
-            # Preenche o código e limpa colunas temporárias
-            res[esteira] = res[esteira].fillna(res['Contrato'])
-            return res.drop(columns=['Prestacao', 'Contrato'], errors='ignore')
-
-        # Execução dos 3 cenários
-        # Cenário 1: Valor Exato
-        andamento_contratos_faltantes = executa_merge_ajustado(andamento_contratos_faltantes, front_base, 0)
-        
-        # Cenário 2: +20 reais
-        andamento_contratos_faltantes = executa_merge_ajustado(andamento_contratos_faltantes, front_base, 20)
-        
-        # Cenário 3: +40 reais
-        andamento_contratos_faltantes = executa_merge_ajustado(andamento_contratos_faltantes, front_base, 40)
-
-        # Limpeza final
-        if 'id_ocorrencia' in andamento_contratos_faltantes.columns:
-            andamento_contratos_faltantes.drop(columns=['id_ocorrencia'], inplace=True)
-
-        # 1. Identificamos o que é numérico
-        mask_numerico = pd.to_numeric(andamento_contratos_faltantes[esteira], errors='coerce').notna()
-
-        # 2. Convertemos apenas as linhas da máscara
-        if mask_numerico.any():
-            # Convertemos para float, arredondamos para evitar 123.0000004 e transformamos em int
-            valores_convertidos = (
-                pd.to_numeric(andamento_contratos_faltantes.loc[mask_numerico, esteira])
-                .round(0)          # Garante que 123.0 vire 123
-                .astype(np.int64)  # Usa o int do numpy que é mais direto
-                .astype(str)       # Transforma em texto para remover o .0 definitivo
-            )
-            
-            andamento_contratos_faltantes.loc[mask_numerico, esteira] = valores_convertidos
-            
-        return andamento_contratos_faltantes, front_base
     
 
     def busca_greedy_backtracking(self, alvo, itens, max_contratos=5):
@@ -540,6 +428,85 @@ class CONSIGFACIL:
         if buscar(0, alvo_int, []):
             return "/".join(map(str, solucao[0]))
         return None
+    
+    def processar_contrato_simples(self, df_andamento, df_front):
+        # Fazer concat de CPF e Valor de Parcela em andamento para preencher linhas vazias de Contrato de Andamento
+        # e procurar contratos no front usando CPF e Prestacao
+
+        # df_andamento_original = df_andamento.copy()
+
+        df_andamento = df_andamento.drop_duplicates(subset=['Código']).copy()
+
+        for df in [df_andamento, df_front]:
+
+            df['CPF'] = df['CPF'].astype(str).str.strip()
+
+        df_front['Contrato'] = df_front['Contrato'].astype(str)
+        df_front['Valor a lançar com peculio'] = df_front['Valor a lançar']
+        # df_front.loc[df_front['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA', 'Valor a lançar com peculio'] += 20
+
+        if df_andamento['Valor da Parcela'].dtype != 'float64':
+
+            df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(str).str.replace(".", "")
+
+            df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(str).str.replace(",", ".")
+
+            df_andamento['Valor da Parcela'] = pd.to_numeric(df_andamento['Valor da Parcela'], errors='coerce')
+
+        df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(float).round(2)
+
+
+
+        if df_front['Valor a lançar com peculio'].dtype != 'float64':
+
+            df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(str).str.replace(".", "")
+
+            df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(str).str.replace(",", ".")
+
+            df_front['Valor a lançar com peculio'] = pd.to_numeric(df_front['Valor a lançar com peculio'], errors='coerce')
+
+        df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(float).round(2)
+
+        if 'Contrato de Andamento' not in df_andamento.columns:
+            df_andamento.insert(2, 'Contrato de Andamento', '', True)
+
+        # 1. Padronização rápida (Removendo o que não é número do CPF)
+        df_andamento['CPF_Limpo'] = df_andamento['CPF'].astype(str).str.replace(r'\D', '', regex=True)
+        df_front['CPF_Limpo'] = df_front['CPF'].astype(str).str.replace(r'\D', '', regex=True)
+        
+        # 2. Identificar coluna de destino
+        col_destino = 'Contrato de Andamento'
+        
+        # 3. Filtrar o que está disponível (Front que não está no Andamento)
+        ocupados = df_andamento['Código na instituição'].dropna().unique()
+        df_front_dispo = df_front[~df_front['Contrato'].isin(ocupados)].copy()
+        
+        # 4. Criar a chave de busca (CPF + Valor)
+        # Usar f-string ou concatenação direta para velocidade
+        df_front_dispo['Chave'] = df_front_dispo['CPF_Limpo'] + "_" + df_front_dispo['Valor a lançar com peculio'].astype(str)
+        
+        # Criar um dicionário de listas: { 'CPF_Valor': [contrato1, contrato2] }
+        # Isso é MUITO mais rápido que fazer filtro de DataFrame dentro de um loop
+        dict_front = {}
+        for _, row in df_front_dispo.iterrows():
+            chave = row['Chave']
+            if chave not in dict_front:
+                dict_front[chave] = []
+            dict_front[chave].append(row['Contrato'])
+
+        # 5. Executar a busca nas linhas vazias
+        vazios = df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")].copy()
+        
+        for idx, row in vazios.iterrows():
+            chave_busca = row['CPF_Limpo'] + "_" + str(round(float(row['Valor da Parcela']), 2))
+            
+            # Se a combinação CPF + Valor existe no dicionário do front
+            if chave_busca in dict_front and len(dict_front[chave_busca]) > 0:
+                # Pega o primeiro contrato disponível e remove da lista (para não repetir)
+                contrato_encontrado = dict_front[chave_busca].pop(0)
+                df_andamento.at[idx, col_destino] = contrato_encontrado
+
+        return df_andamento
 
     def processar_contratos_otimizado(self, df_andamento, df_front):
         # --- Padronização ---
@@ -576,7 +543,7 @@ class CONSIGFACIL:
 
         contratos_usados = set()
 
-        if 'Contrato de Andamento' not in df_andamento_original:
+        if 'Contrato de Andamento' not in df_andamento_original.columns:
             vazios = df_andamento[df_andamento['Contrato de Andamento'].isna() | (df_andamento['Contrato de Andamento'] == "")]
             print(f'Comprimento de vazios Contrato de Andamento:{len(vazios)}')
         else:
