@@ -50,7 +50,7 @@ class ZETRA:
                                "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "10.7 CONTRATO NA\x83O AVERBADO - AGUARDANDO RESOLUA\x87A\x83O", "11 FORMALIZAAÂ‡AÂƒO",
                                "10.5 AGUARDANDO AVERBACAO COMPRA OUTROS CONVENIOS", "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "07.2 TED DEVOLVIDA AÂ\x80Â\x93 PAGAMENTO AO CLIENTE",
                                "RISCO DA OPERAAÂ\x87AÂ\x82O-DEMAIS SITUAAÂ\x87AÂ\x95ES", "10.7 CONTRATO NAÂ\x83O AVERBADO - AGUARDANDO RESOLUAÂ\x87AÂ\x83O", "RISCO DA OPERACAO - DEMAIS SITUACOES",
-                               "15.0 RISCO DA OPERACAO - DEMAIS SITUACOES"
+                               "15.0 RISCO DA OPERACAO - DEMAIS SITUACOES", "POS VENDA", "INTEGRADO"
                               ]
 
         # --- TABELA DE CONFIGURAÇÃO (Baseada na sua imagem) ---
@@ -466,7 +466,7 @@ class ZETRA:
 
             # --- MUDANÇA: LIMIAR ALTO ---
             # Agora podemos exigir quase perfeição porque mudamos o método de comparação
-            LIMIAR_SEGURO = 90
+            LIMIAR_SEGURO = 70
 
             for parte in partes_sujas:
                 parte_limpa = limpar_contrato(parte)
@@ -674,8 +674,18 @@ class ZETRA:
         print(f'data depois de separar as colunas:\n{data_averbados_bruto.columns}')
         print(f'Colunas de data:\n{data_averbados_bruto.columns}')
         # Tentando remover .0 do final dos contratos
-        mask_ponto_zero = data_averbados_bruto['Id. ADE'].dtype == 'float64'
-        data_averbados_bruto.loc[mask_ponto_zero, 'Id. ADE'] = data_averbados_bruto.loc[mask_ponto_zero, 'Id. ADE'].astype('Int64')
+        # 1. Verifica se a COLUNA é do tipo float
+        # 1. Tenta converter tudo para número. 
+        # O que for texto ("parcial_...") vira NaN temporariamente nesta série auxiliar
+        numeros_convertidos = pd.to_numeric(data_averbados_bruto['Id. ADE'], errors='coerce')
+
+        # 2. Criamos a máscara: apenas onde a conversão funcionou (não é nulo)
+        mask_numerica = numeros_convertidos.notna()
+
+        # 3. Aplicamos a conversão apenas nessas linhas
+        # Usamos o numeros_convertidos para garantir que o ".0" suma ao virar Int64
+        data_averbados_bruto.loc[mask_numerica, 'Id. ADE'] = \
+            numeros_convertidos[mask_numerica].astype('Int64')
 
         # Vou tentar colocar a coluna de Orbital aqui no meio mesmo
         if orbital_tratado is not None:
@@ -1024,13 +1034,13 @@ class ZETRA:
         codigo_desconto_dict = {"PREF. AÇAILÂNDIA": "382", "GOV. RIO DE JANEIRO": "4541CARTAO DE CREDITO I", "IGEPREV CAPITAL": "04072",
                                 "IGEPREV CIASPREV": "02470", "PREF. PIRACICABA": "5600", "PREF. PIRACICABA - SEMAE": "675",
                                 "PREV. PIRACICABA": "6277", "PREF. BELO HORIZONTE CB": "204U", "PREF. BELO HORIZONTE CC": "204V",
-                                "PREF. MACAE": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894", "PREF. CAMPINAS": "011",
+                                "PREF. MACAÉ": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894", "PREF. CAMPINAS": "011",
                                 "GOV. PARANÁ": "5408"}
 
         estab_dict = {"PREF. AÇAILÂNDIA": "001", "IGEPREV CAPITAL": "001", "IGEPREV CIASPREV": "001",
                       "PREF. PIRACICABA": "001", "PREF. PIRACICABA - SEMAE": "002", "PREF. CAMPINAS": "",
                       "PREV. PIRACICABA": "001", "PREF. BELO HORIZONTE CB": "001", "PREF. BELO HORIZONTE CC": "001",
-                      "PREF. MACAE": "001", "PREVIPALMAS CAPITAL": "001", "PREVIPALMAS CIASPREV": "001",
+                      "PREF. MACAÉ": "001", "PREVIPALMAS CAPITAL": "001", "PREVIPALMAS CIASPREV": "001",
                       "GOV. PARANÁ": "002"}
 
         emp_dict_gov_rj = {"ADMINISTRAÇÃO DIRETA (GOVERNO ESTADO)": "01",
@@ -1198,7 +1208,7 @@ class ZETRA:
         estab = self.format_number(df['ESTABELECIMENTO'], regras['EST']) if not self.convenio in ['PREF. CAMPINAS', 'GOV. PARANÁ'] else ''
         id_orgao = self.format_id_orgao(df['Id. órgão'], regras['ID_ORG']) if self.convenio == 'GOV. PARANÁ' else ''
         orgao = self.format_number(df['ÓRGÃO'], regras['ORG']) if not self.convenio == 'GOV. PARANÁ' else '' 
-        cod_desc = self.format_number(df['CÓDIGO DE DESCONTO'], regras['COD']) if not self.convenio in ['GOV. RIO DE JANEIRO', 'PREF. MACAE'] else self.format_text(df['CÓDIGO DE DESCONTO'], regras['COD'])
+        cod_desc = self.format_number(df['CÓDIGO DE DESCONTO'], regras['COD']) if not self.convenio in ['GOV. RIO DE JANEIRO', 'PREF. MACAÉ'] else self.format_text(df['CÓDIGO DE DESCONTO'], regras['COD'])
         valor = self.format_currency(df['Lançar'], regras['VAL'])
 
         # Campos calculados na hora (Data e Constantes)

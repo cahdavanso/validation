@@ -56,7 +56,8 @@ class CONSIGFACIL:
         self.conciliacao.rename(columns={'PRESTAÇÃO ORIGINAL': 'PRESTAÇÃO'}, inplace=True)
         self.conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
         self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
-                                         'PRODUTO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO'}, inplace=True)
+                                         'PRODUTO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO',
+                                         'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
         
         # 5. Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
@@ -91,7 +92,7 @@ class CONSIGFACIL:
                                "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
                                "07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES",
                                "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "RISCO DA OPERACAO - DEMAIS SITUACOES", "RISCO DA OPERACAO - DEMAIS SITUACOEES",
-                               "15.0 RISCO DA OPERACAO - DEMAIS SITUACOES"
+                               "15.0 RISCO DA OPERACAO - DEMAIS SITUACOES", "07.0 QUITACAO  ENVIO DE CESSAO", "10.7.0 INGRESSAR COM PROCESSO OU AA\x87A\x83O JURIDICO"
                               ]
         
         
@@ -138,6 +139,12 @@ class CONSIGFACIL:
         # Marca tudo que é orbital
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
+        # Marcar liquidados em StatusContrato
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
+
+        # TIRAR BANCO OUTROS
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'
+
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
 
@@ -146,21 +153,18 @@ class CONSIGFACIL:
         mask_vazio_prazo = front_consig_validado_termino['PRAZO'].isna() | (front_consig_validado_termino['PRAZO'] == '') | (front_consig_validado_termino['PRAZO'] == 1) | (front_consig_validado_termino['PRAZO'] == 0)
 
         # 2. Quem NÃO tem prazo (vazio) -> É Cartão
-        front_consig_validado_termino.loc[mask_vazio_prazo, 'Tipo Operacao'] = 'CARTAO DE CREDITO'
+        front_consig_validado_termino.insert(22, 'Novo Tipo Operacao', '', True)
+        front_consig_validado_termino['Novo Tipo Operacao'] = front_consig_validado_termino['Tipo Operacao'].copy()
+        front_consig_validado_termino.loc[mask_vazio_prazo, 'Novo Tipo Operacao'] = 'CARTAO DE CREDITO'
 
         # 3. Quem TEM prazo (não vazio) -> NÃO é cartão (ex: Empréstimo ou Operação Comum)
         # Usamos o ~ dentro do .loc para inverter a máscara
-        front_consig_validado_termino.loc[~mask_vazio_prazo, 'Tipo Operacao'] = 'CARTAO BENEFICIO' # Ou o nome que desejar
+        '''if self.convenio not in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE', 'PREF. PORTO VELHO']:
+            front_consig_validado_termino.loc[~mask_vazio_prazo, 'Novo Tipo Operacao'] = "CARTAO BENEFICIO"''' # Ou o nome que desejar
 
         # Marcar o que não é cartão Conciliação
-        front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        front_consig_validado_termino.loc[(~front_consig_validado_termino['Novo Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
 
-
-        # Marcar liquidados em StatusContrato
-        front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
-
-        # TIRAR BANCO OUTROS
-        front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'
 
         # Salva com os NÃO LANÇAR
         # Dentro do seu validador (ex: python/Consigfacil.py)
@@ -182,7 +186,7 @@ class CONSIGFACIL:
             return False
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
+        front_consig_cartao_conciliacao = front_consig[front_consig['Novo Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -207,6 +211,7 @@ class CONSIGFACIL:
         # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
         mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA'
         front_consig_trabalhado.loc[mask_peculio, 'Valor a lançar'] += 20
+        front_consig_trabalhado.loc[mask_peculio, 'Prestacao'] += 20
 
         # -------------------------------------- TIRA O PRAZO ----------------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['OBS'].str.contains('NÃO LANÇAR - PRAZO', na=False)].copy()
@@ -215,7 +220,7 @@ class CONSIGFACIL:
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Consignataria'].str.contains('OUTROS', na=False)].copy()
 
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado', na=False)].copy()
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado|CANCELADO', na=False)].copy()
 
         print('DEBUG: Esteiras finais do front trabalhado')
         try:
@@ -313,9 +318,21 @@ class CONSIGFACIL:
     
     
     def andamento_func_front(self, front):
-        # 1. VALIDAÇÃO E TRATAMENTO INICIAL (O que vem primeiro)
+        # 1. VALIDAÇÃO E TRATAMENTO INICIAL
         if self.andamento is None:
             return front
+
+        # --- NOVO FILTRO DE OBS ---
+        # Separamos o que já tem OBS (não mexe) do que está vazio (será processado)
+        # Garantimos que tratamos NaN como string vazia para o filtro funcionar
+        front['OBS'] = front['OBS'].fillna('')
+        front_preenchido = front[front['OBS'] != ''].copy()
+        front_para_processar = front[front['OBS'] == ''].copy()
+
+        # Se não houver nada para processar, já retorna o original
+        if front_para_processar.empty:
+            return front
+        # --------------------------
 
         # Criamos cópias para evitar SettingWithCopyWarning
         self.andamento = self.andamento[self.andamento['Prazo Total'] != 1].copy()
@@ -327,61 +344,53 @@ class CONSIGFACIL:
             self.andamento['Valor da Parcela'] = pd.to_numeric(self.andamento['Valor da Parcela'], errors='coerce')
 
         # Filtro de Previdência/Seguros/Mensalidade (Valores 20, 40, 60)
-        # Criamos uma base de referência limpa para o mapeamento de prazos no final
-        andam_referencia_prazos = self.andamento[~(((self.andamento['Modalidade'] == 'Previdência') | (
+        andam_referencia_prazos = self.andamento[~(((self.andamento['Modalidade'] == 'Previdência') | 
+                                                    (self.andamento['Modalidade'] == 'Seguros') | 
+                                                    (self.andamento['Modalidade'] == 'Mensalidade')) 
+                                                & ((self.andamento['Valor da Parcela'] <= 20) | 
+                                                    (self.andamento['Valor da Parcela'] == 40) | 
+                                                    (self.andamento['Valor da Parcela'] == 60)))].copy()
 
-                    self.andamento['Modalidade'] == 'Seguros') | (self.andamento['Modalidade'] == 'Mensalidade'))
+        # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
+        andam_file, front_base = self.processar_contratos_otimizado(andam_referencia_prazos, front_para_processar)
+        andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
 
-                                                    & ((self.andamento['Valor da Parcela'] <= 20) | (
+        # Terceira passada
+        andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
 
-                            self.andamento['Valor da Parcela'] == 40)
-
-                                                        | (self.andamento['Valor da Parcela'] == 60)))]
-        
-
-        # Tentando buscar contratos únicos usando CPF e Valor de Parcela (Busca) - Primeira etapa do motor de busca
-        andam_file = self.processar_contrato_simples(andam_referencia_prazos, front)
-
-        # 2. PROCESSAMENTO DE CONTRATOS E REFERÊNCIAS (O motor de busca)
-        # Primeira passada: Busca direta e por grupos de CPF
-        andam_file, front_base = self.processar_contratos_otimizado(andam_file, front)
-
-        # Segunda etapa: Extração por referência (texto/campos extras)
-        andam_file = self.extrair_contratos_com_referencia(andam_file, front)
-
-        # Terceira passada: Tenta encaixar o que sobrou após as referências
-        andam_file, front_base = self.processar_contratos_otimizado(andam_file, front)
-
-        # 3. EXTRAÇÃO DOS PRAZOS (Por último, com os contratos já preenchidos)
-        
-        # Identifica colunas que agora podem ter contratos (Código na instituição, Contrato de Andamento, etc)
+        # 3. EXTRAÇÃO DOS PRAZOS
         colunas_contratos = [col for col in andam_file.columns if 'Contrato' in col or 'Código' in col]
         
-        # Cria o dicionário contrato -> prazo baseado no que foi preenchido/encontrado
         contrato_para_prazo = {}
         for _, row in andam_file.iterrows():
             prazo = row.get('Prazo Total')
             if pd.notna(prazo):
-                # Verificamos todas as colunas de contrato da linha para mapear o prazo
                 for col in colunas_contratos:
                     id_contrato = row.get(col)
                     if pd.notna(id_contrato):
                         contrato_para_prazo[str(id_contrato).strip()] = prazo
 
-        # Aplica o mapeamento no Front usando os contratos que o processo encontrou
-        front['PRAZO'] = front['Contrato'].astype(str).str.strip().map(contrato_para_prazo)
+        # Aplica o mapeamento APENAS no que foi processado
+        front_para_processar['PRAZO'] = front_para_processar['Contrato'].astype(str).str.strip().map(contrato_para_prazo)
         
         # Regra de Negócio Final: Marcação de OBS
-        status_prazo = front['PRAZO'].fillna('')
-        cond_prazo = ~status_prazo.isin(['', '1', 1])
-        front.loc[cond_prazo & (front['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - PRAZO'
+        status_prazo = front_para_processar['PRAZO'].fillna('')
+        if self.convenio in ['PREF. NATAL', 'PREF. PALMAS', 'PREV. PALMAS']:
+            cond_prazo = ~status_prazo.isin(['', '0', 0,'1', 1])
+        else:
+            cond_prazo = ~status_prazo.isin(['', '1', 1])
+        front_para_processar.loc[cond_prazo & (front_para_processar['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - PRAZO'
+
+        # --- FINALIZAÇÃO ---
+        # Unimos o que filtramos no início com o que acabamos de processar
+        front_final = pd.concat([front_preenchido, front_para_processar], ignore_index=True)
 
         try:
             andam_file.to_excel(os.path.join(self.caminho, f"ANDAMENTO GERAL {self.convenio}.xlsx"), index=False)
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR ANDAMENTO GERAL: {e}")
 
-        return front
+        return front_final
     
 
     def busca_greedy_backtracking(self, alvo, itens, max_contratos=5):
@@ -442,8 +451,6 @@ class CONSIGFACIL:
             df['CPF'] = df['CPF'].astype(str).str.strip()
 
         df_front['Contrato'] = df_front['Contrato'].astype(str)
-        df_front['Valor a lançar com peculio'] = df_front['Valor a lançar']
-        # df_front.loc[df_front['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA', 'Valor a lançar com peculio'] += 20
 
         if df_andamento['Valor da Parcela'].dtype != 'float64':
 
@@ -457,25 +464,29 @@ class CONSIGFACIL:
 
 
 
-        if df_front['Valor a lançar com peculio'].dtype != 'float64':
+        if df_front['Prestacao'].dtype != 'float64':
 
-            df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(str).str.replace(".", "")
+            df_front['Prestacao'] = df_front['Prestacao'].astype(str).str.replace(".", "")
 
-            df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(str).str.replace(",", ".")
+            df_front['Prestacao'] = df_front['Prestacao'].astype(str).str.replace(",", ".")
 
-            df_front['Valor a lançar com peculio'] = pd.to_numeric(df_front['Valor a lançar com peculio'], errors='coerce')
+            df_front['Prestacao'] = pd.to_numeric(df_front['Prestacao'], errors='coerce')
 
-        df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(float).round(2)
+        df_front['Prestacao'] = df_front['Prestacao'].astype(float).round(2)
 
         if 'Contrato de Andamento' not in df_andamento.columns:
             df_andamento.insert(2, 'Contrato de Andamento', '', True)
+            df_andamento['Contrato de Andamento'] = df_andamento['Código na instituição']
 
         # 1. Padronização rápida (Removendo o que não é número do CPF)
         df_andamento['CPF_Limpo'] = df_andamento['CPF'].astype(str).str.replace(r'\D', '', regex=True)
         df_front['CPF_Limpo'] = df_front['CPF'].astype(str).str.replace(r'\D', '', regex=True)
         
         # 2. Identificar coluna de destino
-        col_destino = 'Contrato de Andamento'
+        if 'Contrato Editado 1' not in df_andamento.columns:
+            col_destino = 'Contrato de Andamento'
+        else:
+            col_destino = 'Contrato Editado 1'
         
         # 3. Filtrar o que está disponível (Front que não está no Andamento)
         ocupados = df_andamento['Código na instituição'].dropna().unique()
@@ -483,7 +494,7 @@ class CONSIGFACIL:
         
         # 4. Criar a chave de busca (CPF + Valor)
         # Usar f-string ou concatenação direta para velocidade
-        df_front_dispo['Chave'] = df_front_dispo['CPF_Limpo'] + "_" + df_front_dispo['Valor a lançar com peculio'].astype(str)
+        df_front_dispo['Chave'] = df_front_dispo['CPF_Limpo'] + "_" + df_front_dispo['Prestacao'].astype(str)
         
         # Criar um dicionário de listas: { 'CPF_Valor': [contrato1, contrato2] }
         # Isso é MUITO mais rápido que fazer filtro de DataFrame dentro de um loop
@@ -506,7 +517,9 @@ class CONSIGFACIL:
                 contrato_encontrado = dict_front[chave_busca].pop(0)
                 df_andamento.at[idx, col_destino] = contrato_encontrado
 
-        return df_andamento
+        print(f'Quantos vazios sobraram após busca simples? {df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")].shape[0]}')
+
+        return df_andamento.fillna('')
 
     def processar_contratos_otimizado(self, df_andamento, df_front):
         # --- Padronização ---
@@ -516,10 +529,6 @@ class CONSIGFACIL:
             df['CPF'] = df['CPF'].astype(str).str.strip()
 
         df_front['Contrato'] = df_front['Contrato'].astype(str)
-
-        df_front['Valor a lançar com peculio'] = df_front['Valor a lançar']
-
-        # df_front.loc[df_front['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA', 'Valor a lançar com peculio'] += 20
         
         if df_andamento['Valor da Parcela'].dtype != 'float64':
             df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(str).str.replace(".", "")
@@ -527,23 +536,64 @@ class CONSIGFACIL:
             df_andamento['Valor da Parcela'] = pd.to_numeric(df_andamento['Valor da Parcela'], errors='coerce')
         df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(float).round(2)
 
-        if df_front['Valor a lançar com peculio'].dtype != 'float64':
-            df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(str).str.replace(".", "")
-            df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(str).str.replace(",", ".")
-            df_front['Valor a lançar com peculio'] = pd.to_numeric(df_front['Valor a lançar com peculio'], errors='coerce')
-        df_front['Valor a lançar com peculio'] = df_front['Valor a lançar com peculio'].astype(float).round(2)
+        if df_front['Prestacao'].dtype != 'float64':
+            df_front['Prestacao'] = df_front['Prestacao'].astype(str).str.replace(".", "")
+            df_front['Prestacao'] = df_front['Prestacao'].astype(str).str.replace(",", ".")
+            df_front['Prestacao'] = pd.to_numeric(df_front['Prestacao'], errors='coerce')
+        df_front['Prestacao'] = df_front['Prestacao'].astype(float).round(2)
 
-        if 'Contrato de Andamento' not in df_andamento_original.columns:
+        if 'Contrato de Andamento' not in df_andamento.columns:
             df_andamento.insert(2, 'Contrato de Andamento', '', True)
             df_andamento['Contrato de Andamento'] = df_andamento['Código na instituição']
         
-        # Contratos que já vieram preenchidos são removidos do front
+        # 2. Identificar coluna de destino
+        if 'Contrato Editado 1' not in df_andamento.columns:
+            col_destino = 'Contrato de Andamento'
+        else:
+            col_destino = 'Contrato Editado 1'
+        
+        # 3. Filtrar o que está disponível (Front que não está no Andamento)
         ocupados = df_andamento['Código na instituição'].dropna().unique()
         df_front_dispo = df_front[~df_front['Contrato'].isin(ocupados)].copy()
+        
+        # 4. Criar a chave de busca (CPF + Valor)
+        # Usar f-string ou concatenação direta para velocidade
+        df_front_dispo['Chave'] = df_front_dispo['CPF'] + "_" + df_front_dispo['Prestacao'].astype(str)
+        
+        # Criar um dicionário de listas: { 'CPF_Valor': [contrato1, contrato2] }
+        # Isso é MUITO mais rápido que fazer filtro de DataFrame dentro de um loop
+        dict_front = {}
+        for _, row in df_front_dispo.iterrows():
+            chave = row['Chave']
+            if chave not in dict_front:
+                dict_front[chave] = []
+            dict_front[chave].append(row['Contrato'])
+
+        # 5. Executar a busca nas linhas vazias
+        vazios = df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")].copy()
+
+        # Garante que a coluna de destino aceite strings/texto
+        df_andamento[col_destino] = df_andamento[col_destino].astype(object)
+        
+        for idx, row in vazios.iterrows():
+            chave_busca = row['CPF'] + "_" + str(round(float(row['Valor da Parcela']), 2))
+            
+            # Se a combinação CPF + Valor existe no dicionário do front
+            if chave_busca in dict_front and len(dict_front[chave_busca]) > 0:
+                # Pega o primeiro contrato disponível e remove da lista (para não repetir)
+                contrato_encontrado = dict_front[chave_busca].pop(0)
+                df_andamento.at[idx, col_destino] = contrato_encontrado
+
+        print(f'Quantos vazios sobraram após busca simples? {df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")].shape[0]}')
+ 
+        
+        # Contratos que já vieram preenchidos são removidos do front
+        '''ocupados = df_andamento['Código na instituição'].dropna().unique()
+        df_front_dispo = df_front[~df_front['Contrato'].isin(ocupados)].copy()'''
 
         contratos_usados = set()
 
-        if 'Contrato de Andamento' not in df_andamento_original.columns:
+        if 'Contrato Editado 1' not in df_andamento_original.columns:
             vazios = df_andamento[df_andamento['Contrato de Andamento'].isna() | (df_andamento['Contrato de Andamento'] == "")]
             print(f'Comprimento de vazios Contrato de Andamento:{len(vazios)}')
         else:
@@ -560,7 +610,7 @@ class CONSIGFACIL:
                 
                 # Ver o que o código achou no Front para ele
                 possibilidades = df_front_dispo[df_front_dispo['CPF'] == cpf]
-                print(f"Possibilidades no Front:\n{possibilidades[['Contrato', 'Valor a lançar com peculio']]}")
+                print(f"Possibilidades no Front:\n{possibilidades[['Contrato', 'Prestacao']]}")
 
             soma_andamento = grupo['Valor da Parcela'].sum()
             
@@ -572,7 +622,7 @@ class CONSIGFACIL:
             if possibilidades.empty: 
                 continue
             
-            lista_itens_front = list(possibilidades[['Contrato', 'Valor a lançar com peculio']].itertuples(index=False, name=None))
+            lista_itens_front = list(possibilidades[['Contrato', 'Prestacao']].itertuples(index=False, name=None))
             
             alvo_final = round(soma_andamento, 2)
 
@@ -591,7 +641,7 @@ class CONSIGFACIL:
 
         # --- ETAPA RESIDUAL: Tenta preencher o que sobrou linha a linha (Lógica anterior) ---
         # Recalculamos os vazios após o processamento por grupo
-        if 'Contrato de Andamento' not in df_andamento_original.columns:
+        if 'Contrato Editado 1' not in df_andamento_original.columns:
             vazios_restantes = df_andamento[df_andamento['Contrato de Andamento'].isna() | (df_andamento['Contrato de Andamento'] == "")]
         else:
             vazios_restantes = df_andamento[df_andamento['Contrato Editado 1'].isna() | (df_andamento['Contrato Editado 1'] == "")]
@@ -606,12 +656,12 @@ class CONSIGFACIL:
             ]
             
             if possibilidades.empty: continue
-            lista_itens = list(possibilidades[['Contrato', 'Valor a lançar com peculio']].itertuples(index=False, name=None))
+            lista_itens = list(possibilidades[['Contrato', 'Prestacao']].itertuples(index=False, name=None))
             
             alvo_final = round(valor, 2)
             resultado = self.busca_greedy_backtracking(alvo_final, lista_itens)
             if resultado:
-                if 'Contrato de Andamento' not in df_andamento_original.columns:
+                if 'Contrato Editado 1' not in df_andamento_original.columns:
                     df_andamento.at[idx, 'Contrato de Andamento'] = resultado
                 else:
                     df_andamento.at[idx, 'Contrato Editado 1'] = resultado
@@ -636,12 +686,12 @@ class CONSIGFACIL:
         
         # Novo Mapa para Parcela (Melhoria 1)
         # Criamos um dicionário onde a chave é o CPF e o valor é uma lista de tuplas (Valor, Contrato)
-        if df_limpo['Valor a lançar'].dtype != 'float64':
-            df_limpo['Valor a lançar'] = df_limpo['Valor a lançar'].astype(str).str.replace(".", "")
-            df_limpo['Valor a lançar'] = df_limpo['Valor a lançar'].astype(str).str.replace(",", ".")
-            df_limpo['Valor a lançar'] = pd.to_numeric(df_limpo['Valor a lançar'], errors='coerce')
+        if df_limpo['Prestacao'].dtype != 'float64':
+            df_limpo['Prestacao'] = df_limpo['Prestacao'].astype(str).str.replace(".", "")
+            df_limpo['Prestacao'] = df_limpo['Prestacao'].astype(str).str.replace(",", ".")
+            df_limpo['Prestacao'] = pd.to_numeric(df_limpo['Prestacao'], errors='coerce')
         cpf_parcelas = df_limpo.groupby('CPF').apply(
-            lambda x: list(zip(x['Valor a lançar'].round(2), x['Contrato']))
+            lambda x: list(zip(x['Prestacao'].round(2), x['Contrato']))
         ).to_dict()
 
         cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict()
@@ -706,6 +756,16 @@ class CONSIGFACIL:
                                 melhor_match_para_parte = contrato_valido
 
                 if melhor_match_para_parte:
+                    # --- NOVA TRAVA DE SEGURANÇA ---
+                    # Verifica se o contrato encontrado por texto bate com o valor da parcela da linha
+                    possiveis_contratos_pelo_valor = [c for v, c in cpf_parcelas.get(cpf, []) if v == valor_parcela_suja]
+                    
+                    # Se o valor da parcela não bater com o contrato encontrado pelo texto, 
+                    # e existir um contrato que bate com o valor, trocamos!
+                    if melhor_match_para_parte not in possiveis_contratos_pelo_valor and possiveis_contratos_pelo_valor:
+                        melhor_match_para_parte = possiveis_contratos_pelo_valor[0]
+                    # -------------------------------
+
                     encontrados_nesta_linha.append(melhor_match_para_parte)
                     if melhor_match_para_parte in contratos_disponiveis:
                         idx = contratos_disponiveis.index(melhor_match_para_parte)
@@ -723,6 +783,7 @@ class CONSIGFACIL:
         lista_de_contratos_encontrados = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
 
         df_contratos_novos = pd.DataFrame(lista_de_contratos_encontrados.tolist(), index=df_sujo.index)
+
         novas_colunas = [f'Contrato Editado {i + 1}' for i in df_contratos_novos.columns]
         df_contratos_novos.columns = novas_colunas
 
@@ -780,8 +841,8 @@ class CONSIGFACIL:
             print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
         
-        if self.convenio in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE']:
-            averbados = averbados[averbados['Modalidade'].isin(['Cartão de Crédito', 'Cartão Benefício (Compras)', 'Cartão Benefício'])]
+        if self.convenio in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE', 'PREF. PORTO VELHO', 'PREF. NATAL']:
+            averbados = averbados[averbados['Modalidade'].isin(['Cartão de Crédito', 'Cartão Benefício (Compras)', 'Cartão Benefício', 'Cartão Benefício(96)', 'Cartão Benefício Compra'])]
         else:
             averbados = averbados[averbados['Modalidade'] == 'Cartão de Crédito']
 
@@ -840,14 +901,15 @@ class CONSIGFACIL:
         
          # Transforma matricula de averbados em inteiro
         try:
-            averbado_novo['Matrícula'] = averbado_novo['Matrícula'].astype('int64')
+            averbado_novo['Matrícula'] = averbado_novo['Matrícula'].astype(str)
         except Exception as e:
             averbado_novo['Matrícula'] = pd.to_numeric(averbado_novo['Matrícula'].astype('int64'), errors='coerce')
 
 
         # SOMASE
         # Apenas remove o ".0" das matrículas que são números, mantendo os textos
-        front_preliminar['MATRICULA_ENCONTRADA_1'] = pd.to_numeric(front_preliminar['MATRICULA_ENCONTRADA_1'], errors='coerce').astype('Int64')
+        # front_preliminar['MATRICULA_ENCONTRADA_1'] = pd.to_numeric(front_preliminar['MATRICULA_ENCONTRADA_1'], errors='coerce').astype('Int64')
+        front_preliminar['MATRICULA_ENCONTRADA_1'] = front_preliminar['MATRICULA_ENCONTRADA_1'].astype(str)
         
         front_preliminar['SOMASE LOCAL POR MATRICULA']  = front_preliminar.groupby('MATRICULA_ENCONTRADA_1')['Valor a lançar'].transform('sum')
         soma_condicional_dict_averb = front_preliminar.groupby('CPF')['SOMASE LOCAL POR MATRICULA'].sum().to_dict()

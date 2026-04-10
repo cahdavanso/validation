@@ -53,10 +53,10 @@ class CODATA:
         esteiras_permitidas = ['11 FORMALIZACAO', '11 FORMALIZAA\x87A\x83O','09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
                                'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
                                '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
-                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
-                               "07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES",
-                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "RISCO DA OPERACAO - DEMAIS SITUACOES", "15.0 RISCO DA OPERACAO - DEMAIS SITUACOES",
-                               ""
+                               '15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES', '11.1 CONTRATO FISICO ENVIADO AO BANCO', '07.0 QUITACAO \x96 ENVIO DE CESSAO',
+                               '07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE', '99 CARTAO UTILIZADO', '15.0 RISCO DA OPERACAO-DEMAIS SITUACOES',
+                               'RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES', 'RISCO DA OPERACAO - DEMAIS SITUACOES', '15.0 RISCO DA OPERACAO - DEMAIS SITUACOES',
+                               '10.7.0 INGRESSAR COM PROCESSO OU AA\x87A\x83O JURIDICO', '02.03 AGUARDANDO PROCESSAMENTO CARTAO', 'POS VENDA', 'INT', 'CONFERE LASTRO'
                               ]
         
         
@@ -93,7 +93,7 @@ class CODATA:
             print(f"Erro ao salvar o arquivo de esteiras removidas: {e}")
 
         # Trata coluna de Tipo da Conciliação
-        front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
+        front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Novo Tipo Operacao']
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
@@ -112,9 +112,9 @@ class CODATA:
 
         # Marcar o que não é cartão
         if self.consignataria == 'CAPITAL CONSIG':
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
-        else:
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Adiantamento Salarial', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO INSPFEM'
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Novo Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        elif self.consignataria == 'INSPFEM':
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Consignataria'].str.contains('INSPFEM - CARD', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO INSPFEM'
 
         # Marca consignatária errada
         if self.consignataria == 'CAPITAL CONSIG':
@@ -125,7 +125,7 @@ class CODATA:
         # Marcar liquidados em StatusContrato
         if self.consignataria == 'CAPITAL CONSIG':
             front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
-        else:
+        elif self.consignataria == 'INSPFEM':
             front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
@@ -153,12 +153,12 @@ class CODATA:
             # Se houver cartão de crédito no Tipo Operacao do Front, mas estiver diferente no 
 
             # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
+            front_consig_cartao_conciliacao = front_consig[front_consig['Novo Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
 
             front_consig_trabalhado = front_consig_cartao_conciliacao
-        else:
+        elif self.consignataria == 'INSPFEM':
             # Separa apenas o que retornou como "INSPFEM - CARD" no tipo de conciliação
-            front_consig_cartao_conciliacao = front_consig[(front_consig['Tipo Conciliação'].str.contains('Adiantamento Salarial', na=False)) & (front_consig['OBS'] != 'NÃO LANÇAR - ORBITAL')].copy()
+            front_consig_cartao_conciliacao = front_consig[(front_consig['Consignataria'].str.contains('INSPFEM - CARD', na=False)) & (front_consig['OBS'] != 'NÃO LANÇAR - ORBITAL')].copy()
             front_consig_trabalhado = front_consig_cartao_conciliacao
 
         # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
@@ -497,7 +497,7 @@ class CODATA:
             soma_condicional_dict_averb = front_consig.groupby('CPF')['Valor a lançar'].sum().to_dict()
             averbado_novo['SOMASE'] = averbado_novo['CPF'].map(soma_condicional_dict_averb)
             averbado_novo['SOMASE'] = averbado_novo['SOMASE'].fillna(0)
-        else:
+        elif self.consignataria == 'INSPFEM':
             # 1. Soma por CPF no front_consig
             somase_front_consig = front_consig.groupby('CPF')['Valor a lançar'].sum()
 
