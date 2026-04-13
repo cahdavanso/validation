@@ -1,6 +1,7 @@
 import pandas as pd
 import zipfile
 import numpy as np
+from ESTEIRAS import load_esteiras
 import re
 from thefuzz import fuzz
 from datetime import datetime
@@ -42,16 +43,7 @@ class ZETRA:
 
         self.orbital = orbital if orbital is not None else None
 
-        self.condicoes_1 = ['02.03 AGUARDANDO PROCESSAMENTO CARTAO', '11 FORMALIZACAO', '11 FORMALIZAA\x87A\x83O', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', "11 FORMALIZAAÂ\x87AÂ\x83O",
-                               '14.0 RISCO DA OPERACAO - OBITO', 'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
-                               '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
-                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO", "07.2 TED DEVOLVIDA PAGAMENTO AO CLIENTE",
-                               "07.2 TED DEVOLVIDA A\x80\x93 PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "11 FORMALIZAA\x87A\x83O", "07.1.1 QUITACAO - CORRECAO DE CCB",
-                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "10.7 CONTRATO NA\x83O AVERBADO - AGUARDANDO RESOLUA\x87A\x83O", "11 FORMALIZAAÂ‡AÂƒO",
-                               "10.5 AGUARDANDO AVERBACAO COMPRA OUTROS CONVENIOS", "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "07.2 TED DEVOLVIDA AÂ\x80Â\x93 PAGAMENTO AO CLIENTE",
-                               "RISCO DA OPERAAÂ\x87AÂ\x82O-DEMAIS SITUAAÂ\x87AÂ\x95ES", "10.7 CONTRATO NAÂ\x83O AVERBADO - AGUARDANDO RESOLUAÂ\x87AÂ\x83O", "RISCO DA OPERACAO - DEMAIS SITUACOES",
-                               "15.0 RISCO DA OPERACAO - DEMAIS SITUACOES", "POS VENDA", "INTEGRADO"
-                              ]
+        self.condicoes_1 = load_esteiras()
 
         # --- TABELA DE CONFIGURAÇÃO (Baseada na sua imagem) ---
         # 0 significa que o campo não existe ou deve ser ignorado

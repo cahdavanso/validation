@@ -5,6 +5,7 @@ import re
 from thefuzz import fuzz
 import logging
 import os
+import ESTEIRAS
 import chardet
 from itertools import combinations
 from python.acha_matriculas_consigfacil import ACHA_MATRICULA_CONSIGFACIL
@@ -86,14 +87,7 @@ class CONSIGFACIL:
         print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
 
         # Esteiras
-        esteiras_permitidas = ['11 FORMALIZACAO', '11 FORMALIZAA\x87A\x83O','09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
-                               'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
-                               '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
-                               "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
-                               "07.1 AÂ– QUITACAO AÂ– PAGAMENTO AO CLIENTE", "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES",
-                               "RISCO DA OPERAA\x87A\x82O-DEMAIS SITUAA\x87A\x95ES", "RISCO DA OPERACAO - DEMAIS SITUACOES", "RISCO DA OPERACAO - DEMAIS SITUACOEES",
-                               "15.0 RISCO DA OPERACAO - DEMAIS SITUACOES", "07.0 QUITACAO  ENVIO DE CESSAO", "10.7.0 INGRESSAR COM PROCESSO OU AA\x87A\x83O JURIDICO"
-                              ]
+        esteiras_permitidas = load_esteiras()
         
         
         # Vamos renomear a primeira coluna da conciliação
