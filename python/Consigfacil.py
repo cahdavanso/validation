@@ -842,7 +842,6 @@ class CONSIGFACIL:
         # Contse do Credbase no relatório de averbados
         front_consig = front.copy()
         averbados = self.averbados
-        print(f'Qual o valor da reserva no CPF: 526.819.804-10 no início?\n{averbados.loc[averbados["CPF"] == "526.819.804-10", "Valor da reserva"]}')
 
         if front_consig is False:
             print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
@@ -863,7 +862,6 @@ class CONSIGFACIL:
 
         acha_matriculas = ACHA_MATRICULA_CONSIGFACIL(averbados, front_consig)
         front_preliminar = acha_matriculas.acha_matricula()
-        print(f'FRONT COM MATRICULAS TRATADAS:\n{front_preliminar}')
 
         # Remover de Averbados algumas colunas
         colunas_para_remover = ['Validade', 'Saldo de reserva', 'Data', 'IP', 'Código', '%']

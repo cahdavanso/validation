@@ -15,6 +15,14 @@ class TRATA_CONCILIACAO:
                      print(f"KOBRAKI:\n{self.kobraki.head()}")
                 except Exception as e:
                      print(f"Erro ao exibir KOBRAKI:\n{e}")'''
+            # Vamos verificar o tipo da coluna CONTRATO de KOBRAKI para garantir que é numérica
+            '''if 'CONTRATO' in self.kobraki.columns:
+                print(f"Amostra de linhas da coluna CONTRATO:\n{self.kobraki['CONTRATO'].head()}")
+                print(f"Tipo da coluna CONTRATO: {self.kobraki['CONTRATO'].dtype}")
+
+                print(f"Amostra de linhas da coluna CONTRATOS Conciliação:\n{self.conciliacao['CONTRATOS'].head()}")
+                print(f"Tipo da coluna CONTRATOS: {self.conciliacao['CONTRATOS'].dtype}")'''
+
             
             kobraki_tratado = self.kobraki
 
@@ -55,12 +63,16 @@ class TRATA_CONCILIACAO:
             # para puxar os valores de "VALOR RECEBIDO" no kobraki puxando da coluna "CONTRATO"
             somase_kobraki = kobraki_tratado.groupby('CONTRATO')['VALOR RECEBIDO'].sum()
             conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['CONTRATOS'].map(somase_kobraki)
+            conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['KOBRAKI'].fillna(0)
+
+            # Somar as colunas de KOBRAKI e RECEBIDO GERAL para criar a coluna "TOTAL RECEBIDO"
+            conciliacao_tratado['TOTAL RECEBIDO'] = conciliacao_tratado['KOBRAKI'] + conciliacao_tratado['RECEBIDO GERAL']
 
             # 2. Calcular prestação * prazo
             prestacao_vezes_prazo = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']
 
             # 3. Calcular o resultado final
             conciliacao_tratado['Pago'] = soma_d8 - prestacao_vezes_prazo
-            conciliacao_tratado['Saldo'] = conciliacao_tratado['Pago'] + conciliacao_tratado['KOBRAKI']
+            conciliacao_tratado['Saldo'] = conciliacao_tratado['Pago'] + conciliacao_tratado['TOTAL RECEBIDO']
 
             return conciliacao_tratado
