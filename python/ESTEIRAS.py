@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 def load_esteiras():
     # Carregar as esteiras a partir de um arquivo ou definir manualmente
     df_esteiras = pd.DataFrame(columns=['Esteiras'])

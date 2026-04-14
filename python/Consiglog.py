@@ -1,7 +1,7 @@
 import pandas as pd
 from thefuzz import fuzz
 from datetime import datetime
-from ESTEIRAS import load_esteiras
+from python.ESTEIRAS import load_esteiras
 import openpyxl
 import numpy as np
 import os
@@ -9,7 +9,7 @@ import re
 
 
 class CONSIGLOG:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, conciliacao=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, conciliacao=None, kobraki=None, orbital=None):
         self.averbados = portal_file_list
 
 

@@ -3,9 +3,10 @@ import numpy as np
 from datetime import datetime
 import re
 from thefuzz import fuzz
-import logging
+from python.ESTEIRAS import load_esteiras
+from python.trata_conciliacao import TRATA_CONCILIACAO
 import os
-import ESTEIRAS
+import logging
 import chardet
 from itertools import combinations
 from python.acha_matriculas_consigfacil import ACHA_MATRICULA_CONSIGFACIL
@@ -16,7 +17,7 @@ rejeitados = ['/']
 class CONSIGFACIL:
     # O init foi adaptado para receber os DataFrames do server.py, mas prepara os dados
     # exatamente como o original esperava (convertendo tipos, etc.)
-    def __init__(self, front, portal_file_list, convenio,  caminho, conciliacao=None, andamento_list=None):
+    def __init__(self, front, portal_file_list, convenio,  caminho, conciliacao=None, kobraki=None, andamento_list=None):
         
         self.convenio = convenio
         self.caminho = caminho
@@ -59,6 +60,8 @@ class CONSIGFACIL:
         self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
                                          'PRODUTO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO',
                                          'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
+        
+        self.kobraki = kobraki if kobraki is not None else None
         
         # 5. Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
@@ -118,6 +121,7 @@ class CONSIGFACIL:
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
         front_consig_validado_termino = self.validacao_termino_front(front_consig_esteiras)
+        print(f'tipo de OBS antes de marcar OBS: {front_consig_validado_termino["OBS"].dtype}')
         front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > -0.01, 'OBS'] = 'NÃO LANÇAR - SALDO POSITIVO'
 
         # Marca o que é ação judicial
@@ -141,6 +145,9 @@ class CONSIGFACIL:
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
+
+        # Marca para tirar o que é ADIANTAMENTO SALARIAL de Tipo Operacao
+        front_consig_validado_termino.loc[front_consig_validado_termino['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
 
         # Marcar tudo que contem prazo como Não cartão
         # 1. Cria a máscara para quem está com o PRAZO vazio (ou NaN)
@@ -191,6 +198,9 @@ class CONSIGFACIL:
         # Faz concat dos dois dataframes
         front_consig_trabalhado = front_consig_cartao_conciliacao.copy()
 
+        # ------------------------------- TIRA O QUE É ADIANTAMENTO SALARIAL ------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['OBS'].str.contains('NÃO LANÇAR - ADIANTAMENTO SALARIAL', na=False)].copy()
+
         # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Acao Judicial'] != 1].copy()
 
@@ -228,6 +238,7 @@ class CONSIGFACIL:
         return front_consig_trabalhado
 
     def trata_conciliacao(self):
+        # conciliacao_tratado_teste = teste_conciliacao.trata_conciliacao()
         conciliacao_tratado = self.conciliacao
         # Converte para lista de colunas
 
@@ -274,7 +285,8 @@ class CONSIGFACIL:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        conciliacao_tratado = self.trata_conciliacao()
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
         # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
@@ -830,12 +842,13 @@ class CONSIGFACIL:
         # Contse do Credbase no relatório de averbados
         front_consig = front.copy()
         averbados = self.averbados
+        print(f'Qual o valor da reserva no CPF: 526.819.804-10 no início?\n{averbados.loc[averbados["CPF"] == "526.819.804-10", "Valor da reserva"]}')
 
         if front_consig is False:
             print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
         
-        if self.convenio in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE', 'PREF. PORTO VELHO', 'PREF. NATAL']:
+        if self.convenio in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE', 'PREF. PORTO VELHO', 'PREF. NATAL','PREF. SANTA RITA']:
             averbados = averbados[averbados['Modalidade'].isin(['Cartão de Crédito', 'Cartão Benefício (Compras)', 'Cartão Benefício', 'Cartão Benefício(96)', 'Cartão Benefício Compra'])]
         else:
             averbados = averbados[averbados['Modalidade'] == 'Cartão de Crédito']
@@ -873,9 +886,17 @@ class CONSIGFACIL:
         averbados['OBS'] = ''
 
         # Tira valor vazio do Valor da Reserva
-        mask_nao = (averbados['Valor da reserva'] == 0) | (averbados['Valor da reserva'].isna())
+        averbados['Valor da reserva'] = averbados['Valor da reserva'].fillna('')
+        print(f'Qual o valor da reserva no CPF: 526.819.804-10?\n{averbados.loc[averbados["CPF"] == "526.819.804-10", "Valor da reserva"]}')
+        mask_nao = (averbados['Valor da reserva'] == 0) | \
+                   (averbados['Valor da reserva'] == '0') | \
+                   (averbados['Valor da reserva'] == '')
+
+        # 3. Aplicamos a marcação e o filtro
         averbados.loc[mask_nao, 'OBS'] = 'NÃO'
-        averbados = averbados[averbados['OBS'] != "NÃO"]
+        averbados = averbados[averbados['OBS'] != "NÃO"].copy()
+
+        print(f'CPF: 526.819.804-10 ainda está na planilha?\n{averbados.loc[averbados["CPF"] == "526.819.804-10", "Valor da reserva"]}')
 
         # Separa o que não é NÃO em outra planilha
         # averbado_novo = averbados[averbados['OBS'] != 'NÃO'].copy()

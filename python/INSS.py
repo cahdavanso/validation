@@ -8,7 +8,7 @@ import os
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 class INSS:
-    def __init__(self, portal_file_list, front,conciliacao, caminho, casos_capital=None):
+    def __init__(self, portal_file_list, front, conciliacao, kobraki, caminho, casos_capital=None):
         
         # --- ADAPTAÇÃO: Recebendo DataFrames do server.py ---
         

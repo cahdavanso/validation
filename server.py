@@ -86,14 +86,16 @@ async def read_and_unify_files(file_list: List[UploadFile]):
     for uploaded_file in file_list:
         try:
             filename = uploaded_file.filename.lower()
+            print(f'nome do arquivo: {filename}')
             content = await uploaded_file.read()
             file_obj = io.BytesIO(content)
             logging.info(f"Lendo: {uploaded_file.filename}")
 
-            if filename.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(file_obj)
-            elif filename == 'liminar' and filename.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(file_obj, sheet_name='DEMAIS CONVÊNIOS')
+            
+            if "kobraki" in filename and filename.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_obj, sheet_name='CONSOLIDADO')
+            elif filename.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_obj) 
             else:
                 try:
                     file_obj.seek(0)
@@ -131,6 +133,7 @@ async def validar_planilhas(
     AVERBADOS: List[UploadFile] = File(None, alias="AVERBADOS"),
     ZIPS: List[UploadFile] = File(None, alias="ZIPS"),
     CONCILIACAO: List[UploadFile] = File(None, alias="CONCILIACAO"),
+    KOBRAKI: List[UploadFile] = File(None, alias="KOBRAKI"),
     LIQUIDADOS: List[UploadFile] = File(None, alias="LIQUIDADOS"),
     LIMINAR: List[UploadFile] = File(None, alias="LIMINAR"),
     HISTORICO: List[UploadFile] = File(None, alias="HISTORICO"),
@@ -171,6 +174,7 @@ async def validar_planilhas(
         # 2. Leitura dos arquivos
         averbados_df = await read_and_unify_files(AVERBADOS)
         conciliacao_df = await read_and_unify_files(CONCILIACAO)
+        kobraki_df = await read_and_unify_files(KOBRAKI)
         liquidados_df = await read_and_unify_files(LIQUIDADOS)
         liminar_df = await read_and_unify_files(LIMINAR)
         historico_df = await read_and_unify_files(HISTORICO)
@@ -193,6 +197,7 @@ async def validar_planilhas(
                 front = front_df,
                 consignataria=consignataria, 
                 conciliacao=conciliacao_df,
+                kobraki=kobraki_df,
                 andamento_list=andamento_df,
                 caminho=CAMINHO_SAIDA
             )
@@ -203,6 +208,7 @@ async def validar_planilhas(
                 portal_file_list=averbados_df,
                 front=front_df,
                 conciliacao=conciliacao_df,
+                kobraki=kobraki_df,
                 caminho=CAMINHO_SAIDA,
                 casos_capital=casoscapital_df
             )
@@ -213,6 +219,7 @@ async def validar_planilhas(
                 convenio=convenio,
                 front=front_df,
                 conciliacao=conciliacao_df,
+                kobraki=kobraki_df,
                 trabalhado_anterior=trabalhado_anterior_df,
                 rubrica=rubrica,
                 caminho=CAMINHO_SAIDA,
@@ -227,6 +234,7 @@ async def validar_planilhas(
                 front=front_df,
                 consignataria=consignataria,
                 conciliacao=conciliacao_df,
+                kobraki=kobraki_df,
                 caminho=CAMINHO_SAIDA,
                 orbital=orbital_df
             )
@@ -238,6 +246,7 @@ async def validar_planilhas(
                 convenio=convenio,
                 front=front_df,
                 conciliacao=conciliacao_df,
+                kobraki=kobraki_df,
                 consignataria=consignataria,
                 caminho=CAMINHO_SAIDA,
                 historico=historico_df,
@@ -252,6 +261,7 @@ async def validar_planilhas(
                 convenio=convenio,
                 front=front_df,
                 conciliacao=conciliacao_df,
+                kobraki=kobraki_df,
                 andamento_list=andamento_df,
                 caminho=CAMINHO_SAIDA,
             )

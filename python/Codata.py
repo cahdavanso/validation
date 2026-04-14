@@ -1,8 +1,9 @@
 import os
+import sys
 import pandas as pd
 import xlrd
 import openpyxl
-from ESTEIRAS import load_esteiras
+from python.ESTEIRAS import load_esteiras
 from datetime import datetime
 import numpy as np
 import xlsxwriter
@@ -12,7 +13,7 @@ rejeitados = ['/']
 class CODATA:
 # Dentro de python/Codata.py
 
-    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, caminho, andamento_list=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, kobraki, caminho, andamento_list=None):
 
         # A API FastAPI já leu, unificou e tratou a codificação. 
         # Aqui, apenas atribuímos o DataFrame ou inicializamos como vazio se for None.

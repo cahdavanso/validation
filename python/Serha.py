@@ -2,14 +2,14 @@ from thefuzz import fuzz
 import pandas as pd
 import openpyxl
 import numpy as np
-from ESTEIRAS import load_esteiras
+from python.ESTEIRAS import load_esteiras
 from datetime import datetime
 import os
 import logging
 import re
 
 class SERHA:
-    def __init__(self, portal_file_list, convenio, front, conciliacao, trabalhado_anterior, rubrica, caminho, complementar=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, conciliacao, kobraki, trabalhado_anterior, rubrica, caminho, complementar=None, orbital=None):
         # isso é apenas para caso seja um arquivo de averbação
         self.averbados = portal_file_list if portal_file_list is not None else None
         if self.averbados is not None:
@@ -176,13 +176,15 @@ class SERHA:
 
             orbital['Numero de Contrato'] = orbital['Numero de Contrato'].astype(str)
             orbital = orbital.drop_duplicates(subset='Numero de Contrato', keep='first')
-            '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "Validação  desconto final"]}\n')
+            '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "Validação desconto final"]}\n')
             print(f'Contrato 301268942 no front: {front_consig_esteiras.loc[front_consig_esteiras["Contrato"] == "301268942", "Prestacao"]}\n')'''
+
+            print(f'Colunas de Orbital: {orbital.columns}')
 
 
             # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
             # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
-            mapa_orbital = orbital.set_index('Numero de Contrato')['Validação  desconto final']
+            mapa_orbital = orbital.set_index('Numero de Contrato')['Validação desconto final']
             # --- ETAPA 3: Definir quem vai ser alterado ---
             filtro_esteira = front_consig_esteiras['Esteira'] == '99 CARTAO UTILIZADO'
 
@@ -567,7 +569,7 @@ class SERHA:
 
         orbital_preparado = orbital.loc[
             orbital['Descrição EMPREGADOR'].str.contains(autarquia, case=False, na=False),
-            ['Numero de Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Validação  desconto final']
+            ['Numero de Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Validação desconto final']
         ].copy()
         orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 

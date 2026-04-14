@@ -1,7 +1,7 @@
 import pandas as pd
 import zipfile
 import numpy as np
-from ESTEIRAS import load_esteiras
+from python.ESTEIRAS import load_esteiras
 import re
 from thefuzz import fuzz
 from datetime import datetime
@@ -12,7 +12,7 @@ import openpyxl
 
 
 class ZETRA:
-    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, historico=None, conciliacao=None, orbital=None):
+    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, historico=None, conciliacao=None, kobraki=None, orbital=None):
 
         self.caminho = caminho
 
@@ -379,14 +379,24 @@ class ZETRA:
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
         # front['Contrato'] = front['Contrato'].astype(str)
 
-        front_copy.loc[:, 'Status'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')[status_name]).to_dict()
+        # 1. Garante que a coluna aceite qualquer tipo de dado (evita o erro de dtype 'str')
+        front_copy['Status'] = front_copy['Status'].astype(str)
+
+        # 2. Cria o mapeamento sem o .to_dict()
+        # O .map() já devolve uma Series alinhada ao index, o que é o correto
+        mapeamento = conciliacao_tratado.set_index('CONTRATOS')[status_name]
+        front_copy['Status'] = front_copy['Contrato'].map(mapeamento).fillna('NÃO ENCONTRADO')
         conciliacao_tratado.to_excel(fr'{self.caminho}\Conciliacao_TESTE.xlsx', index=False)
 
 
         # print(f'status \n{front_copy[front_copy['Contrato'] == 300846910]}')
 
         # Puxar o saldo para o front
-        front_copy.loc[:, 'Saldo'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
+        if not front_copy['Saldo'].dtype == 'float64':
+            front_copy['Saldo'] = front_copy['Saldo'].astype(str).replace('.', '', regex=False).replace(',', '.', regex=False)
+            front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
+        mapeamento_saldo = conciliacao_tratado.set_index('CONTRATOS')['Saldo']
+        front_copy['Saldo'] = front_copy['Contrato'].map(mapeamento_saldo).fillna(0)
 
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Prestacao" seja escolhida)
