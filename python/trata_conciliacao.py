@@ -45,7 +45,7 @@ class TRATA_CONCILIACAO:
             # Atualiza o DataFrame com novos nomes
 
 
-            conciliacao_tratado = conciliacao_tratado
+            conciliacao_tratado = conciliacao_tratado.copy()
 
             # 1. Selecionar colunas com "d8" no nome e somar por linha (axis=1)
             # "D8 " precisa ficar com espaço para que a coluna "CONVENIO D8" não atrapalhe na hora da soma
@@ -62,7 +62,7 @@ class TRATA_CONCILIACAO:
             # Vamos criar uma coluna "KOBRAKI" na conciliação, e usar a coluna de "CONTRATOS" da conciliação 
             # para puxar os valores de "VALOR RECEBIDO" no kobraki puxando da coluna "CONTRATO"
             somase_kobraki = kobraki_tratado.groupby('CONTRATO')['VALOR RECEBIDO'].sum()
-            conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['CONTRATOS'].map(somase_kobraki)
+            conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['CONTRATOS'].copy().map(somase_kobraki)
             conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['KOBRAKI'].fillna(0)
 
             # Somar as colunas de KOBRAKI e RECEBIDO GERAL para criar a coluna "TOTAL RECEBIDO"
