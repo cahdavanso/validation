@@ -260,6 +260,7 @@ async def validar_planilhas(
                 portal_file_list=averbados_df, 
                 convenio=convenio,
                 front=front_df,
+                funcao=funcao_df,
                 conciliacao=conciliacao_df,
                 kobraki=kobraki_df,
                 andamento_list=andamento_df,
@@ -330,6 +331,6 @@ async def download_file(filename: str):
 
 # É melhor comentar do que apagar na próxima vez que precisar testar no render
 if __name__ == "__main__":
-    # Pega a porta do Render ou usa 5000 se estiver local
-    port = int(os.environ.get("PORT", 5000))
+    # Pega a porta do Render ou usa 8000 se estiver local
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)

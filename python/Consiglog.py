@@ -2,6 +2,7 @@ import pandas as pd
 from thefuzz import fuzz
 from datetime import datetime
 from python.ESTEIRAS import load_esteiras
+from python.trata_conciliacao import TRATA_CONCILIACAO
 import openpyxl
 import numpy as np
 import os
@@ -9,13 +10,18 @@ import re
 
 
 class CONSIGLOG:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, conciliacao=None, kobraki=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, funcao=None, conciliacao=None, kobraki=None, orbital=None):
         self.averbados = portal_file_list
 
 
         self.convenio = convenio
 
         self.front= front
+
+        # Funcao
+        self.funcao = funcao if funcao is not None else None
+
+        self.kobraki = kobraki
 
 
         conciliacao_falso = pd.DataFrame(
@@ -255,48 +261,10 @@ class CONSIGLOG:
 
         return front_consig_trabalhado
 
-    def trata_conciliacao(self):
-        conciliacao_tratado = self.conciliacao
-        # Converte para lista de colunas
-
-
-        # Encontra o índice da primeira ocorrência de "CONTRATO" e altera
-        # print(f'primeira coluna de conciliação {conciliacao_tratado.columns[0]}')
-        conciliacao_tratado.rename(columns={conciliacao_tratado.columns[0]: 'CONTRATOS'}, inplace=True)
-
-        cols = list(conciliacao_tratado.columns)
-        conciliacao_tratado.columns = cols
-        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype(str)
-        conciliacao_tratado = conciliacao_tratado.drop_duplicates(subset='CONTRATOS')
-        # Atualiza o DataFrame com novos nomes
-
-
-        conciliacao_tratado = conciliacao_tratado
-
-        # 1. Selecionar colunas com "d8" no nome e somar por linha (axis=1)
-        # "D8 " precisa ficar com espaço para que a coluna "CONVENIO D8" não atrapalhe na hora da soma
-        colunas_d8 = conciliacao_tratado.filter(like='D8 ').columns
-        for col in colunas_d8:
-            tipos = conciliacao_tratado[col].apply(type).value_counts()
-            '''print(f"Coluna {col}:")
-            print(tipos)
-            print()'''
-        conciliacao_tratado[colunas_d8] = conciliacao_tratado[colunas_d8].apply(pd.to_numeric, errors='coerce')
-
-        soma_d8 = conciliacao_tratado.filter(like='D8 ').sum(axis=1)
-
-        # 2. Calcular prestação * prazo
-        prestacao_vezes_prazo = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']
-
-        # 3. Calcular o resultado final
-        conciliacao_tratado['Pago'] = soma_d8 - prestacao_vezes_prazo
-        conciliacao_tratado['Saldo'] = conciliacao_tratado['Pago'] + conciliacao_tratado['RECEBIDO GERAL']
-
-        return conciliacao_tratado
-
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        conciliacao_tratado = self.trata_conciliacao()
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Front trabalhado são do mesmo tipo
         front_copy['Contrato'] = front_copy['Contrato'].astype(str)
@@ -855,7 +823,8 @@ class CONSIGLOG:
 
         data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
 
-        conciliacao_tratado = self.trata_conciliacao()
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO
         # OP LIQUIDADO

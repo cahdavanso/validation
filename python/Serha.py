@@ -3,13 +3,14 @@ import pandas as pd
 import openpyxl
 import numpy as np
 from python.ESTEIRAS import load_esteiras
+from python.trata_conciliacao import TRATA_CONCILIACAO
 from datetime import datetime
 import os
 import logging
 import re
 
 class SERHA:
-    def __init__(self, portal_file_list, convenio, front, conciliacao, kobraki, trabalhado_anterior, rubrica, caminho, complementar=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, conciliacao, kobraki, trabalhado_anterior, rubrica, caminho, funcao=None, complementar=None, orbital=None):
         # isso é apenas para caso seja um arquivo de averbação
         self.averbados = portal_file_list if portal_file_list is not None else None
         if self.averbados is not None:
@@ -20,7 +21,13 @@ class SERHA:
         # Isso é apenas para caso o front seja um arquivo apenas
         self.front_unificados = front if front is not None else None
 
+        # Funcao
+        self.funcao = funcao if funcao is not None else None
+
         self.convenio = convenio
+
+        # kobraki
+        self.kobraki = kobraki
 
         conciliacao_falso = pd.DataFrame(
             columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25', 'RECEBIDO GERAL'])
@@ -360,7 +367,8 @@ class SERHA:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        conciliacao_tratado = self.trata_conciliacao()
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        conciliacao_tratado = teste_conciliacao.trata_conciliacao()
         if conciliacao_tratado is False:
             print("validacao_termino_front: O tratamento da conciliação falhou. Verifique os erros anteriores.")
             return False

@@ -2,6 +2,7 @@ import pandas as pd
 import zipfile
 import numpy as np
 from python.ESTEIRAS import load_esteiras
+from python.trata_conciliacao import TRATA_CONCILIACAO
 import re
 from thefuzz import fuzz
 from datetime import datetime
@@ -12,7 +13,7 @@ import openpyxl
 
 
 class ZETRA:
-    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, historico=None, conciliacao=None, kobraki=None, orbital=None):
+    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, funcao=None, historico=None, conciliacao=None, kobraki=None, orbital=None):
 
         self.caminho = caminho
 
@@ -23,6 +24,10 @@ class ZETRA:
         self.averbados = self.processar_arquivos_zip(portal_file_path)
 
         self.front = front
+
+        self.kobraki = kobraki
+
+        self.funcao = funcao
 
         self.historico = historico if historico is not None else None
 
@@ -368,7 +373,8 @@ class ZETRA:
     def validacao_termino(self, front):
         print(f'validacao_termino acionado')
         front_copy = front.copy()
-        conciliacao_tratado = self.trata_conciliacao()
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Puxar o último status para o front
         status = conciliacao_tratado.filter(like='ST ')
@@ -758,7 +764,8 @@ class ZETRA:
 
         semi_front = front[front['Esteira'].isin(self.condicoes_1)]
 
-        conciliacao_tratado = self.trata_conciliacao()
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO
         # OP LIQUIDADO

@@ -4,6 +4,7 @@ import pandas as pd
 import xlrd
 import openpyxl
 from python.ESTEIRAS import load_esteiras
+from python.trata_conciliacao import TRATA_CONCILIACAO
 from datetime import datetime
 import numpy as np
 import xlsxwriter
@@ -13,7 +14,7 @@ rejeitados = ['/']
 class CODATA:
 # Dentro de python/Codata.py
 
-    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, kobraki, caminho, andamento_list=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, caminho, kobraki=None, funcao=None, andamento_list=None):
 
         # A API FastAPI já leu, unificou e tratou a codificação. 
         # Aqui, apenas atribuímos o DataFrame ou inicializamos como vazio se for None.
@@ -25,6 +26,9 @@ class CODATA:
         # Front
         self.front = front if front is not None else pd.DataFrame()
 
+        # Funcao
+        self.funcao = funcao if funcao is not None else None
+
         # Andamento
         self.andamento = andamento_list if andamento_list is not None else None
 
@@ -34,6 +38,9 @@ class CODATA:
         # Conciliação - CORREÇÃO: Trata None para evitar pd.read_excel(None, ...)
         self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()
         self.conciliacao.rename(columns={'TIPO OPERACAO': 'PRODUTO', 'TIPO OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO'}, inplace=True)
+
+        # Kobrakai
+        self.kobraki = kobraki
 
         # Chama a primeira função da cadeia de processamento
         front_trabalhado = self.tratamento_front()
@@ -217,7 +224,8 @@ class CODATA:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        conciliacao_tratado = self.trata_conciliacao()
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
         # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
