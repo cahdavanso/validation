@@ -6,6 +6,39 @@ import numpy as np
 from datetime import datetime
 import os
 
+def abas(excel_file):
+    # 2. Pegamos a lista de todas as abas disponíveis
+    todas_as_abas = excel_file.sheet_names
+
+    # print(f'todas as abas: {todas_as_abas}')
+
+    # 3. Identificamos as abas dinamicamente
+    # Buscamos por 'Linhas' mas garantimos que não seja a que você quer descartar (se houver uma regra)
+    # E buscamos por 'desc. Parciais'
+    aba_linhas = None
+    aba_parciais = None
+
+    for nome in todas_as_abas:
+        # Lógica para a aba de Linhas
+        # Aqui verificamos se tem 'Linhas' no nome e se NÃO tem outros termos indesejados
+        if "Linhas" in nome and "Suspensas" not in nome:
+            aba_linhas = nome
+        
+        # Lógica para a aba de Descontos Parciais
+        if "Desc. Parciais" in nome:
+            aba_parciais = nome
+
+        if  aba_linhas is not None and aba_parciais is not None:
+            return aba_linhas, aba_parciais
+        else:
+            continue
+
+d8_gov_to_amostra = pd.ExcelFile(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CAPITAL-032026.xlsx")
+planilha_linhas, planilha_parciais = abas(d8_gov_to_amostra)
+
+# print(f'planilhas linhas: {planilha_linhas}\nplanilhas parciais: {planilha_parciais}')
+
+
 front = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\FRONT GOV TO - IGEPREV 04-2026.csv", encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
 funcao = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\FUNCAO GOV TO - IGEPREV 04-2026.csv", encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
 averbado_gov_to_capital = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\AVERBADOSGOVTOCAPITAL942026_13_10.xlsx")
@@ -13,10 +46,14 @@ averbado_gov_to_ciasprev = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPRE
 averbado_gov_to_hp = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\AVERBADOSGOVTOHOJE942026_13_9.xlsx")
 averbado_igeprev_capital = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\provisionamento_margem_CAPITAL.xlsx")
 averbado_igeprev_ciasprev = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\provisionamento_margem_CIASPREV.xlsx")
-d8_gov_to_capital = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CAPITAL-032026.xlsx", header=7)
-d8_gov_to_ciasprev = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CIASPREV-032026.xlsx", header=7)
-d8_gov_to_hp = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CLICKBANK-032026.xlsx", header=7)
-d8_gov_to_click = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-HOJE-032026.xlsx", header=7)
+d8_gov_to_capital = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CAPITAL-032026.xlsx", header=7,sheet_name=planilha_linhas)
+d8_gov_to_ciasprev = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CIASPREV-032026.xlsx", header=7,sheet_name=planilha_linhas)
+d8_gov_to_hp = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CLICKBANK-032026.xlsx", header=7,sheet_name=planilha_linhas)
+d8_gov_to_click = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-HOJE-032026.xlsx", header=7,sheet_name=planilha_linhas)
+d8_gov_to_capital_parciais = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CAPITAL-032026.xlsx", header=7, sheet_name=planilha_parciais)
+d8_gov_to_ciasprev_parciais = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CIASPREV-032026.xlsx", header=7, sheet_name=planilha_parciais)
+d8_gov_to_hp_parciais = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CLICKBANK-032026.xlsx", header=7, sheet_name=planilha_parciais)
+d8_gov_to_click_parciais = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-HOJE-032026.xlsx", header=7, sheet_name=planilha_parciais)
 d8_igeprev_capital = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Movimento_Financeiro-IGEPREV-CAPITAL-032026.csv", encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
 d8_igeprev_ciasprev = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Movimento_Financeiro-IGEPREV-CIASPREV-032026.csv", encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
 conciliacao_df = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Conciliação-Governo do Tocantins + IGEPREV - 032026.xlsx")
@@ -229,11 +266,15 @@ class IGEPREV_GOVTO_PRELIMINAR:
 
         return front_copy
     
-    def unifica_d8(self):
+    def unifica_d8_gov_to(self):
         gov_to_d8_capital = d8_gov_to_capital
         gov_to_d8_ciasprev = d8_gov_to_ciasprev
         gov_to_d8_hp = d8_gov_to_hp
         gov_to_d8_click = d8_gov_to_click
+        gov_to_d8_capital_parcial = d8_gov_to_capital_parciais
+        gov_to_d8_ciasprev_parcial = d8_gov_to_ciasprev_parciais
+        gov_to_d8_hp_parcial = d8_gov_to_hp_parciais
+        gov_to_d8_click_parcial = d8_gov_to_click_parciais
 
         # Adiciona CONSIGNATARIA no final de cada DataFrame
         gov_to_d8_capital['CONSIGNATARIA'] = 'CAPITAL'
@@ -241,18 +282,57 @@ class IGEPREV_GOVTO_PRELIMINAR:
         gov_to_d8_hp['CONSIGNATARIA'] = 'HP'
         gov_to_d8_click['CONSIGNATARIA'] = 'CLICK'
 
-        d8_gov_to_unificado = pd.concat([gov_to_d8_capital, gov_to_d8_ciasprev, gov_to_d8_hp, gov_to_d8_click], ignore_index=True)
+        # Adiciona CONSIGNATARIA no final de cada DataFrame Parcial
+        gov_to_d8_capital_parcial['CONSIGNATARIA'] = 'CAPITAL'
+        gov_to_d8_ciasprev_parcial['CONSIGNATARIA'] = 'CIASPREV'
+        gov_to_d8_hp_parcial['CONSIGNATARIA'] = 'HP'
+        gov_to_d8_click_parcial['CONSIGNATARIA'] = 'CLICK'
+
+        '''print(f'd8 parcial de gov to Capital\n{d8_gov_to_capital_parciais}\n')
+        print(f'd8 parcial de gov to Ciasprev\n{d8_gov_to_ciasprev_parciais}\n')
+        print(f'd8 parcial de gov to HP\n{d8_gov_to_hp_parciais}\n')
+        print(f'd8 parcial de gov to Click\n{d8_gov_to_click_parciais}\n')'''
+
+        d8_gov_to_unificado_linhas = pd.concat([gov_to_d8_capital, gov_to_d8_ciasprev, gov_to_d8_hp, gov_to_d8_click], ignore_index=True)
+        d8_gov_to_unificado_parciais = pd.concat([gov_to_d8_capital_parcial, gov_to_d8_ciasprev_parcial, gov_to_d8_hp_parcial, gov_to_d8_click_parcial], ignore_index=True)
+
+        # Muda o nome da coluna R$ PARCELA DESCONTADA da aba de Parciais para R$ PARCELA
+        d8_gov_to_unificado_parciais.rename(columns={'R$ PARCELA DESCONTADA': 'R$ PARCELA'}, inplace=True)
+        print(f'Colunas de d8_gov_to_unificado_parciais: {d8_gov_to_unificado_parciais.columns}')
+
+        # Mapeamento das colunas para concatenar
+        mapeamento_d8 = ["ORDEM", "REFERENCIA", "CPF", "MATRICULA", "NOME", "RUBRICA", "PARCELA", "ADF", "R$ PARCELA", "CONSIGNATARIA"]
+
+        d8_gov_to_unificado_linhas = d8_gov_to_unificado_linhas[mapeamento_d8]
+        d8_go_to_unificado_parciais_reduzido = d8_gov_to_unificado_parciais[mapeamento_d8]
+
+        d8_gov_to_unificado = pd.concat([d8_gov_to_unificado_linhas, d8_go_to_unificado_parciais_reduzido], ignore_index=True)
+
 
         d8_gov_to_unificado.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO.xlsx', index=False)
 
+    def unifica_d8_igeprev(self):
+        igeprev_d8_capital = d8_igeprev_capital.copy()
+        # Tira as últimas 5 linhas 
+        igeprev_d8_capital_reduzido = igeprev_d8_capital[:-4]
+        igeprev_d8_capital_reduzido['CONSIGNATARIA'] = 'CAPITAL'
+
+        igeprev_d8_ciasprev = d8_igeprev_ciasprev.copy()
+        # Tira as últimas 5 linhas 
+        igeprev_d8_ciasprev_reduzido = igeprev_d8_ciasprev[:-4]
+        igeprev_d8_ciasprev_reduzido['CONSIGNATARIA'] = 'CIASPREV'
+
+        # Acho que dá para concatenar de boas
+        d8_igeprev_unificado = pd.concat([igeprev_d8_capital_reduzido, igeprev_d8_ciasprev_reduzido], ignore_index=True)
+
+        # Transforma  em excel
+        d8_igeprev_unificado.to_excel(fr'{self.caminho}\D8 UNIFICADO DE IGEPREV.xlsx', index=False)
  
         
 
-
-
 teste = IGEPREV_GOVTO_PRELIMINAR(front, funcao, conciliacao_df, kobraki_df)
 
-resultado = teste.unifica_d8()
+resultado = teste.unifica_d8_igeprev()
 
 
 
