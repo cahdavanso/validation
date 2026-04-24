@@ -227,14 +227,14 @@ class ZETRA:
 
             
 
-            orbital['Numero Contrato'] = orbital['Numero Contrato'].astype(str)
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
             '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "Validação  desconto final"]}\n')
             print(f'Contrato 301268942 no front: {front_consig_esteiras.loc[front_consig_esteiras["Contrato"] == "301268942", "Prestacao"]}\n')'''
 
 
             # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
             # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
-            mapa_orbital = orbital.set_index('Numero Contrato')['Valor da Parcela']
+            mapa_orbital = orbital.set_index('CONTRATO')['Valor da Parcela']
             # --- ETAPA 3: Definir quem vai ser alterado ---
             filtro_esteira = front_consig_esteiras['Esteira'] == '99 CARTAO UTILIZADO'
 
@@ -593,32 +593,32 @@ class ZETRA:
         if orbital is None:
             return None
         
-        orbital_preparado = pd.DataFrame(columns=['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela'])
+        orbital_preparado = pd.DataFrame(columns=['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL'])
 
         if self.convenio == 'PREF. PIRACICABA':
             orbital_preparado = orbital.loc[
-                orbital['Descrição EMPREGADOR'].str.contains('PREF PIRACICABA', case=False, na=False),
-                ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
+                orbital['DESCRIÇÃO DO EMPREG'].str.contains('PREF PIRACICABA', case=False, na=False),
+                ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
             ].copy()
         elif self.convenio == 'PREF. PIRACICABA SEMAE':
             orbital_preparado = orbital.loc[
-                orbital['Descrição EMPREGADOR'].str.contains('PREF PIRA SEMAE', case=False, na=False),
-                ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
+                orbital['DESCRIÇÃO DO EMPREG'].str.contains('PREF PIRA SEMAE', case=False, na=False),
+                ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
             ].copy()
         elif self.convenio == 'GOV. RIO DE JANEIRO':
             orbital_preparado = orbital.loc[
-                orbital['Descrição EMPREGADOR'].str.contains('GOV RJ|GOV RJ DG|GOV RJ SEG|GOV RJ M NEG', case=False, na=False),
-                ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
+                orbital['DESCRIÇÃO DO EMPREG'].str.contains('GOV RJ|GOV RJ DG|GOV RJ SEG|GOV RJ M NEG', case=False, na=False),
+                ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
             ].copy()
         elif self.convenio == 'PREF. CAMPINAS':
             orbital_preparado = orbital.loc[
-                orbital['Descrição EMPREGADOR'].str.contains('PREF CAMPINAS', case=False, na=False),
-                ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
+                orbital['DESCRIÇÃO DO EMPREG'].str.contains('PREF CAMPINAS', case=False, na=False),
+                ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
             ].copy()
         elif self.convenio == 'GOV. PARANÁ':
             orbital_preparado = orbital.loc[
-                orbital['Descrição EMPREGADOR'].str.contains('GOV PR DG|GOV PARANA|GOV PARANA SEG', case=False, na=False),
-                ['Numero Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Valor da Parcela']
+                orbital['DESCRIÇÃO DO EMPREG'].str.contains('GOV PR DG|GOV PARANA|GOV PARANA SEG', case=False, na=False),
+                ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
             ].copy()
 
         orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']

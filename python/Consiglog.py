@@ -102,13 +102,13 @@ class CONSIGLOG:
             
 
             orbital['Numero de Contrato'] = orbital['Numero de Contrato'].astype(str)
-            '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "Validação  desconto final"]}\n')
+            '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "VALID DESCONTO FINAL"]}\n')
             print(f'Contrato 301268942 no front: {front_consig_esteiras.loc[front_consig_esteiras["Contrato"] == "301268942", "Prestacao"]}\n')'''
 
 
             # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
             # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
-            mapa_orbital = orbital.set_index('Numero de Contrato')['Validação  desconto final']
+            mapa_orbital = orbital.set_index('Numero de Contrato')['VALID DESCONTO FINAL']
             # --- ETAPA 3: Definir quem vai ser alterado ---
             filtro_esteira = front_consig_esteiras['Esteira'] == '99 CARTAO UTILIZADO'
 
@@ -509,8 +509,8 @@ class CONSIGLOG:
     def orbital_tratado(self, orbital, front_para_separar):
 
         orbital_preparado = orbital.loc[
-            orbital['Descrição EMPREGADOR'].str.contains('PREF GOIÂNIA|PM GOIANIA SEG', case=False, na=False),
-            ['Numero de Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Validação  desconto final']
+            orbital['DESCRIÇÃO DO EMPREG'].str.contains('PREF GOIÂNIA|PM GOIANIA SEG', case=False, na=False),
+            ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
         ].copy()
         orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 

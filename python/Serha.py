@@ -57,6 +57,18 @@ class SERHA:
 
         self.orbital = orbital if orbital is not None else None
 
+        if self.orbital is not None:
+                    
+            # O cabeçalho está linha 3, considerando que começa em 0
+            # 1. Localiza a linha 3 para ser o novo cabeçalho
+            novo_cabecalho = self.orbital.iloc[2] 
+
+            # 2. Pega os dados da linha 3 em diante
+            self.orbital = self.orbital.iloc[3:].copy() 
+            # 3. Define os nomes das colunas
+            self.orbital.columns = novo_cabecalho
+            print(f'colunas de orbital: {self.orbital.columns}')
+
         self.main()
 
     def tratamento_front_preliminar(self):
@@ -179,19 +191,15 @@ class SERHA:
             front_consig_esteiras['Contrato'] = front_consig_esteiras['Contrato'].astype(str).str.strip()
             # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
 
-            
 
-            orbital['Numero de Contrato'] = orbital['Numero de Contrato'].astype(str)
-            orbital = orbital.drop_duplicates(subset='Numero de Contrato', keep='first')
-            '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "Validação desconto final"]}\n')
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
+            orbital = orbital.drop_duplicates(subset='CONTRATO', keep='first')
+            '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "VALID DESCONTO FINAL"]}\n')
             print(f'Contrato 301268942 no front: {front_consig_esteiras.loc[front_consig_esteiras["Contrato"] == "301268942", "Prestacao"]}\n')'''
-
-            print(f'Colunas de Orbital: {orbital.columns}')
-
 
             # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
             # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
-            mapa_orbital = orbital.set_index('Numero de Contrato')['Validação desconto final']
+            mapa_orbital = orbital.set_index('CONTRATO')['VALID DESCONTO FINAL']
             # --- ETAPA 3: Definir quem vai ser alterado ---
             filtro_esteira = front_consig_esteiras['Esteira'] == '99 CARTAO UTILIZADO'
 
@@ -571,13 +579,13 @@ class SERHA:
 
         if orbital is None:
             return None
-
+    
         # Pegar do hífen para frente para conseguir pegar a autarquia do self.convenio, porque tem um padrão de "GOV. MG - IPSEMG" ou "GOV. MG - CBMMG"
         autarquia = self.convenio.split('-')[-1].strip()
 
         orbital_preparado = orbital.loc[
-            orbital['Descrição EMPREGADOR'].str.contains(autarquia, case=False, na=False),
-            ['Numero de Contrato', 'nome_mutuario', 'num_cpf_mutuario', 'Validação desconto final']
+            orbital['DESCRIÇÃO DO EMPREG'].str.contains(autarquia, case=False, na=False),
+            ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
         ].copy()
         orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
