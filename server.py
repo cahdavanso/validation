@@ -331,6 +331,6 @@ async def download_file(filename: str):
 
 # É melhor comentar do que apagar na próxima vez que precisar testar no render
 if __name__ == "__main__":
-    # Pega a porta do Render ou usa 8000 se estiver local
-    port = int(os.environ.get("PORT", 8000))
+    # Pega a porta do Render ou usa 5000 se estiver local
+    port = int(os.environ.get("PORT", 5000))
     uvicorn.run(app, host="0.0.0.0", port=port)

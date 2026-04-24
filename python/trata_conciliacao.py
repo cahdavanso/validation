@@ -1,7 +1,7 @@
 import pandas as pd
 
 class TRATA_CONCILIACAO:
-    def __init__(self, conciliacao, kobraki):
+    def __init__(self, conciliacao, kobraki=None):
         self.conciliacao = conciliacao
         self.kobraki = kobraki
 
@@ -24,7 +24,7 @@ class TRATA_CONCILIACAO:
                 print(f"Tipo da coluna CONTRATOS: {self.conciliacao['CONTRATOS'].dtype}")'''
 
             
-            kobraki_tratado = self.kobraki
+            kobraki_tratado = self.kobraki if self.kobraki is not None else None
 
             conciliacao_tratado = self.conciliacao
             # Converte para lista de colunas
@@ -61,12 +61,16 @@ class TRATA_CONCILIACAO:
 
             # Vamos criar uma coluna "KOBRAKI" na conciliação, e usar a coluna de "CONTRATOS" da conciliação 
             # para puxar os valores de "VALOR RECEBIDO" no kobraki puxando da coluna "CONTRATO"
-            somase_kobraki = kobraki_tratado.groupby('CONTRATO')['VALOR RECEBIDO'].sum()
-            conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['CONTRATOS'].copy().map(somase_kobraki)
-            conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['KOBRAKI'].fillna(0)
+            if kobraki_tratado is not None:
+                somase_kobraki = kobraki_tratado.groupby('CONTRATO')['VALOR RECEBIDO'].sum()
+                conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['CONTRATOS'].copy().map(somase_kobraki)
+                conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['KOBRAKI'].fillna(0)
 
-            # Somar as colunas de KOBRAKI e RECEBIDO GERAL para criar a coluna "TOTAL RECEBIDO"
-            conciliacao_tratado['TOTAL RECEBIDO'] = conciliacao_tratado['KOBRAKI'] + conciliacao_tratado['RECEBIDO GERAL']
+                # Somar as colunas de KOBRAKI e RECEBIDO GERAL para criar a coluna "TOTAL RECEBIDO"
+                conciliacao_tratado['TOTAL RECEBIDO'] = conciliacao_tratado['KOBRAKI'] + conciliacao_tratado['RECEBIDO GERAL']
+            else:
+                 # Somar as colunas de KOBRAKI e RECEBIDO GERAL para criar a coluna "TOTAL RECEBIDO"
+                conciliacao_tratado['TOTAL RECEBIDO'] = conciliacao_tratado['RECEBIDO GERAL']
 
             # 2. Calcular prestação * prazo
             prestacao_vezes_prazo = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']

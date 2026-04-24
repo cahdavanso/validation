@@ -93,7 +93,7 @@ class IGEPREV_GOVTO_PRELIMINAR:
         
         self.condicoes_1 = load_esteiras()
 
-        # self.front_tratado = self.tratamento_front()        
+        self.front_tratado = self.tratamento_front()        
         
     def unifica_front_funcao(self):
         front = self.front
@@ -483,8 +483,16 @@ class IGEPREV_GOVTO_PRELIMINAR:
         gov_to_ciasprev_averbado['Consignataria'] = 'CIASPREV'
         gov_to_hp_averbado['Consignataria'] = 'HP'
 
+        front_trabalhado = self.front_com_d8()
+
         # Unifica averbações de GOV TO
         gov_to_averbado_unificado = pd.concat([gov_to_capital_averbado, gov_to_ciasprev_averbado, gov_to_hp_averbado], ignore_index=True)
+
+        # Adiciona ponto e traço
+        cpf_tratado = gov_to_averbado_unificado['CPF'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
+        gov_to_averbado_unificado['CPF'] = cpf_tratado
+
+
         gov_to_averbado_unificado['Convenio'] = 'Governo de Tocantins'
 
         # Pega só o que é cartão de GOV TO
@@ -527,8 +535,76 @@ class IGEPREV_GOVTO_PRELIMINAR:
         print(f'COLUNAS DE IGEPREV REMAPEADO {igeprev_remapeado.columns}')
         to_igeprev_unificado = pd.concat([gov_to_remapeado, igeprev_remapeado], ignore_index=True)
 
-        to_igeprev_unificado.to_excel(fr'{self.caminho}\GOV TO E IGEPREV UNIFICADOS.xlsx', index=False)
+        if to_igeprev_unificado['VALOR_PARCELA'].dtype != 'float64':
+            to_igeprev_unificado['VALOR_PARCELA'] = to_igeprev_unificado['VALOR_PARCELA'].str.replace(".", '')
+            to_igeprev_unificado['VALOR_PARCELA'] = to_igeprev_unificado['VALOR_PARCELA'].str.replace(",", '.')
+            to_igeprev_unificado['VALOR_PARCELA'] = pd.to_numeric(to_igeprev_unificado['VALOR_PARCELA'], errors='coerce')
 
+        # CRIAÇÃO DE COLUNAS QUE SERÃO USADAS NO PRÓXIMO MÓDULO
+        to_igeprev_unificado['CONTSE CPF'] = ''
+        to_igeprev_unificado['CONTSE SEQ'] = ''
+        to_igeprev_unificado['PARCELA FRONT'] = ''
+        to_igeprev_unificado['SOMASE CRED'] = ''
+        to_igeprev_unificado['OBS'] = ''
+
+        somase_cred = front_trabalhado.groupby('CPF')['Lançar'].sum().to_dict()
+        # print(f'SOMASE_CRED:\n{somase_cred}')
+
+        to_igeprev_unificado['SOMASE CRED'] = to_igeprev_unificado['CPF'].map(somase_cred).fillna(0)
+
+        def distribuicao_valores(averbado_para_distribuir):
+            # IMPORTANTE: Garanta que as colunas de valores são numéricas, não texto.
+            # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
+            to_igeprev_averbado_final = averbado_para_distribuir.copy()
+            to_igeprev_averbado_final['VALOR_PARCELA'] = pd.to_numeric(to_igeprev_averbado_final['VALOR_PARCELA'], errors='coerce').fillna(0)
+
+            if to_igeprev_averbado_final['SOMASE CRED'].dtype != 'float64':
+                to_igeprev_averbado_final['SOMASE CRED'] = to_igeprev_averbado_final['SOMASE CRED'].str.replace(".", "")
+                to_igeprev_averbado_final['SOMASE CRED'] = to_igeprev_averbado_final['SOMASE CRED'].str.replace(",", ".")
+                to_igeprev_averbado_final['SOMASE CRED'] = pd.to_numeric(to_igeprev_averbado_final['SOMASE CRED'], errors='coerce').fillna(0)
+
+            # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
+            # Esta é a "mágica" que substitui a necessidade de um loop.
+            to_igeprev_averbado_final['SOMA ACUMULADA DA RESERVA'] = to_igeprev_averbado_final.groupby('CPF')['VALOR_PARCELA'].cumsum()
+
+            # 2. Calcula o valor que JÁ FOI ALOCADO para as linhas ANTERIORES.
+            # É a soma acumulada até a linha atual, menos o valor da própria linha.
+            alocado_anteriormente = to_igeprev_averbado_final['SOMA ACUMULADA DA RESERVA'] - to_igeprev_averbado_final['VALOR_PARCELA']
+            to_igeprev_averbado_final['ALOCADO ANTERIORMENTE'] = alocado_anteriormente
+
+            # 3. Calcula o saldo restante do SOMASE ANTES de processar a linha atual.
+            saldo_restante = to_igeprev_averbado_final['SOMASE CRED'] - alocado_anteriormente
+
+            # 4. O valor a lançar é o MÍNIMO entre o que a reserva da linha pede e o saldo que ainda temos.
+            # Usamos .clip(0) para garantir que o saldo não seja negativo (se já estourou, é 0).
+            valor_a_lancar = np.minimum(to_igeprev_averbado_final['VALOR_PARCELA'], saldo_restante.clip(0))
+
+            to_igeprev_averbado_final['VALOR LANÇAR'] = valor_a_lancar.round(2)
+
+            # averbado_novo.loc[averbado_novo['VALOR A LANÇAR CPF'] == 0, 'OBS'] = 'NÃO'
+
+            # 7. Vamos criar a coluna Diff para lançar os parciais
+            somase_lancar = to_igeprev_averbado_final.groupby('CPF')['VALOR LANÇAR'].transform('sum')
+            to_igeprev_averbado_final['DIFF'] = somase_lancar - to_igeprev_averbado_final['SOMASE CRED']
+            to_igeprev_averbado_final['DIFF'] = to_igeprev_averbado_final['DIFF'].round(2)
+
+            # 8. Adiciona a coluna de SITUAÇÃO DE DESCONTO para TOTAL ou PARCIAL
+            to_igeprev_averbado_final['SITUAÇÃO DE DESCONTO'] = ''
+            to_igeprev_averbado_final.loc[to_igeprev_averbado_final['DIFF'] < 0, 'SITUAÇÃO DE DESCONTO'] = 'PARCIAL'
+            to_igeprev_averbado_final.loc[to_igeprev_averbado_final['DIFF'] >= 0, 'SITUAÇÃO DE DESCONTO'] = 'TOTAL'
+
+            # 9. Novo Lançar total
+            # to_igeprev_averbado_final['LANÇAR TOTAL'] = to_igeprev_averbado_final['VALOR_PARCELA'] - to_igeprev_averbado_final['DIFF']
+
+            return to_igeprev_averbado_final
+
+        to_igeprev_finalizado = distribuicao_valores(to_igeprev_unificado)
+
+        print('DEBUG: Averbados após cálculo vetorizado:')
+        try:
+            to_igeprev_finalizado.to_excel(os.path.join(self.caminho, f"GOV TO E IGEPREV TRABALHADO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR AVERBADOS TRABALHADO: {e}")
 
 teste = IGEPREV_GOVTO_PRELIMINAR(front, funcao, conciliacao_df, kobraki_df)
 

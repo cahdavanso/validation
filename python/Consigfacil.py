@@ -72,16 +72,73 @@ class CONSIGFACIL:
 
         # --- GATILHO: Inicia a lógica original automaticamente ---
         logging.info("Iniciando lógica original do Consigfacil...")
-        front_trabalhado = self.tratamento_front()
-        self.averbados_func(front_trabalhado)
+        self.front_trabalhado = self.tratamento_front()
+        self.averbados_func()
 
 
     # =========================================================================
     # DAQUI PARA BAIXO É A LÓGICA ORIGINAL INTACTA (Copy-Paste do seu arquivo)
     # =========================================================================
 
+    def unifica_front_funcao(self):
+        front = self.front
+        funcao = self.funcao
+
+        if funcao is None:
+            print('\nDEBUG class ANDAMENTO -> funcao unifica_fron_funcao -> Arquivo "Função" é nulo, retornando "front" sem tratamento\n')
+            return front
+        # tipos dos contratos de cada dataframe
+        '''print('Tipo da coluna Contrato do Front', front['Contrato'].dtype)
+        print('Tipo da coluna NR_PROP do Funcao', funcao['NR_PROP'].dtype)'''
+
+        contrato_front = front['Contrato']
+        ccb_tratado = front['CCB'].astype(str).str.slice(0, 9).fillna(0).astype('float64')
+
+        ccb_tratado = ccb_tratado.astype('int64')
+
+        # Tira os contratos do Front que já existem no Função
+        funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
+
+        # Tira os contratos CCB do Front que também existem no Função
+        funcao = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
+
+        # Juntar Funcao com Front
+        # 1. Defina o mapeamento de nomes (De: Para)
+        mapeamento = {
+            'NR_PROP': 'Contrato',
+            'CPF': 'CPF',
+            'MATRICULA': 'Matricula',
+            'CLIENTE': 'Nome',
+            'PARC': 'Prazo',
+            'VLR_PARC': 'Prestacao',
+            'PRODUTO': 'Tipo Operacao',
+            'ORIGEM_4': 'Convenio'
+        }
+
+        # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
+        # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
+        funcao_ajustado = funcao[list(mapeamento.keys())].rename(columns=mapeamento)
+
+        # 3. Use o concat para unir os dois DataFrames
+        # O ignore_index=True serve para gerar um novo índice sequencial no DF final
+        front_unif = pd.concat([front, funcao_ajustado], ignore_index=True)
+
+        # Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
+        front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
+        front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
+        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG ")
+        front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
+        front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
+        front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
+
+        print('front unif finalzin:\n', front_unif.tail())
+
+        # front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
+
+        return front_unif
+
     def tratamento_front_preliminar(self):
-        front_consig = self.front.copy()
+        front_consig = self.unifica_front_funcao()
 
         conciliacao = self.conciliacao.copy()
 
@@ -144,34 +201,46 @@ class CONSIGFACIL:
         # Marcar liquidados em StatusContrato
         front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
-        # TIRAR BANCO OUTROS
-        front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'
+        # TIRAR BANCO OUTROS e FUTURO
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS|FUTURO', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO ERRADO'
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
         front_com_prazo = objeto_andamento.andamento_func_front()
+        front_consig_validado_termino['PRAZO'] = front_consig_validado_termino['Contrato'].astype(str).map(front_com_prazo.set_index('Contrato')['PRAZO'])
         front_consig_validado_termino['Contrato'] = front_consig_validado_termino['Contrato'].astype('int64')
-        front_consig_validado_termino['PRAZO'] = front_consig_validado_termino['Contrato'].map(front_com_prazo.set_index('Contrato')['PRAZO'])
 
         # Marca para tirar o que é ADIANTAMENTO SALARIAL de Tipo Operacao
         front_consig_validado_termino.loc[front_consig_validado_termino['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
 
         # Marcar tudo que contem prazo como Não cartão
-        # 1. Cria a máscara para quem está com o PRAZO vazio (ou NaN)
-        mask_vazio_prazo = front_consig_validado_termino['PRAZO'].isna() | (front_consig_validado_termino['PRAZO'] == '') | (front_consig_validado_termino['PRAZO'] == 1) | (front_consig_validado_termino['PRAZO'] == 0)
+        '''front_com_prazo = front_consig_validado_termino[
+        (front_consig_validado_termino['PRAZO'].notna()) & 
+        (front_consig_validado_termino['PRAZO'] != '') & 
+        (front_consig_validado_termino['PRAZO'] != 1) & 
+        (front_consig_validado_termino['PRAZO'] != 0)
+        ]'''
 
-        # 2. Quem NÃO tem prazo (vazio) -> É Cartão
-        front_consig_validado_termino.insert(22, 'Novo Tipo Operacao', '', True)
-        front_consig_validado_termino['Novo Tipo Operacao'] = front_consig_validado_termino['Tipo Operacao'].copy()
-        front_consig_validado_termino.loc[mask_vazio_prazo, 'Novo Tipo Operacao'] = 'CARTAO DE CREDITO'
+        front_com_prazo = front_consig_validado_termino[
+        (front_consig_validado_termino['PRAZO'].notna()) & 
+        (front_consig_validado_termino['PRAZO'] != '')
+        ]
+
+        '''if self.convenio in ['GOV. MARANHÃO', 'PREF. NATAL', 'PREF. PALMAS', 'PREV. PALMAS']:
+            front_consig_validado_termino = front_consig_validado_termino[(front_consig_validado_termino['PRAZO'].isna()) | (front_consig_validado_termino['PRAZO'] == '') | (front_consig_validado_termino['PRAZO'] == 1)]
+        else:
+            front_consig_validado_termino = front_consig_validado_termino[(front_consig_validado_termino['PRAZO'].isna()) | (front_consig_validado_termino['PRAZO'] == '') | (front_consig_validado_termino['PRAZO'] == 1) | (front_consig_validado_termino['PRAZO'] == 0)]'''
+        
+        front_consig_validado_termino = front_consig_validado_termino[(front_consig_validado_termino['PRAZO'].isna()) | (front_consig_validado_termino['PRAZO'] == '')]
+        front_com_prazo.to_excel(fr'{self.caminho}\FRONT COM PRAZOS PORQUE EU SOU MUITO BURRO.xlsx', index=False)
+        # front_consig_validado_termino.to_excel(fr'{self.caminho}\front_consig_validado_termino.xlsx', index=False)
+        front_consig_validado_termino.insert(22, 'Novo Tipo Operacao', 'CARTAO DE CREDITO')
+        # print(f'O que está escrito na linha com contrato 512377\n{front_consig_validado_termino.loc[front_consig_validado_termino['Contrato'] == 512377, 'Novo Tipo Operacao']}')
 
         # 3. Quem TEM prazo (não vazio) -> NÃO é cartão (ex: Empréstimo ou Operação Comum)
         # Usamos o ~ dentro do .loc para inverter a máscara
         '''if self.convenio not in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE', 'PREF. PORTO VELHO']:
             front_consig_validado_termino.loc[~mask_vazio_prazo, 'Novo Tipo Operacao'] = "CARTAO BENEFICIO"''' # Ou o nome que desejar
-
-        # Marcar o que não é cartão Conciliação
-        front_consig_validado_termino.loc[(~front_consig_validado_termino['Novo Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
 
 
         # Salva com os NÃO LANÇAR
@@ -188,6 +257,8 @@ class CONSIGFACIL:
         
     def tratamento_front(self):
         front_consig = self.tratamento_front_preliminar()
+        print(f'Comprimento de front_consig: {len(front_consig)}')
+
 
         if front_consig is False:
             print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
@@ -195,6 +266,7 @@ class CONSIGFACIL:
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
         front_consig_cartao_conciliacao = front_consig[front_consig['Novo Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
+        print(f'Comprimento de front_consig_cartao_conciliacao: {len(front_consig_cartao_conciliacao)}')
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -207,9 +279,11 @@ class CONSIGFACIL:
 
         # ------------------------------- TIRA O QUE É ADIANTAMENTO SALARIAL ------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['OBS'].str.contains('NÃO LANÇAR - ADIANTAMENTO SALARIAL', na=False)].copy()
+        print(f'Comprimento de front_consig_trabalhado: {len(front_consig_trabalhado)}')
 
         # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Acao Judicial'] != 1].copy()
+        print(f'Comprimento de front_consig_trabalhado pós ação judicial: {len(front_consig_trabalhado)}')
 
         # ---------------------------------- TIRAR ÓBITO DO FRONT ---------------------------------- #
         # front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Obito'] != 1].copy()
@@ -218,20 +292,23 @@ class CONSIGFACIL:
 
         front_consig_trabalhado.loc[front_consig_trabalhado['Saldo'] > -0.01, 'Valor a lançar'] = 0
         front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Valor a lançar'] > 0].copy()
+        print(f'Comprimento de front_consig_trabalhado pós saldo: {len(front_consig_trabalhado)}')
 
-        # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
-        mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA'
-        front_consig_trabalhado.loc[mask_peculio, 'Valor a lançar'] += 20
-        front_consig_trabalhado.loc[mask_peculio, 'Prestacao'] += 20
 
         # -------------------------------------- TIRA O PRAZO ----------------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['OBS'].str.contains('NÃO LANÇAR - PRAZO', na=False)].copy()
-
+        print(f'Comprimento de front_consig_trabalhado pós prazo: {len(front_consig_trabalhado)}')
         # --------------------------------------- TIRA BANCO OUTROS ----------------------------------------- #
-        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Consignataria'].str.contains('OUTROS', na=False)].copy()
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Consignataria'].str.contains('OUTROS|FUTURO', na=False)].copy()
+        print(f'Comprimento de front_consig_trabalhado pós outros bancos: {len(front_consig_trabalhado)}')
 
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado|CANCELADO', na=False)].copy()
+        print(f'Comprimento de front_consig_trabalhado pós liquidados: {len(front_consig_trabalhado)}')
+
+        # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
+        front_consig_trabalhado = self.verificacao_peculio_front(front_consig_trabalhado)
+
 
         print('DEBUG: Esteiras finais do front trabalhado')
         try:
@@ -738,11 +815,48 @@ class CONSIGFACIL:
             print(f"DEBUG: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
 
         return orbital_final
+    
+    def verificacao_peculio_front(self, front_trabalhado):
+        # Usando .copy() para não afetar o original por acidente
+        averbados_unif = self.averbados
+        if self.convenio in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE', 'PREF. PORTO VELHO', 'PREF. NATAL','PREF. SANTA RITA']:
+            averbados_unif = averbados_unif[averbados_unif['Modalidade'].isin(['Cartão de Crédito', 'Cartão Benefício (Compras)', 'Cartão Benefício', 'Cartão Benefício(96)', 'Cartão Benefício Compra'])]
+        else:
+            averbados_unif = averbados_unif[averbados_unif['Modalidade'] == 'Cartão de Crédito']
+
+        front = front_trabalhado.copy()
+
+        # 1. Preparar contagens (Calculamos nos averbados e mapeamos para o front)
+        contagem_geral = averbados_unif['CPF'].value_counts()
+        
+        averbados_hp = averbados_unif[averbados_unif['Login'].str.contains('HOJE|HOJEPREV')]
+        contagem_hp = averbados_hp['CPF'].value_counts()
+
+        # 2. Mapear para o front (Garante que os dados alinhem pelo CPF)
+        front['CONTSE HP'] = front['CPF'].map(contagem_hp).fillna(0)
+        front['CONTSE GERAL'] = front['CPF'].map(contagem_geral).fillna(0)
+
+        # 3. Garantir que 'Valor a lançar' é numérico para poder somar
+        front['Valor a lançar'] = pd.to_numeric(front['Valor a lançar'], errors='coerce').fillna(0)
+
+        # 4. Aplicar a lógica com parênteses corretos
+        # Se HP > 0 E Geral > 0 E HP == Geral (Ou seja, ele é 100% HP nos averbados)
+        mask_peculio = (
+            ((front['CONTSE HP'] > 0) & 
+            (front['CONTSE GERAL'] > 0) & 
+            (front['CONTSE HP'] == front['CONTSE GERAL'])) |
+            (front['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA')
+        )
+        
+        front.loc[mask_peculio, 'Valor a lançar'] += 20
+
+        # 5. Limpeza e retorno
+        return front #.drop(columns=['CONTSE HP', 'CONTSE GERAL'])
 
 
-    def averbados_func(self, front):
+    def averbados_func(self):
         # Contse do Credbase no relatório de averbados
-        front_consig = front.copy()
+        front_consig = self.front_trabalhado
         averbados = self.averbados
 
         if front_consig is False:
@@ -885,10 +999,6 @@ class CONSIGFACIL:
 
             averbado_novo['Valor da reserva'] = pd.to_numeric(averbado_novo['Valor da reserva'], errors='coerce').fillna(0)
             averbado_novo['SOMASE CRED'] = pd.to_numeric(averbado_novo['SOMASE CRED'], errors='coerce').fillna(0)
-
-            # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
-            # da ordem atual do DataFrame. Se precisar de uma ordem específica,
-            # um .sort_values() viria aqui.
 
             # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
             # Esta é a "mágica" que substitui a necessidade de um loop.

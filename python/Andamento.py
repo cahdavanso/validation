@@ -69,13 +69,14 @@ class ANDAMENTO:
         # Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
         front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
         front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
+        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG ")
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
         front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
 
         print('front unif finalzin:\n', front_unif.tail())
 
-        front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
+        # front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
 
         return front_unif
     
@@ -106,7 +107,10 @@ class ANDAMENTO:
         
 
         # Criamos cópias para evitar SettingWithCopyWarning
-        self.andamento = self.andamento[self.andamento['Prazo Total'] != 1].copy()
+        # self.andamento = self.andamento[self.andamento['Prazo Total'] != 1].copy()
+
+        # Remoção de cartão de crédito com prazo 0 ou 1
+        self.andamento = self.andamento[~((self.andamento['Modalidade'] == 'Cartão de Crédito') & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
 
         if 'Contrato de Andamento' not in self.andamento.columns:
             self.andamento.insert(2, 'Contrato de Andamento', self.andamento['Código na instituição'])
@@ -131,13 +135,14 @@ class ANDAMENTO:
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
         andam_file, front_base = self.processar_contratos_otimizado(andam_referencia_prazos, front_para_processar)
         andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
-        print(f'Andamento depois de extrair_contratos\n{andam_file.loc[andam_file['CPF'] == '010.574.793-90']}')
+        # print(f'Andamento depois de extrair_contratos\n{andam_file.loc[andam_file['CPF'] == '010.574.793-90']}')
 
         # Terceira passada
         andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
 
         # 3. EXTRAÇÃO DOS PRAZOS
-        colunas_contratos = [col for col in andam_file.columns if 'Contrato' in col or 'Código' in col]
+        # colunas_contratos = [col for col in andam_file.columns if 'Contrato' in col or 'Código' in col]
+        colunas_contratos = [col for col in andam_file.columns if 'Contrato Editado' in col]
         
         contrato_para_prazo = {}
         for _, row in andam_file.iterrows():
@@ -153,10 +158,13 @@ class ANDAMENTO:
         
         # Regra de Negócio Final: Marcação de OBS
         status_prazo = front_para_processar['PRAZO'].fillna('')
-        if self.convenio in ['PREF. NATAL', 'PREF. PALMAS', 'PREV. PALMAS']:
-            cond_prazo = ~status_prazo.isin(['', '0', 0,'1', 1])
+        front_para_processar['PRAZO'] = front_para_processar['PRAZO'].fillna('')
+        '''if self.convenio in ['PREF. NATAL', 'PREF. PALMAS', 'PREV. PALMAS']:
+            cond_prazo = ~status_prazo.isin(['', '0', 0, '1', 1])
         else:
-            cond_prazo = ~status_prazo.isin(['', '1', 1])
+            cond_prazo = ~status_prazo.isin(['', '1', 1])'''
+        # front_para_processar.loc[cond_prazo & (front_para_processar['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - PRAZO'
+        cond_prazo = ~status_prazo.isin([''])
         front_para_processar.loc[cond_prazo & (front_para_processar['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - PRAZO'
 
         # --- FINALIZAÇÃO ---
@@ -167,6 +175,8 @@ class ANDAMENTO:
             andam_file.to_excel(os.path.join(self.caminho, f"ANDAMENTO GERAL {self.convenio}.xlsx"), index=False)
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR ANDAMENTO GERAL: {e}")
+
+        front_final.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
 
         return front_final
     
