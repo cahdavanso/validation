@@ -14,7 +14,7 @@ rejeitados = ['/']
 class CODATA:
 # Dentro de python/Codata.py
 
-    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, caminho, kobraki=None, funcao=None, andamento_list=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, caminho, kobraki=None, funcao=None, andamento_list=None, orbital=None):
 
         # A API FastAPI já leu, unificou e tratou a codificação. 
         # Aqui, apenas atribuímos o DataFrame ou inicializamos como vazio se for None.
@@ -42,15 +42,75 @@ class CODATA:
         # Kobrakai
         self.kobraki = kobraki
 
+        # Orbital
+        self.orbital = orbital if orbital is not None else None
+
         # Chama a primeira função da cadeia de processamento
         front_trabalhado = self.tratamento_front()
         self.averbados_func(front_trabalhado)
         # self.tratamento_funcao()
 
+    def unifica_front_funcao(self):
+        front = self.front
+        funcao = self.funcao
+
+        print(f"colunas de funcao: {funcao.columns}")
+
+        contrato_front = front['Contrato']
+        ccb_tratado = front['CCB'].astype(str).str.slice(0, 9)
+        ccb_tratado = ccb_tratado.astype('int64')
+
+        # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
+        contrato_funcao = funcao['NR_PROP']
+        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
+
+        # Tira os contratos do Front que já existem no Função
+        funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
+
+        # Tira os contratos CCB do Front que também existem no Função
+        funcao_tratado = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
+
+
+        # Juntar Funcao com Front
+        # 1. Defina o mapeamento de nomes (De: Para)
+        mapeamento = {
+            'NR_PROP': 'Contrato',
+            'CPF': 'CPF',
+            'MATRICULA': 'Matricula',
+            'CLIENTE': 'Nome',
+            'PARC': 'Prazo',
+            'VLR_PARC': 'Prestacao',
+            'PRODUTO': 'Tipo Operacao',
+            'ORIGEM_4': 'Convenio'
+        }
+
+        # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
+        # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
+        funcao_ajustado = funcao_tratado[list(mapeamento.keys())].rename(columns=mapeamento)
+
+        # 3. Use o concat para unir os dois DataFrames
+        # O ignore_index=True serve para gerar um novo índice sequencial no DF final
+        front_unif = pd.concat([front, funcao_ajustado], ignore_index=True)
+
+        # Coloca Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
+        front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
+        front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
+        front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
+        front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
+        front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
+
+        # print(front_unif.tail())
+
+        # front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
+
+        return front_unif
+
     def tratamento_front_preliminar(self):
-        front_consig = self.front.copy()
+        front_consig = self.unifica_front_funcao()
 
         conciliacao = self.conciliacao.copy()
+
+        orbital = self.orbital
 
         # Insere as colunas vazias necessárias
         front_consig.insert(21, 'Saldo', '', True)
@@ -84,8 +144,50 @@ class CODATA:
         
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
+        print(f"últimas linhas de orbital do front 0:\n{front_consig[['CPF', 'Prestacao']].tail()}")
+
         # Adiciona só as esteiras que podem ser lançadas
-        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+        # --------------------------------------------- ORBITAL --------------------------------------------- #
+        # --- ETAPA 1: Garantir que as chaves são do mesmo tipo (Texto) ---
+        # Isso evita o erro clássico onde um lado é número e o outro é texto
+        if orbital is not None:
+            front_consig['Contrato'] = front_consig['Contrato'].astype(str).str.strip()
+            # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
+
+            if orbital['VALID DESCONTO FINAL'].dtype != "float64":
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
+                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+
+            for col in orbital.columns:
+                if "contrato" in col or "Contrato" in col:
+                    orbital.rename(columns={col:"CONTRATO"}, inplace=True)
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
+
+            # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
+            # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
+            mapa_orbital = orbital.set_index('CONTRATO')['VALID DESCONTO FINAL']
+            # --- ETAPA 3: Definir quem vai ser alterado ---
+            filtro_esteira = front_consig['Esteira'] == '99 CARTAO UTILIZADO'
+
+            # --- ETAPA 4: Fazer a mágica (Buscar valores) ---
+            # .loc[filtro, coluna] -> Seleciona só as linhas da esteira certa
+            # .map(mapa_orbital)   -> Faz o "PROCV" buscando no dicionário criado
+            valores_encontrados = front_consig.loc[filtro_esteira, 'Contrato'].map(mapa_orbital)
+
+            # --- ETAPA 5: Tratar quem não foi achado ---
+            # Se o contrato não existe na Orbital, o map devolve NaN.
+            # Usamos fillna(0) para trocar NaN por 0, conforme você pediu.
+            valores_encontrados = valores_encontrados.fillna(0)
+
+            # --- ETAPA 6: Gravar no DataFrame original ---
+            valores_encontrados_str = valores_encontrados.astype(str)
+            front_consig.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
+
+        front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+
+        print(f"últimas linhas de orbital do front 1:\n{front_consig[['CPF', 'Prestacao']].tail()}")
+
 
         # ------------------------------------ ESTEIRAS REMOVIDAS ------------------------------------- #
         front_consig_esteiras_removidas = front_consig[~front_consig['Esteira'].isin(esteiras_permitidas)].copy()
@@ -94,9 +196,14 @@ class CODATA:
         except Exception as e:
             print(f"Erro ao salvar o arquivo de esteiras removidas: {e}")
 
+        # Adiciona só as esteiras que podem ser lançadas
+        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Novo Tipo Operacao']
 
+
+        print(f"últimas linhas de orbital do front 2:\n{front_consig_esteiras[['CPF', 'Prestacao']].tail()}")
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
         front_consig_validado_termino = self.validacao_termino_front(front_consig_esteiras)
@@ -118,6 +225,8 @@ class CODATA:
         elif self.consignataria == 'INSPFEM':
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Consignataria'].str.contains('INSPFEM - CARD', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO INSPFEM'
 
+        print(f"últimas linhas de orbital do front 3:\n{front_consig_validado_termino[['CPF', 'Prestacao']].tail()}")
+
         # Marca consignatária errada
         if self.consignataria == 'CAPITAL CONSIG':
             front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('INSPFEM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - INSPFEM'
@@ -130,6 +239,8 @@ class CODATA:
         elif self.consignataria == 'INSPFEM':
             front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
+        print(f"últimas linhas de orbital do front 4:\n{front_consig_validado_termino[['CPF', 'Prestacao']].tail()}")
+
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
 
@@ -140,6 +251,8 @@ class CODATA:
             print("DEBUG: Arquivo salvo com sucesso!")
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR: {e}")
+
+        print(f"últimas linhas de orbital do front 5:\n{front_consig_validado_termino[['CPF', 'Prestacao']].tail()}")
 
         # --------------------------------------------------------------------------------------------- #
         return front_consig_validado_termino
@@ -201,29 +314,55 @@ class CODATA:
 
         return front_consig_trabalhado
 
-    def orbital_tratado(self, front_para_separar):
+    def orbital_tratado(self, orbital, front_para_separar):
+
+
+        if orbital['VALID DESCONTO FINAL'].dtype != 'float64':
+            orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
+            orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
+            orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+            
+
+        orbital_preparado = orbital.loc[
+            orbital['DESCRIÇÃO DO EMPREG'].str.contains('INSPFEM', case=False, na=False),
+            ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
+        ].copy()
+        orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+        
 
         front_so_orbital = front_para_separar.loc[
             front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
-            ['Contrato', 'Nome', 'CPF', 'Prestacao']
-        ].copy()
+            ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
+        
         front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
-        orbital_final = front_so_orbital
+        # front_so_orbital['Proposta'] = front_so_orbital['Proposta'].astype(str).str.strip()
+
+        # front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace('.', '', regex=False)
+        if front_so_orbital['VALOR DESCONTO'].dtype != "float64":
+            front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace('.', '', regex=False)
+            front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace(',', '.', regex=False)
+            front_so_orbital['VALOR DESCONTO'] = pd.to_numeric(front_so_orbital['VALOR DESCONTO'], errors='coerce')
+
+        orbital_final = pd.concat([front_so_orbital, orbital_preparado])
 
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
 
+        print(f"últimas linhas de orbital:\n{orbital_final[['CPF/CNPJ', 'VALOR DESCONTO']].tail()}")
+        
+        print(f"orbital_tratado: Salvando arquivo de orbital tratado teste com front")
         try:
             orbital_final.to_excel(os.path.join(self.caminho, f"ORBITAL TRABALHADO {self.convenio}.xlsx"), index=False)
-            print(f"DEBUG: ORBITAL TRABALHADO {self.convenio} salvo com sucesso!")
+            print(f"orbital_tratado: ORBITAL TRABALHADO {self.convenio} salvo com sucesso!")
         except Exception as e:
-            print(f"DEBUG: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
+            print(f"orbital_tratado: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
 
         return orbital_final
 
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
+        print(f"últimas linhas de orbital do front validacao_termino 0:\n{front_copy[['CPF', 'Prestacao']].tail()}")
         teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
@@ -244,18 +383,24 @@ class CODATA:
 
         # Puxar o saldo para o credbase
         front_copy['Saldo'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
+        print(f"últimas linhas de orbital do front validacao_termino 1:\n{front_copy[['CPF', 'Prestacao']].tail()}")
         # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
 
         front_copy.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
-        front_copy['Prestacao'] = front_copy['Prestacao'].str.replace('.', '', regex=False)
-        front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
-        front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
+        if front['Prestacao'].dtype != "float64":
+            front_copy['Prestacao'] = front_copy['Prestacao'].str.replace('.', '', regex=False)
+            front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
+            front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
+
+        print(f"últimas linhas de orbital do front validacao_termino 2:\n{front_copy[['CPF', 'Prestacao']].tail()}")
 
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
         valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['Prestacao'])
 
         front_copy['Valor a lançar'] = valor_a_lancar
+
+        print(f"últimas linhas de orbital do front validacao_termino 3:\n{front_copy[['CPF', 'Prestacao', 'Valor a lançar']].tail()}")
 
         return front_copy
 
@@ -285,9 +430,10 @@ class CODATA:
             # 2. Cria um dicionário auxiliar: contrato → prazo
             contrato_para_prazo = {}
 
-            '''andam_file['Valor da Parcela'] = andam_file['Valor da Parcela'].str.replace(".", '')
-            andam_file['Valor da Parcela'] = andam_file['Valor da Parcela'].str.replace(",", '.')'''
-            andam_file['Valor da Parcela'] = pd.to_numeric(andam_file['Valor da Parcela'], errors='coerce')
+            if andam_file['Valor da Parcela'].dtype != "float64":
+                andam_file['Valor da Parcela'] = andam_file['Valor da Parcela'].str.replace(".", '')
+                andam_file['Valor da Parcela'] = andam_file['Valor da Parcela'].str.replace(",", '.')
+                andam_file['Valor da Parcela'] = pd.to_numeric(andam_file['Valor da Parcela'], errors='coerce')
             # print(f'Modalidade e Parcela do Código 407337: {andam_file.loc[andam_file['Código'] == 407337, ['Modalidade', 'Valor da Parcela']]}')
 
             # Para cada linha no arquivo de andamentos, verifica todas as colunas de contrato
@@ -457,7 +603,7 @@ class CODATA:
         averbados.loc[averbados['Entidade'] == 'PBPREV INATIVOS - DER', 'Codigo Entidade'] = '19'
 
         # Orbitall
-        orbitall = self.orbital_tratado(front_preliminar)
+        orbitall = self.orbital_tratado(self.orbital, front_preliminar)
 
         # Transforma a coluna em averbados mesmo
         # averbados['Data do Cadastro'] = pd.to_datetime(averbados['Data do Cadastro'], dayfirst=True)
@@ -525,8 +671,15 @@ class CODATA:
 
         # IMPORTANTE: Garanta que as colunas de valores são numéricas, não texto.
         # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
-        averbado_novo['Valor da Reserva'] = pd.to_numeric(averbado_novo['Valor da Reserva'], errors='coerce').fillna(0)
-        averbado_novo['SOMASE'] = pd.to_numeric(averbado_novo['SOMASE'], errors='coerce').fillna(0)
+        if averbado_novo['Valor da Reserva'].dtype != "float64": 
+            averbado_novo['Valor da Reserva'] = averbado_novo['Valor da Reserva'].astype(str).str.replace(".", "")
+            averbado_novo['Valor da Reserva'] = averbado_novo['Valor da Reserva'].astype(str).str.replace(",", ".")
+            averbado_novo['Valor da Reserva'] = pd.to_numeric(averbado_novo['Valor da Reserva'], errors='coerce').fillna(0)
+        
+        if averbado_novo['SOMASE'].dtype != "float64":
+            averbado_novo['SOMASE'] = averbado_novo['SOMASE'].astype(str).str.replace(".", "")
+            averbado_novo['SOMASE'] = averbado_novo['SOMASE'].astype(str).str.replace(",", ".")
+            averbado_novo['SOMASE'] = pd.to_numeric(averbado_novo['SOMASE'], errors='coerce').fillna(0)
 
         # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
         # da ordem atual do DataFrame. Se precisar de uma ordem específica,

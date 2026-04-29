@@ -130,8 +130,15 @@ class CONSIGLOG:
         # Tentar transformar em string com virgula
         front_consig_esteiras.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
 
-        front_consig_esteiras['Prestacao'] = front_consig_esteiras['Prestacao'].astype(str).replace('.', ',', regex=False)
-        front_consig_esteiras['Valor a lançar'] = front_consig_esteiras['Valor a lançar'].astype(str).replace('.', ',', regex=False)
+        if front_consig_esteiras['Prestacao'].dtype != 'float64':
+            front_consig_esteiras['Prestacao'] = front_consig_esteiras['Prestacao'].astype(str).str.replace('.', '', regex=False)
+            front_consig_esteiras['Prestacao'] = front_consig_esteiras['Prestacao'].str.replace(',', '.', regex=False)
+            front_consig_esteiras['Prestacao'] = pd.to_numeric(front_consig_esteiras['Prestacao'], errors='coerce')
+
+        if front_consig_esteiras['Valor a lançar'].dtype != 'float64':
+            front_consig_esteiras['Valor a lançar'] = front_consig_esteiras['Valor a lançar'].astype(str).str.replace('.', '', regex=False)
+            front_consig_esteiras['Valor a lançar'] = front_consig_esteiras['Valor a lançar'].astype(str).str.replace(',', '.', regex=False)
+            front_consig_esteiras['Valor a lançar'] = pd.to_numeric(front_consig_esteiras['Valor a lançar'], errors='coerce')
 
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
@@ -288,9 +295,10 @@ class CONSIGLOG:
         # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
 
         front_copy.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
-        front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace('.', '', regex=False)
-        front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
-        front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
+        if front_copy['Prestacao'].dtype != 'float64':
+            front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace('.', '', regex=False)
+            front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
+            front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
 
         print(f'Contrato 301268942 no front no validacao_termino: {front_copy.loc[front_copy["Contrato"] == "301268942", "Prestacao"]}\n')
  
@@ -958,6 +966,8 @@ class CONSIGLOG:
 
         soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
         data_averbados['SOMASE FRONT'] = data_averbados['CPF_Formatado'].map(soma_condicional_dict_averb)
+
+        
         data_averbados['SOMASE FRONT'] = data_averbados['SOMASE FRONT'].map('{:.2f}'.format).astype(float)
 
         # DIFF

@@ -1,12 +1,15 @@
 import pandas as pd
-from trata_conciliacao import TRATA_CONCILIACAO
-from ESTEIRAS import load_esteiras
+import zipfile
+import io
+from io import StringIO
+from python.trata_conciliacao import TRATA_CONCILIACAO
+from python.ESTEIRAS import load_esteiras
 import openpyxl
 import numpy as np
 from datetime import datetime
 import os
 
-def abas(excel_file):
+'''def abas(excel_file):
     # 2. Pegamos a lista de todas as abas disponíveis
     todas_as_abas = excel_file.sheet_names
 
@@ -34,12 +37,12 @@ def abas(excel_file):
             continue
 
 d8_gov_to_amostra = pd.ExcelFile(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CAPITAL-032026.xlsx")
-planilha_linhas, planilha_parciais = abas(d8_gov_to_amostra)
+planilha_linhas, planilha_parciais = abas(d8_gov_to_amostra)'''
 
 # print(f'planilhas linhas: {planilha_linhas}\nplanilhas parciais: {planilha_parciais}')
 
 
-front = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\FRONT GOV TO - IGEPREV 04-2026.csv", encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
+'''front = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\FRONT GOV TO - IGEPREV 04-2026.csv", encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
 funcao = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\FUNCAO GOV TO - IGEPREV 04-2026.csv", encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
 averbado_gov_to_capital = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\AVERBADOSGOVTOCAPITAL942026_13_10.xlsx", header=17)
 averbado_gov_to_ciasprev = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\AVERBADOSGOVTOCIASPREV942026_13_11.xlsx", header=17)
@@ -60,17 +63,21 @@ conciliacao_df = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORI
 kobraki_df = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RECEBIVEIS KOBRAKI - ABRIL 2026.xlsx", sheet_name="CONSOLIDADO")
 
 caminho = r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\teste_programa"
-
+'''
 # , portal_file_list, d8_to, d8_igeprev, conciliacao=None,  kobraki=None
 # averbado_unif = pd.concat()
 
-class IGEPREV_GOVTO_PRELIMINAR:
-    def __init__(self, front, funcao, conciliacao=None, kobraki=None):
+class IGEPREV_GOVTO:
+    def __init__(self, front, funcao, portal_file_path_to, portal_file_path_igeprev, d8_file_path_to, d8_file_path_igeprev, caminho, conciliacao=None, kobraki=None):
         self.caminho = caminho
         self.front = front
-        # self.averbados = portal_file_list
+        self.averbados_to = portal_file_path_to
+        self.averbados_igeprev = portal_file_path_igeprev
+        self.d8_to = d8_file_path_to
+        self.d8_igeprev = d8_file_path_igeprev
         self.funcao = funcao
         self.kobraki = kobraki if kobraki is not None else None
+        self.caminho = caminho
         
         conciliacao_falso = pd.DataFrame(
             columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25', 'RECEBIDO GERAL'])
@@ -93,8 +100,10 @@ class IGEPREV_GOVTO_PRELIMINAR:
         
         self.condicoes_1 = load_esteiras()
 
-        self.front_tratado = self.tratamento_front()        
-        
+        self.front_tratado = self.tratamento_front()
+
+        self.unifica_averbados()
+
     def unifica_front_funcao(self):
         front = self.front
         funcao = self.funcao
@@ -103,11 +112,16 @@ class IGEPREV_GOVTO_PRELIMINAR:
         ccb_tratado = front['CCB'].astype(str).str.slice(0, 9)
         ccb_tratado = ccb_tratado.astype('int64')
 
+        # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
+        contrato_funcao = funcao['NR_PROP']
+        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
+
         # Tira os contratos do Front que já existem no Função
         funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
 
         # Tira os contratos CCB do Front que também existem no Função
-        funcao = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
+        funcao_tratado = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
+
 
         # Juntar Funcao com Front
         # 1. Defina o mapeamento de nomes (De: Para)
@@ -124,7 +138,7 @@ class IGEPREV_GOVTO_PRELIMINAR:
 
         # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
         # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
-        funcao_ajustado = funcao[list(mapeamento.keys())].rename(columns=mapeamento)
+        funcao_ajustado = funcao_tratado[list(mapeamento.keys())].rename(columns=mapeamento)
 
         # 3. Use o concat para unir os dois DataFrames
         # O ignore_index=True serve para gerar um novo índice sequencial no DF final
@@ -231,8 +245,6 @@ class IGEPREV_GOVTO_PRELIMINAR:
                                "Valor a lançar", "OBS", "Orbital", "Status", "Acao Judicial", "Obito"]
         front_tratado = front_tratado[colunas_necessarias]
 
-        front_tratado.to_excel(fr'{self.caminho}\FRONT TRABALHADO {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
-
         return front_tratado
 
     def validacao_termino(self, front):
@@ -287,93 +299,105 @@ class IGEPREV_GOVTO_PRELIMINAR:
                 d8_unificado['CONTSE SEQ'].astype(str)
             )
             # 3. Correção do .isin (precisa de uma lista [])
-            valores_peculio = [20, 40, 60, 80]
+            valores_peculio = [20]
             d8_peculios = d8_unificado[d8_unificado['R$ PARCELA'].isin(valores_peculio)].copy()
+            convenio = 'GOV. TO'
             
         except Exception as e:
             try:
                 # 1. Criar o 'CONTSE SEQ' e o 'CONCAT' de uma vez só
                 # Usamos o cumcount direto no agrupamento de CPF e Parcela
-                d8_unificado['CONTSE SEQ'] = d8_unificado.groupby(['CPF', 'VLR.  PARC.']).cumcount() + 1
+                d8_unificado['CONTSE SEQ'] = d8_unificado.groupby(['CPF', 'VLR.  ADE']).cumcount() + 1
 
                 # 2. Gerar a chave final concatenada
                 d8_unificado['CONCAT CPF PARCELA'] = (
                     d8_unificado['CPF'].astype(str) + 
-                    d8_unificado['VLR.  PARC.'].astype(str) + 
+                    d8_unificado['VLR.  ADE'].astype(str) + 
                     d8_unificado['CONTSE SEQ'].astype(str)
                 )
                 # 3. Correção do .isin (precisa de uma lista [])
-                valores_peculio = [20, 40, 60, 80]
-                d8_peculios = d8_unificado[d8_unificado['VLR.  PARC.'].isin(valores_peculio)].copy()
+                valores_peculio = [20]
+                d8_peculios = d8_unificado[d8_unificado['VLR.  ADE'].isin(valores_peculio)].copy()
+
+                convenio = 'IGEPREV'
                 
             except Exception as e:
-                print(f'Erro ao separar 20, 40, 60, 80', e)
+                print(f'Erro ao separar 20', e)
 
-        # Separa os valores de 20, 40, 60, 80 no front
-        front_peculios = front[front['Prestacao'].isin([20, 40, 60, 80])]
         # CONTSE SEQ
-        front_peculios['CONTSE SEQ'] = front_peculios.groupby(['CPF', 'Prestacao']).cumcount() + 1
+        front['CONTSE SEQ'] = front.groupby(['CPF', 'Prestacao']).cumcount() + 1
         # CONCAT FRONT
-        front_peculios['CONCAT CPF PARCELA'] = (
-            front_peculios['CPF'].astype(str) +
-            front_peculios['Prestacao'].astype(str) +
-            front_peculios['CONTSE SEQ'].astype(str)
+        front['CONCAT CPF PARCELA'] = (
+            front['CPF'].astype(str) +
+            front['Prestacao'].astype(str) +
+            front['CONTSE SEQ'].astype(str)
             )
         
-        # D8_peculio só com os casos não encontrados
-        d8_peculios_nao_encontrados = d8_peculios[~d8_peculios['CONCAT CPF PARCELA'].isin(front_peculios['CONCAT CPF PARCELA'])]
+        # Separa os valores de 20 no front
+        front_peculios = front[front['Prestacao'].isin([20])]
+        
+        # 1. Pegamos a lista de chaves (CONCAT) que EXISTEM no front
+        chaves_no_front = front_peculios['CONCAT CPF PARCELA'].unique()
 
-        # d8_unificado sem os casos que não foram encontrados
-        d8_unificado = d8_unificado[~d8_unificado['CONCAT CPF PARCELA'].isin(d8_peculios_nao_encontrados['CONCAT CPF PARCELA'])]
+        # 2. Identificamos as chaves de valor 20 que estão no D8
+        # (Você já tem o d8_peculios, vamos usar a coluna dele)
+        chaves_no_d8_vinte = d8_peculios['CONCAT CPF PARCELA'].unique()
 
-        d8_unificado.to_excel(fr'{self.caminho}\D8 SEM PECULIOS INDESEJADOS.xlsx', index=False)
-        front_peculios.to_excel(fr'{self.caminho}\FRONT SEM PECULIOS INDESEJADOS.xlsx', index=False)
+        # 3. Criamos a lista de quem deve ser APAGADO:
+        # São as chaves que são de valor 20 no D8, mas NÃO estão no front
+        excluir_casos_d8 = [c for c in chaves_no_d8_vinte if c not in chaves_no_front]
+
+        # 4. Removemos do d8_unificado original
+        d8_unificado = d8_unificado[~d8_unificado['CONCAT CPF PARCELA'].isin(excluir_casos_d8)].copy()
 
         return d8_unificado
-
         
     
     def unifica_d8_gov_to(self):
-        gov_to_d8_capital = d8_gov_to_capital
+        d8_gov_to_unificado = self.d8_to
+
+        # print(f'HEAD de d8 unificado: {d8_gov_to_unificado.head()}')
+        
+        '''gov_to_d8_capital = d8_gov_to_capital
         gov_to_d8_ciasprev = d8_gov_to_ciasprev
         gov_to_d8_hp = d8_gov_to_hp
         gov_to_d8_click = d8_gov_to_click
         gov_to_d8_capital_parcial = d8_gov_to_capital_parciais
         gov_to_d8_ciasprev_parcial = d8_gov_to_ciasprev_parciais
         gov_to_d8_hp_parcial = d8_gov_to_hp_parciais
-        gov_to_d8_click_parcial = d8_gov_to_click_parciais
+        gov_to_d8_click_parcial = d8_gov_to_click_parciais'''
 
         # Adiciona CONSIGNATARIA no final de cada DataFrame
-        gov_to_d8_capital['CONSIGNATARIA'] = 'CAPITAL'
+        '''gov_to_d8_capital['CONSIGNATARIA'] = 'CAPITAL'
         gov_to_d8_ciasprev['CONSIGNATARIA'] = 'CIASPREV'
         gov_to_d8_hp['CONSIGNATARIA'] = 'HP'
-        gov_to_d8_click['CONSIGNATARIA'] = 'CLICK'
+        gov_to_d8_click['CONSIGNATARIA'] = "CLICK"'''
 
         # Adiciona CONSIGNATARIA no final de cada DataFrame Parcial
-        gov_to_d8_capital_parcial['CONSIGNATARIA'] = 'CAPITAL'
+        '''gov_to_d8_capital_parcial['CONSIGNATARIA'] = 'CAPITAL'
         gov_to_d8_ciasprev_parcial['CONSIGNATARIA'] = 'CIASPREV'
         gov_to_d8_hp_parcial['CONSIGNATARIA'] = 'HP'
-        gov_to_d8_click_parcial['CONSIGNATARIA'] = 'CLICK'
+        gov_to_d8_click_parcial['CONSIGNATARIA'] = "CLICK"'''
 
         '''print(f'd8 parcial de gov to Capital\n{d8_gov_to_capital_parciais}\n')
         print(f'd8 parcial de gov to Ciasprev\n{d8_gov_to_ciasprev_parciais}\n')
         print(f'd8 parcial de gov to HP\n{d8_gov_to_hp_parciais}\n')
         print(f'd8 parcial de gov to Click\n{d8_gov_to_click_parciais}\n')'''
 
-        d8_gov_to_unificado_linhas = pd.concat([gov_to_d8_capital, gov_to_d8_ciasprev, gov_to_d8_hp, gov_to_d8_click], ignore_index=True)
-        d8_gov_to_unificado_parciais = pd.concat([gov_to_d8_capital_parcial, gov_to_d8_ciasprev_parcial, gov_to_d8_hp_parcial, gov_to_d8_click_parcial], ignore_index=True)
+        # d8_gov_to_unificado_linhas = pd.concat([gov_to_d8_capital, gov_to_d8_ciasprev, gov_to_d8_hp, gov_to_d8_click], ignore_index=True)
+        # d8_gov_to_unificado_parciais = pd.concat([gov_to_d8_capital_parcial, gov_to_d8_ciasprev_parcial, gov_to_d8_hp_parcial, gov_to_d8_click_parcial], ignore_index=True)
 
         # Muda o nome da coluna R$ PARCELA DESCONTADA da aba de Parciais para R$ PARCELA
-        d8_gov_to_unificado_parciais.rename(columns={'R$ PARCELA DESCONTADA': 'R$ PARCELA'}, inplace=True)
+        # d8_gov_to_unificado_parciais.rename(columns={'R$ PARCELA DESCONTADA': 'R$ PARCELA'}, inplace=True)
         # print(f'Colunas de d8_gov_to_unificado_parciais: {d8_gov_to_unificado_parciais.columns}')
 
         # Mapeamento das colunas para concatenar
-        mapeamento_d8 = ["ORDEM", "REFERENCIA", "CPF", "MATRICULA", "NOME", "RUBRICA", "PARCELA", "ADF", "R$ PARCELA", "CONSIGNATARIA"]
+        '''mapeamento_d8 = ["ORDEM", "REFERENCIA", "CPF", "MATRICULA", "NOME", "RUBRICA", "PARCELA", "ADF", "R$ PARCELA", "CONSIGNATARIA"]
 
         d8_gov_to_unificado_linhas = d8_gov_to_unificado_linhas[mapeamento_d8]
         d8_go_to_unificado_parciais_reduzido = d8_gov_to_unificado_parciais[mapeamento_d8]
 
-        d8_gov_to_unificado = pd.concat([d8_gov_to_unificado_linhas, d8_go_to_unificado_parciais_reduzido], ignore_index=True)
+        d8_gov_to_unificado = pd.concat([d8_gov_to_unificado_linhas, d8_go_to_unificado_parciais_reduzido], ignore_index=True)'''
 
         if d8_gov_to_unificado['R$ PARCELA'].dtype != 'float64':
             d8_gov_to_unificado['R$ PARCELA'] = d8_gov_to_unificado['R$ PARCELA'].astype(str).str.replace("R$ ", "")
@@ -390,7 +414,9 @@ class IGEPREV_GOVTO_PRELIMINAR:
         return d8_govto_sem_peculios_errados
 
     def unifica_d8_igeprev(self):
-        igeprev_d8_capital = d8_igeprev_capital.copy()
+        d8_igeprev_unificado = self.d8_igeprev
+
+        '''igeprev_d8_capital = d8_igeprev_capital.copy()
         # Tira as últimas 5 linhas 
         igeprev_d8_capital_reduzido = igeprev_d8_capital[:-4]
         igeprev_d8_capital_reduzido['CONSIGNATARIA'] = 'CAPITAL'
@@ -401,12 +427,12 @@ class IGEPREV_GOVTO_PRELIMINAR:
         igeprev_d8_ciasprev_reduzido['CONSIGNATARIA'] = 'CIASPREV'
 
         # Acho que dá para concatenar de boas
-        d8_igeprev_unificado = pd.concat([igeprev_d8_capital_reduzido, igeprev_d8_ciasprev_reduzido], ignore_index=True)
+        d8_igeprev_unificado = pd.concat([igeprev_d8_capital_reduzido, igeprev_d8_ciasprev_reduzido], ignore_index=True)'''
 
-        if d8_igeprev_unificado['VLR.  PARC.'].dtype != 'float64':
-            d8_igeprev_unificado['VLR.  PARC.'] = d8_igeprev_unificado['VLR.  PARC.'].astype(str).str.replace(".", "")
-            d8_igeprev_unificado['VLR.  PARC.'] = d8_igeprev_unificado['VLR.  PARC.'].astype(str).str.replace(",", ".")
-            d8_igeprev_unificado['VLR.  PARC.'] = pd.to_numeric(d8_igeprev_unificado['VLR.  PARC.'], errors='coerce')
+        if d8_igeprev_unificado['VLR.  ADE'].dtype != 'float64':
+            d8_igeprev_unificado['VLR.  ADE'] = d8_igeprev_unificado['VLR.  ADE'].astype(str).str.replace(".", "")
+            d8_igeprev_unificado['VLR.  ADE'] = d8_igeprev_unificado['VLR.  ADE'].astype(str).str.replace(",", ".")
+            d8_igeprev_unificado['VLR.  ADE'] = pd.to_numeric(d8_igeprev_unificado['VLR.  ADE'], errors='coerce')
 
         # Testa d8 sem peculios errados
         d8_igeprev_sem_peculios_errados = self.remove_peculios_indesejados(d8_igeprev_unificado, self.front_tratado)
@@ -421,11 +447,12 @@ class IGEPREV_GOVTO_PRELIMINAR:
         d8_unificado_igeprev = self.unifica_d8_igeprev()
 
         # Separar prazo de d8 gov to
-        d8_govto_prazo = d8_unificado_govt_to[(d8_unificado_govt_to['PARCELA'].str.contains('/')) & (~d8_unificado_govt_to['RUBRICA'].isin(['3620_2023', '3620_2024', '3620_2025'])) & (~d8_unificado_govt_to['RUBRICA'].str.contains("M"))]
+        d8_govto_prazo = d8_unificado_govt_to[(d8_unificado_govt_to['PARCELA'].str.contains('/')) & (~d8_unificado_govt_to['RUBRICA'].isin(['3620_2023', '3620_2024', '3620_2025']))]
 
         # Separar prazo de d8 igeprev
-        d8_igeprev_prazo = d8_unificado_igeprev[~d8_unificado_igeprev['PRZ.'].isin(['1', 'Indeter.'])]
+        d8_igeprev_prazo = d8_unificado_igeprev[~d8_unificado_igeprev['PRZ.'].isin([1, '1','Indeter.'])]
         d8_igeprev_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE IGEPREV COM PRAZO.xlsx', index=False)
+        d8_govto_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO COM PRAZO.xlsx', index=False)
 
         return d8_govto_prazo, d8_igeprev_prazo
 
@@ -439,20 +466,24 @@ class IGEPREV_GOVTO_PRELIMINAR:
         front_tratado['SOMAS DE D8'] = ''
         front_tratado['SOMASE LOCAL'] = ''
         front_tratado['DIFF D8'] = ''
+        
+        # Vamos reordenar o arquivo para HP ficar em primeiro
+        front_tratado = front_tratado.sort_values(by=['Consignataria'], ascending=False)
 
         # Somase de d8 gov to
         somase_d8_govto = d8_govto_prazo.groupby('CPF')['R$ PARCELA'].sum()
         front_tratado['SOMASE D8 GOV TO'] = front_tratado['CPF'].map(somase_d8_govto).fillna(0)
+        
 
         # Somase de d8 igeprev
-        somase_d8_igeprev = d8_igeprev_prazo.groupby('CPF')['VLR.  PARC.'].sum()
+        somase_d8_igeprev = d8_igeprev_prazo.groupby('CPF')['VLR.  ADE'].sum()
         front_tratado['SOMASE IGEPREV'] = front_tratado['CPF'].map(somase_d8_igeprev).fillna(0)
 
         # Soma dos d8
         front_tratado['SOMAS DE D8'] = front_tratado['SOMASE D8 GOV TO'] + front_tratado['SOMASE IGEPREV']
 
         # SOMASE LOCAL
-        front_tratado['SOMASE LOCAL'] = front_tratado.groupby("CPF")['Prestacao'].transform('sum')
+        front_tratado['SOMASE LOCAL'] = front_tratado.groupby("CPF")['Valor a lançar'].transform('sum')
 
         # Diff entre somas dos SOMASES de D8 e SOMASE LOCAL
         front_tratado['DIFF D8'] = front_tratado['SOMASE LOCAL'] - front_tratado['SOMAS DE D8']
@@ -469,28 +500,73 @@ class IGEPREV_GOVTO_PRELIMINAR:
 
         front_tratado.to_excel(fr'{self.caminho}\FRONT MEIO TRATADO.xlsx', index=False)
 
+
         # Vamos salvar e retornar somente o que é maior que 0
-        front_trabalhado = front_tratado[front_tratado['Lançar'] > 0]
+        front_trabalhado = front_tratado[(front_tratado['Lançar'] > 0) & (front_tratado['Contse seq'] == 1)]
+
+        # Adiciona mais 20 em cada cpf de hp
+        front_trabalhado.loc[front_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA', 'Lançar'] += 20
+        
         front_trabalhado.to_excel(fr'{self.caminho}\FRONT TOTALMENTE TRABALHADO.xlsx', index=False)
 
-        return front_trabalhado[front_trabalhado['Contse seq'] == 1]
+        return front_trabalhado # [front_trabalhado['Contse seq'] == 1]
     
     def unifica_averbados(self):
-        gov_to_capital_averbado = averbado_gov_to_capital
+        gov_to_averbado_unificado = self.averbados_to
+        '''gov_to_capital_averbado = averbado_gov_to_capital
         gov_to_ciasprev_averbado = averbado_gov_to_ciasprev
         gov_to_hp_averbado = averbado_gov_to_hp
         gov_to_capital_averbado['Consignataria'] = 'CAPITAL'
         gov_to_ciasprev_averbado['Consignataria'] = 'CIASPREV'
-        gov_to_hp_averbado['Consignataria'] = 'HP'
+        gov_to_hp_averbado['Consignataria'] = "HP"'''
 
         front_trabalhado = self.front_com_d8()
 
         # Unifica averbações de GOV TO
-        gov_to_averbado_unificado = pd.concat([gov_to_capital_averbado, gov_to_ciasprev_averbado, gov_to_hp_averbado], ignore_index=True)
+        # gov_to_averbado_unificado = pd.concat([gov_to_capital_averbado, gov_to_ciasprev_averbado, gov_to_hp_averbado], ignore_index=True)
+
+        if gov_to_averbado_unificado['VALOR_PARCELA'].dtype != "float64":
+            gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado['VALOR_PARCELA'].astype(str).str.replace(".", "")
+            gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado['VALOR_PARCELA'].astype(str).str.replace(",", ".")
+            gov_to_averbado_unificado['VALOR_PARCELA'] = pd.to_numeric(gov_to_averbado_unificado['VALOR_PARCELA'], errors='coerce')
+
+        # Status ADF
+        gov_to_averbado_unificado = gov_to_averbado_unificado[gov_to_averbado_unificado['STATUS_ADF'].isin(['CONSOLIDADO', 'INSERIDO'])]
+
+        # PRAZo
+        gov_to_averbado_unificado = gov_to_averbado_unificado[gov_to_averbado_unificado['PRAZO'].isin(['INDETERMINADO'])]
+
+        # Vamos gerar o arquivo para averiguar melhor
+        gov_to_averbado_unificado.to_excel(fr'{self.caminho}\AVERBADOS DE GOV TO UNIFICADOS.xlsx', index=False)
+
+        # 1. Resolver os casos de valores iguais (remover duplicados exatos)
+        # Isso remove as linhas onde MATRICULA, Consignataria e VALOR_PARCELA são idênticos,
+        # mantendo apenas a primeira ocorrência.
+        total_duplicados_anterior = gov_to_averbado_unificado.duplicated(subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA']).sum()
+        # print(f'Quantos duplicados de MATRICULA, CONSIGNATARIA E PARCELA foram removidos antes da soma: {total_duplicados_anterior}')
+
+        gov_to_averbado_unificado = gov_to_averbado_unificado.drop_duplicates(
+            subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA'], 
+            keep='first'
+        )
+
+
+
+        # Ele calcula a soma por grupo e "espalha" o resultado nas linhas originais
+        gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado.groupby(['MATRICULA', 'Consignataria'])['VALOR_PARCELA'].transform('sum')
+        
+        total_duplicados_posterior = gov_to_averbado_unificado.duplicated(subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA']).sum()
+        # print(f'Quantos duplicados de MATRICULA, CONSIGNATARIA E PARCELA foram removidos depois da soma: {total_duplicados_posterior}')
+
+        gov_to_averbado_unificado = gov_to_averbado_unificado.drop_duplicates(
+            subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA'], 
+            keep='first'
+        )
 
         # Adiciona ponto e traço
         cpf_tratado = gov_to_averbado_unificado['CPF'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
         gov_to_averbado_unificado['CPF'] = cpf_tratado
+
 
 
         gov_to_averbado_unificado['Convenio'] = 'Governo de Tocantins'
@@ -498,17 +574,17 @@ class IGEPREV_GOVTO_PRELIMINAR:
         # Pega só o que é cartão de GOV TO
         gov_to_averbado_unificado = gov_to_averbado_unificado[(gov_to_averbado_unificado['PRAZO'].isin(['INDETERMINADO'])) & (gov_to_averbado_unificado['STATUS_ADF'].isin(['CONSOLIDADO', 'INSERIDO']))]
 
-        igeprev_capital_averbado = averbado_igeprev_capital.iloc[:-6]
-        igeprev_ciasprev_averbado = averbado_igeprev_ciasprev.iloc[:-6]
+        '''igeprev_capital_averbado = averbado_igeprev_capital.iloc[:-6]
+        igeprev_ciasprev_averbado = averbado_igeprev_ciasprev.iloc[:-6]'''
 
         # Remove apenas as colunas que estão 100% vazias
-        igeprev_capital_averbado = igeprev_capital_averbado.dropna(axis=1, how='all')
+        '''igeprev_capital_averbado = igeprev_capital_averbado.dropna(axis=1, how='all')
         igeprev_capital_averbado['Consignataria'] = 'CAPITAL'
         igeprev_ciasprev_averbado['Consignataria'] = 'CIASPREV'
-        igeprev_ciasprev_averbado = igeprev_ciasprev_averbado.dropna(axis=1, how='all')
+        igeprev_ciasprev_averbado = igeprev_ciasprev_averbado.dropna(axis=1, how='all')'''
 
         # Unifica averbações de IGEPREV
-        igeprev_averbado_unificado = pd.concat([igeprev_capital_averbado, igeprev_ciasprev_averbado], ignore_index=True)
+        igeprev_averbado_unificado = self.averbados_igeprev
         igeprev_averbado_unificado.rename(columns={"SERVIDOR": "SERVIDOR + MATRICULA"}, inplace=True)
 
         igeprev_averbado_unificado.insert(1, "MATRICULA", "", True)
@@ -530,15 +606,15 @@ class IGEPREV_GOVTO_PRELIMINAR:
         gov_to_remapeado = gov_to_averbado_unificado[mapeamento]
         
         igeprev_remapeado = igeprev_averbado_unificado[mapeamento]
+        if igeprev_remapeado['VALOR_PARCELA'].dtype != 'float64':
+            igeprev_remapeado['VALOR_PARCELA'] = igeprev_remapeado['VALOR_PARCELA'].str.replace(".", '')
+            igeprev_remapeado['VALOR_PARCELA'] = igeprev_remapeado['VALOR_PARCELA'].str.replace(",", '.')
+            igeprev_remapeado['VALOR_PARCELA'] = pd.to_numeric(igeprev_remapeado['VALOR_PARCELA'], errors='coerce')
         
-        print(f'COLUNAS DE GOV TO REMAPEADO {gov_to_remapeado.columns}\n')
-        print(f'COLUNAS DE IGEPREV REMAPEADO {igeprev_remapeado.columns}')
+        # print(f'COLUNAS DE GOV TO REMAPEADO {gov_to_remapeado.columns}\n')
+        # print(f'COLUNAS DE IGEPREV REMAPEADO {igeprev_remapeado.columns}')
         to_igeprev_unificado = pd.concat([gov_to_remapeado, igeprev_remapeado], ignore_index=True)
-
-        if to_igeprev_unificado['VALOR_PARCELA'].dtype != 'float64':
-            to_igeprev_unificado['VALOR_PARCELA'] = to_igeprev_unificado['VALOR_PARCELA'].str.replace(".", '')
-            to_igeprev_unificado['VALOR_PARCELA'] = to_igeprev_unificado['VALOR_PARCELA'].str.replace(",", '.')
-            to_igeprev_unificado['VALOR_PARCELA'] = pd.to_numeric(to_igeprev_unificado['VALOR_PARCELA'], errors='coerce')
+        # print(f'VALOR_PARCELA TERCEIRO:\n{gov_to_remapeado['VALOR_PARCELA']}')
 
         # CRIAÇÃO DE COLUNAS QUE SERÃO USADAS NO PRÓXIMO MÓDULO
         to_igeprev_unificado['CONTSE CPF'] = ''
@@ -548,7 +624,7 @@ class IGEPREV_GOVTO_PRELIMINAR:
         to_igeprev_unificado['OBS'] = ''
 
         somase_cred = front_trabalhado.groupby('CPF')['Lançar'].sum().to_dict()
-        # print(f'SOMASE_CRED:\n{somase_cred}')
+        # print(f'TIPO SOMASE_CRED:\n{somase_cred}')
 
         to_igeprev_unificado['SOMASE CRED'] = to_igeprev_unificado['CPF'].map(somase_cred).fillna(0)
 
@@ -558,10 +634,10 @@ class IGEPREV_GOVTO_PRELIMINAR:
             to_igeprev_averbado_final = averbado_para_distribuir.copy()
             to_igeprev_averbado_final['VALOR_PARCELA'] = pd.to_numeric(to_igeprev_averbado_final['VALOR_PARCELA'], errors='coerce').fillna(0)
 
-            if to_igeprev_averbado_final['SOMASE CRED'].dtype != 'float64':
+            '''if to_igeprev_averbado_final['SOMASE CRED'].dtype != 'float64':
                 to_igeprev_averbado_final['SOMASE CRED'] = to_igeprev_averbado_final['SOMASE CRED'].str.replace(".", "")
                 to_igeprev_averbado_final['SOMASE CRED'] = to_igeprev_averbado_final['SOMASE CRED'].str.replace(",", ".")
-                to_igeprev_averbado_final['SOMASE CRED'] = pd.to_numeric(to_igeprev_averbado_final['SOMASE CRED'], errors='coerce').fillna(0)
+                to_igeprev_averbado_final['SOMASE CRED'] = pd.to_numeric(to_igeprev_averbado_final['SOMASE CRED'], errors='coerce').fillna(0)'''
 
             # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
             # Esta é a "mágica" que substitui a necessidade de um loop.
@@ -606,10 +682,9 @@ class IGEPREV_GOVTO_PRELIMINAR:
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR AVERBADOS TRABALHADO: {e}")
 
-teste = IGEPREV_GOVTO_PRELIMINAR(front, funcao, conciliacao_df, kobraki_df)
+'''teste = IGEPREV_GOVTO(front, funcao, conciliacao_df, kobraki_df)
 
-resultado = teste.unifica_averbados()
-
+resultado = teste.unifica_averbados()'''
 
 
 

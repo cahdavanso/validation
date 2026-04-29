@@ -11,6 +11,7 @@ import logging
 import io
 import traceback
 from time import sleep
+import re
 from typing import List, Optional
 import uvicorn
 
@@ -20,6 +21,7 @@ from python.Codata import CODATA
 from python.INSS import INSS
 from python.Serha import SERHA
 from python.Consiglog import CONSIGLOG
+from python.IgeprevGovTo_Preliminar import IGEPREV_GOVTO
 from python.Zetra import ZETRA
 
 app = FastAPI()
@@ -66,6 +68,8 @@ ZETRA_CONVENIO = [
          "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL", "PREVIPALMAS"
          ]
 
+TO_IGEPREV_CONVENIO = ["GOV. TOCANTINS e IGEPREV"]
+
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
     "GOV. MARANHÃO", "GOV. MATO GROSSO", "GOV. PAUÍ", "GOV. PERNAMBUCO","PREF. BAYEUX", "PREF. CAJAMAR",
@@ -75,6 +79,33 @@ CONSIGFACIL_CONVENIOS = [
     "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RIO GRANDE DO NORTE", "PREF. NATAL",
     "PREF. TUTÓIA"
 ]
+
+def abas(excel_file):
+    # 2. Pegamos a lista de todas as abas disponíveis
+    todas_as_abas = excel_file.sheet_names
+
+    # print(f'todas as abas: {todas_as_abas}')
+
+    # 3. Identificamos as abas dinamicamente
+    # Buscamos por 'Linhas' mas garantimos que não seja a que você quer descartar (se houver uma regra)
+    # E buscamos por 'desc. Parciais'
+    aba_linhas = None
+    aba_parciais = None
+
+    for nome in todas_as_abas:
+        # Lógica para a aba de Linhas
+        # Aqui verificamos se tem 'Linhas' no nome e se NÃO tem outros termos indesejados
+        if "Linhas" in nome and "Suspensas" not in nome:
+            aba_linhas = nome
+        
+        # Lógica para a aba de Descontos Parciais
+        if "Desc. Parciais" in nome:
+            aba_parciais = nome
+
+        if  aba_linhas is not None and aba_parciais is not None:
+            return aba_linhas, aba_parciais
+        else:
+            continue
 
 # --- Função Auxiliar de Leitura ---
 async def read_and_unify_files(file_list: List[UploadFile]):
@@ -86,14 +117,61 @@ async def read_and_unify_files(file_list: List[UploadFile]):
     for uploaded_file in file_list:
         try:
             filename = uploaded_file.filename.lower()
-            print(f'nome do arquivo: {filename}')
+            # print(f'nome do arquivo: {filename}')
+            # 1. Pegar o cabeçalho Content-Disposition
+            content_disposition = uploaded_file.headers.get("content-disposition", "")
+            match = re.search('name="([^"]+)"', content_disposition)
+            # Se encontrar o 'name', armazena, senão usa o filename como reserva
+            name = match.group(1).lower() if match else "desconhecido"
             content = await uploaded_file.read()
             file_obj = io.BytesIO(content)
             logging.info(f"Lendo: {uploaded_file.filename}")
 
+            print(f'File list: {file_list}')
+
+            
             
             if "kobraki" in filename and filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(file_obj, sheet_name='CONSOLIDADO')
+            elif "d8_to" in name:
+                d8_gov_to_amostra = pd.ExcelFile(file_obj)
+                planilha_linhas, planilha_parciais = abas(d8_gov_to_amostra)
+                df_d8_linhas = pd.read_excel(file_obj, header=7, sheet_name=planilha_linhas)
+
+                print(f'HEAD de d8_to: {df_d8_linhas.head()}')
+
+                df_d8_parciais = pd.read_excel(file_obj, header=7, sheet_name=planilha_parciais)
+                df_d8_parciais.rename(columns={'R$ PARCELA DESCONTADA': 'R$ PARCELA'}, inplace=True)
+                mapeamento_d8 = ["ORDEM", "REFERENCIA", "CPF", "MATRICULA", "NOME", "RUBRICA", "PARCELA", "ADF", "R$ PARCELA"]
+                df_d8_parciais_completo = df_d8_parciais[mapeamento_d8]
+
+
+                df = pd.concat([df_d8_linhas, df_d8_parciais_completo], ignore_index=True)
+            elif "averbados_to" in name:
+                df_preliminar = pd.read_excel(file_obj)
+                linha_identificacao = str(df_preliminar.iloc[5].values)
+                if "CAPITAL" in linha_identificacao:
+                    consig = "CAPITAL"
+                elif "CIASPREV" in linha_identificacao:
+                    consig = "CIASPREV"
+                elif "HOJE" in linha_identificacao:
+                    consig = "HP"
+                else:
+                    consig = "CLICKBANK"
+
+                df = pd.read_excel(file_obj, header=17)
+                df['Consignataria'] = consig
+            elif "averbados_igeprev" in name:
+                df_preliminar = pd.read_excel(file_obj)
+                linha_identificacao = str(df_preliminar.iloc[1].values)
+                consig = "CAPITAL" if "CAPITAL" in linha_identificacao else "CIASPREV"
+                df = pd.read_excel(file_obj, header=4)
+                df = df[:-6]
+                df['Consignataria'] = consig
+                df = df.dropna(axis=1, how='all')
+            elif "orbital" in name:
+                df = pd.read_excel(file_obj, header=3)
+                print(f'Cabeçalho de orbital:\n{df.head(10)}')
             elif filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(file_obj) 
             else:
@@ -130,10 +208,15 @@ async def validar_planilhas(
     output_path: Optional[str] = Form(None),
     
     # Todos os campos possíveis do sistema
+    # NÃO PODE TER ESPAÇO NOS NOMES EM ALIAS, PRECISA COLOCAR ALGUM SEPARADOR COMO _ OU - OU TUDO JUNTO
     AVERBADOS: List[UploadFile] = File(None, alias="AVERBADOS"),
+    AVERBADOS_TO: List[UploadFile] = File(None, alias="AVERBADOS_TO"),
+    AVERBADOS_IGEPREV: List[UploadFile] = File(None, alias="AVERBADOS_IGEPREV"),
     ZIPS: List[UploadFile] = File(None, alias="ZIPS"),
     CONCILIACAO: List[UploadFile] = File(None, alias="CONCILIACAO"),
     KOBRAKI: List[UploadFile] = File(None, alias="KOBRAKI"),
+    D8_TO: List[UploadFile] = File(None, alias="D8_TO"),
+    D8_IGEPREV: List[UploadFile] = File(None, alias="D8_IGEPREV"),
     LIQUIDADOS: List[UploadFile] = File(None, alias="LIQUIDADOS"),
     LIMINAR: List[UploadFile] = File(None, alias="LIMINAR"),
     HISTORICO: List[UploadFile] = File(None, alias="HISTORICO"),
@@ -173,8 +256,12 @@ async def validar_planilhas(
     try:
         # 2. Leitura dos arquivos
         averbados_df = await read_and_unify_files(AVERBADOS)
+        averbados_to_df = await read_and_unify_files(AVERBADOS_TO)
+        averbados_igeprev_df = await read_and_unify_files(AVERBADOS_IGEPREV)
         conciliacao_df = await read_and_unify_files(CONCILIACAO)
         kobraki_df = await read_and_unify_files(KOBRAKI)
+        d8_df_to = await read_and_unify_files(D8_TO)
+        d8_df_igeprev = await read_and_unify_files(D8_IGEPREV)
         liquidados_df = await read_and_unify_files(LIQUIDADOS)
         liminar_df = await read_and_unify_files(LIMINAR)
         historico_df = await read_and_unify_files(HISTORICO)
@@ -195,10 +282,12 @@ async def validar_planilhas(
                 portal_file_list=averbados_df,
                 convenio=convenio,
                 front = front_df,
+                funcao=funcao_df,
                 consignataria=consignataria, 
                 conciliacao=conciliacao_df,
                 kobraki=kobraki_df,
                 andamento_list=andamento_df,
+                orbital=orbital_df,
                 caminho=CAMINHO_SAIDA
             )
 
@@ -252,7 +341,19 @@ async def validar_planilhas(
                 historico=historico_df,
                 orbital=orbital_df
             )
-
+        elif convenio in TO_IGEPREV_CONVENIO:
+            logging.info("Usando o validador: GOV TO e IGEPREV")
+            validador = IGEPREV_GOVTO(
+                portal_file_path_to=averbados_to_df,
+                portal_file_path_igeprev=averbados_igeprev_df,
+                d8_file_path_to=d8_df_to,
+                d8_file_path_igeprev=d8_df_igeprev,
+                front=front_df,
+                funcao=funcao_df,
+                conciliacao=conciliacao_df,
+                kobraki=kobraki_df,
+                caminho=CAMINHO_SAIDA
+            )
         else:
             # Padrão para todos os outros (Consigfacil)
             logging.info("Usando validador: CONSIGFACIL")
