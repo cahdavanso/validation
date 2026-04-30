@@ -254,7 +254,10 @@ class CODATA:
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         if self.consignataria == 'CAPITAL CONSIG':
             objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
-            front_consig_validado_termino = objeto_andamento.andamento_func_front()
+            front_com_prazo = objeto_andamento.andamento_func_front()
+
+            front_consig_validado_termino['PRAZO'] = front_consig_validado_termino['Contrato'].astype(str).map(front_com_prazo.set_index('Contrato')['PRAZO'])
+            front_consig_validado_termino['Contrato'] = front_consig_validado_termino['Contrato'].astype('int64')
 
             front_com_prazo = front_consig_validado_termino[
             (front_consig_validado_termino['PRAZO'].notna()) & 
@@ -282,6 +285,7 @@ class CODATA:
         
     def tratamento_front(self):
         front_consig = self.tratamento_front_preliminar()
+        # print(f'Colunas de front_consig: {front_consig.columns}')
 
         if front_consig is False:
             print("tratamento_front: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
@@ -620,7 +624,8 @@ class CODATA:
         averbados.loc[averbados['Entidade'] == 'PBPREV INATIVOS - DER', 'Codigo Entidade'] = '19'
 
         # Orbitall
-        orbitall = self.orbital_tratado(self.orbital, front_preliminar)
+        if self.orbital is not None:
+            orbitall = self.orbital_tratado(self.orbital, front_preliminar)
 
         # Transforma a coluna em averbados mesmo
         # averbados['Data do Cadastro'] = pd.to_datetime(averbados['Data do Cadastro'], dayfirst=True)

@@ -117,7 +117,7 @@ class ANDAMENTO:
 
         if self.convenio == 'GOV. PARAÍBA':
             if 'Contrato de Andamento' not in self.andamento.columns:
-                self.andamento.insert(8, 'Contrato de Andamento', self.andamento['Código na instituição'])
+                self.andamento.insert(9, 'Contrato de Andamento', self.andamento['Contrato'])
         else:
             if 'Contrato de Andamento' not in self.andamento.columns:
                 self.andamento.insert(2, 'Contrato de Andamento', self.andamento['Código na instituição'])
@@ -129,11 +129,13 @@ class ANDAMENTO:
             self.andamento['Valor da Parcela'] = pd.to_numeric(self.andamento['Valor da Parcela'], errors='coerce')
 
         if self.convenio == 'GOV. PARAÍBA':
-            self.andamento = self.andamento.drop_duplicates(subset=['Matrícula', 'Entidade', 'Rubrica']).copy()
+            andam_referencia_prazos = self.andamento.drop_duplicates(subset=['Matrícula', 'Entidade', 'Rubrica']).copy()
+            cpf_tratado = andam_referencia_prazos['CPF'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
+            andam_referencia_prazos['CPF'] = cpf_tratado
 
             # Renomear a coluna Prazo para Prazo Total
             try:
-                self.andamento.rename(columns={'Prazo': 'Prazo Total'})
+                andam_referencia_prazos.rename(columns={'Prazo': 'Prazo Total'}, inplace=True)
             except Exception as e:
                 print('Erro ao renomear a coluna de Prazo', e)
         else:
@@ -152,7 +154,7 @@ class ANDAMENTO:
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
         andam_file, front_base = self.processar_contratos_otimizado(andam_referencia_prazos, front_para_processar)
         andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
-        # print(f'Andamento depois de extrair_contratos\n{andam_file.loc[andam_file['CPF'] == '010.574.793-90']}')
+        print(f'Andamento depois de extrair_contratos\n{andam_file.columns}')
 
         # Terceira passada
         andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
@@ -203,6 +205,7 @@ class ANDAMENTO:
         Busca a combinação de contratos que resulte na menor diferença absoluta
         em relação ao valor alvo.
         """
+        # print('BUSCA GREEDY ATIVADO')
         # Escala de centavos para evitar erros de float
         alvo_int = int(round(alvo * 100))
         opcoes = sorted([(c, int(round(v * 100))) for c, v in itens], 
@@ -250,6 +253,8 @@ class ANDAMENTO:
         # --- 1. Padronização ---
         # df_andamento = df_andamento.drop_duplicates(subset=['Código']).copy()
 
+        print('PROCESSAR CONTRATOS OTIMIZADO ATIVADO')
+
         # Ordena por prioridade o Tipo Operacao
         # Criar ordem de prioridade
         ordem = {
@@ -277,6 +282,7 @@ class ANDAMENTO:
 
         col_destino = 'Contrato Editado 1' if 'Contrato Editado 1' in df_andamento.columns else 'Contrato de Andamento'
         contratos_usados_andamento = df_andamento['Contrato Editado 1'] if 'Contrato Editado 1' in df_andamento.columns else df_andamento['Contrato de Andamento']
+
         df_andamento[col_destino] = df_andamento[col_destino].astype(object)
         
         # 2. Filtrar Front disponível
@@ -305,12 +311,11 @@ class ANDAMENTO:
             contratos_usados_andamento = set(
                 df_andamento[col_destino]
                 .astype(str)
-                .str.split('/')    # Divide se houver barras
+                .str.replace(r'\s+', '', regex=True)    # Divide se houver barras
                 .explode()         # Transforma cada item da lista em uma linha
                 .str.strip()       # Remove espaços
                 .unique()
             )
-
             # 2. Filtra opções disponíveis para este CPF específico
             # Usamos parênteses para garantir a ordem das operações lógicas
             possibilidades = df_front_dispo[
@@ -319,6 +324,7 @@ class ANDAMENTO:
                 (~df_front_dispo['Contrato'].astype(str).isin(contratos_usados))
             ]
             
+
             if possibilidades.empty: continue
 
             # Joga só o que está nas esteiras corretas
@@ -458,6 +464,7 @@ class ANDAMENTO:
         
         # Processa a busca
         res_raw = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
+        print(f'O que está em res_raw: {res_raw}')
 
         # Criar DataFrames separados para Contratos e Métodos
         contratos_data = []
