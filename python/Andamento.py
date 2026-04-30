@@ -110,10 +110,17 @@ class ANDAMENTO:
         # self.andamento = self.andamento[self.andamento['Prazo Total'] != 1].copy()
 
         # Remoção de cartão de crédito com prazo 0 ou 1
-        self.andamento = self.andamento[~((self.andamento['Modalidade'] == 'Cartão de Crédito') & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
+        if self.convenio == 'GOV. PARAÍBA':
+            self.andamento = self.andamento[~((self.andamento['Situação'].isin(['Quitada', 'Baixada'])) & (self.andamento['Prazo'].isin(["1/1"])))].copy()
+        else:
+            self.andamento = self.andamento[~((self.andamento['Modalidade'] == 'Cartão de Crédito') & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
 
-        if 'Contrato de Andamento' not in self.andamento.columns:
-            self.andamento.insert(2, 'Contrato de Andamento', self.andamento['Código na instituição'])
+        if self.convenio == 'GOV. PARAÍBA':
+            if 'Contrato de Andamento' not in self.andamento.columns:
+                self.andamento.insert(8, 'Contrato de Andamento', self.andamento['Código na instituição'])
+        else:
+            if 'Contrato de Andamento' not in self.andamento.columns:
+                self.andamento.insert(2, 'Contrato de Andamento', self.andamento['Código na instituição'])
         
         # Padronização de valores numéricos para os filtros funcionarem
         if self.andamento['Valor da Parcela'].dtype != 'float64':
@@ -121,15 +128,25 @@ class ANDAMENTO:
                 .str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
             self.andamento['Valor da Parcela'] = pd.to_numeric(self.andamento['Valor da Parcela'], errors='coerce')
 
-        self.andamento = self.andamento.drop_duplicates(subset=['Código']).copy()
-        # Filtro de Previdência/Seguros/Mensalidade (Valores 20, 40, 60)
-        andam_referencia_prazos = self.andamento[~(((self.andamento['Modalidade'] == 'Previdência') | 
-                                                    (self.andamento['Modalidade'] == 'Seguros') | 
-                                                    (self.andamento['Modalidade'] == 'Mensalidade')) 
-                                                & ((self.andamento['Valor da Parcela'] <= 20) | 
-                                                    (self.andamento['Valor da Parcela'] == 40) | 
-                                                    (self.andamento['Valor da Parcela'] == 60)))].copy()
-        
+        if self.convenio == 'GOV. PARAÍBA':
+            self.andamento = self.andamento.drop_duplicates(subset=['Matrícula', 'Entidade', 'Rubrica']).copy()
+
+            # Renomear a coluna Prazo para Prazo Total
+            try:
+                self.andamento.rename(columns={'Prazo': 'Prazo Total'})
+            except Exception as e:
+                print('Erro ao renomear a coluna de Prazo', e)
+        else:
+            self.andamento = self.andamento.drop_duplicates(subset=['Código']).copy()
+            # Filtro de Previdência/Seguros/Mensalidade (Valores 20, 40, 60)
+
+            andam_referencia_prazos = self.andamento[~(((self.andamento['Modalidade'] == 'Previdência') | 
+                                                        (self.andamento['Modalidade'] == 'Seguros') | 
+                                                        (self.andamento['Modalidade'] == 'Mensalidade')) 
+                                                    & ((self.andamento['Valor da Parcela'] <= 20) | 
+                                                        (self.andamento['Valor da Parcela'] == 40) | 
+                                                        (self.andamento['Valor da Parcela'] == 60)))].copy()
+            
         
 
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
@@ -263,7 +280,10 @@ class ANDAMENTO:
         df_andamento[col_destino] = df_andamento[col_destino].astype(object)
         
         # 2. Filtrar Front disponível
-        ocupados = df_andamento['Código na instituição'].dropna().unique()
+        if self.convenio == 'GOV. PARAÍBA':
+            ocupados = df_andamento['Contrato'].dropna().unique()
+        else:
+            ocupados = df_andamento['Código na instituição'].dropna().unique()
         df_front_dispo = df_front[~df_front['Contrato'].astype(str).isin(map(str, ocupados))].copy()
         
         contratos_usados = set()
@@ -321,8 +341,6 @@ class ANDAMENTO:
     
     def extrair_contratos_com_referencia(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
         print("Iniciando o processo de extração de contratos...")
-
-        
         
         def limpar_contrato(texto: str) -> str:
             if not isinstance(texto, str):

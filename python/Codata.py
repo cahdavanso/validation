@@ -5,6 +5,7 @@ import xlrd
 import openpyxl
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
+from python.Andamento import ANDAMENTO
 from datetime import datetime
 import numpy as np
 import xlsxwriter
@@ -81,6 +82,7 @@ class CODATA:
             'PARC': 'Prazo',
             'VLR_PARC': 'Prestacao',
             'PRODUTO': 'Tipo Operacao',
+            'ORIGEM_2': 'Consignataria',
             'ORIGEM_4': 'Convenio'
         }
 
@@ -94,10 +96,17 @@ class CODATA:
 
         # Coloca Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
         front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
+        # Coloca SIM onde é orbital no função
+        front_unif.loc[front_unif['Tipo Operacao'].isin(['CARTÃO PLÁSTICO', 'CARTÃO PLÁSTICO - RE']), 'Orbital'] = 'SIM'
+
+        # Preenche INSPFEM ONDE DEVE
+        front_unif.loc[front_unif['Convenio'].isin(['INSPFEM']), 'Consignataria'] = 'INSPFEM - CARD' 
+
         front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
         front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
+
 
         # print(front_unif.tail())
 
@@ -117,6 +126,16 @@ class CODATA:
         front_consig.insert(22, 'Valor a lançar', '', True)
         front_consig.insert(23, 'PRAZO', '', True)
         front_consig.insert(24, 'OBS', '', True)
+
+        # Aqui foi a resolução de um problema que me consumiu muitas horas, entender porque algumas parcelas de orbital no front
+        # e no orbital trabalhado estavam vindo com virgula, e outros sem. Acontece que o Prestacao estava em string, enquanto trazia os valores de orbital em float.
+        # Quando puxava  o valor de orbital para o front e fazia o tratamento de transformação de string para float, ele tirava o ponto das parcelas tratadas que vieram
+        # de orbital, enquanto corrigia os valores da Prestacao no front... Resumindo, para corrigir isso, tratei os valores de Prestacao no front, antes de juntar
+        # com orbital
+        if front_consig['Prestacao'].dtype != "float64":
+            front_consig['Prestacao'] = front_consig['Prestacao'].str.replace('.', '', regex=False)
+            front_consig['Prestacao'] = front_consig['Prestacao'].str.replace(',', '.', regex=False)
+            front_consig['Prestacao'] = pd.to_numeric(front_consig['Prestacao'], errors='coerce')
 
         # Esteiras
         esteiras_permitidas = load_esteiras()
@@ -144,7 +163,6 @@ class CODATA:
         
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
-        print(f"últimas linhas de orbital do front 0:\n{front_consig[['CPF', 'Prestacao']].tail()}")
 
         # Adiciona só as esteiras que podem ser lançadas
         # --------------------------------------------- ORBITAL --------------------------------------------- #
@@ -181,12 +199,10 @@ class CODATA:
             valores_encontrados = valores_encontrados.fillna(0)
 
             # --- ETAPA 6: Gravar no DataFrame original ---
-            valores_encontrados_str = valores_encontrados.astype(str)
+            valores_encontrados_str = valores_encontrados # .astype(str)
             front_consig.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
 
         front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
-
-        print(f"últimas linhas de orbital do front 1:\n{front_consig[['CPF', 'Prestacao']].tail()}")
 
 
         # ------------------------------------ ESTEIRAS REMOVIDAS ------------------------------------- #
@@ -200,10 +216,8 @@ class CODATA:
         front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
 
         # Trata coluna de Tipo da Conciliação
-        front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Novo Tipo Operacao']
+        front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
 
-
-        print(f"últimas linhas de orbital do front 2:\n{front_consig_esteiras[['CPF', 'Prestacao']].tail()}")
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
         front_consig_validado_termino = self.validacao_termino_front(front_consig_esteiras)
@@ -220,12 +234,10 @@ class CODATA:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão
-        if self.consignataria == 'CAPITAL CONSIG':
+        '''if self.consignataria == 'CAPITAL CONSIG':
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Novo Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         elif self.consignataria == 'INSPFEM':
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Consignataria'].str.contains('INSPFEM - CARD', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO INSPFEM'
-
-        print(f"últimas linhas de orbital do front 3:\n{front_consig_validado_termino[['CPF', 'Prestacao']].tail()}")
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Consignataria'].str.contains('INSPFEM - CARD', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = "NÃO LANÇAR - NÃO INSPFEM"'''
 
         # Marca consignatária errada
         if self.consignataria == 'CAPITAL CONSIG':
@@ -239,10 +251,23 @@ class CODATA:
         elif self.consignataria == 'INSPFEM':
             front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
-        print(f"últimas linhas de orbital do front 4:\n{front_consig_validado_termino[['CPF', 'Prestacao']].tail()}")
-
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
-        front_consig_validado_termino = self.andamento_func_front(front_consig_validado_termino)
+        if self.consignataria == 'CAPITAL CONSIG':
+            objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
+            front_consig_validado_termino = objeto_andamento.andamento_func_front()
+
+            front_com_prazo = front_consig_validado_termino[
+            (front_consig_validado_termino['PRAZO'].notna()) & 
+            (front_consig_validado_termino['PRAZO'] != '')
+            ]
+
+            front_consig_validado_termino = front_consig_validado_termino[(front_consig_validado_termino['PRAZO'].isna()) | (front_consig_validado_termino['PRAZO'] == '')]
+            front_com_prazo.to_excel(fr'{self.caminho}\FRONT COM PRAZOS PORQUE EU SOU MUITO BURRO.xlsx', index=False)
+            # front_consig_validado_termino.to_excel(fr'{self.caminho}\front_consig_validado_termino.xlsx', index=False)
+            front_consig_validado_termino.insert(22, 'Novo Tipo Operacao', 'CARTAO DE CREDITO')
+        else:
+            front_consig_validado_termino = front_consig_validado_termino[front_consig_validado_termino['Consignataria'] == 'INSPFEM - CARD']
+            front_consig_validado_termino.insert(22, 'Novo Tipo Operacao', 'CARTAO DE CREDITO')
 
         # Salva com os NÃO LANÇAR
         print(f"DEBUG: Tentando salvar FRONT SEMI TRABALHADO em: {self.caminho}")
@@ -251,8 +276,6 @@ class CODATA:
             print("DEBUG: Arquivo salvo com sucesso!")
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR: {e}")
-
-        print(f"últimas linhas de orbital do front 5:\n{front_consig_validado_termino[['CPF', 'Prestacao']].tail()}")
 
         # --------------------------------------------------------------------------------------------- #
         return front_consig_validado_termino
@@ -362,7 +385,6 @@ class CODATA:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        print(f"últimas linhas de orbital do front validacao_termino 0:\n{front_copy[['CPF', 'Prestacao']].tail()}")
         teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
@@ -383,7 +405,6 @@ class CODATA:
 
         # Puxar o saldo para o credbase
         front_copy['Saldo'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
-        print(f"últimas linhas de orbital do front validacao_termino 1:\n{front_copy[['CPF', 'Prestacao']].tail()}")
         # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
 
         front_copy.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
@@ -392,15 +413,11 @@ class CODATA:
             front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
             front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
 
-        print(f"últimas linhas de orbital do front validacao_termino 2:\n{front_copy[['CPF', 'Prestacao']].tail()}")
-
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
         valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['Prestacao'])
 
         front_copy['Valor a lançar'] = valor_a_lancar
-
-        print(f"últimas linhas de orbital do front validacao_termino 3:\n{front_copy[['CPF', 'Prestacao', 'Valor a lançar']].tail()}")
 
         return front_copy
 
@@ -473,7 +490,7 @@ class CODATA:
         contrato_editado = contrato_editado.replace('//', '/', regex=True)
 
         # INSERE A COLUNA CONTRATO EDITADO COM OS NÚMEROS JÁ TRATADOS
-        data_averbados.insert(2, "Contrato Editado", contrato_editado, True)
+        data_averbados.insert(8, "Contrato Editado", contrato_editado, True)
 
         data_averbados['Contrato Editado'] = data_averbados['Contrato Editado'].apply(self.separar_contratos)
 
