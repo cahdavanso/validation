@@ -23,6 +23,7 @@ from python.Serha import SERHA
 from python.Consiglog import CONSIGLOG
 from python.IgeprevGovTo_Preliminar import IGEPREV_GOVTO
 from python.Zetra import ZETRA
+from python.Rf1 import RF1
 
 app = FastAPI()
 
@@ -67,6 +68,8 @@ ZETRA_CONVENIO = [
          "GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
          "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL", "PREVIPALMAS"
          ]
+
+RF1_CONVENIO = ["PREF. ANANINDEUA"]
 
 TO_IGEPREV_CONVENIO = ["GOV. TOCANTINS e IGEPREV"]
 

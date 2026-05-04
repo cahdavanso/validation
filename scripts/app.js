@@ -26,7 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const TO_IGEPREV = ["GOV. TOCANTINS e IGEPREV"];
 
-    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_CONSIGLOG].sort();
+    const CONVENIOS_RF1 = ['PREF. ANANINDEUA'];
+
+    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_RF1].sort();
 
     const FIELDS_CONSIGFACIL = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_CODATA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "ANDAMENTO", "AVERBADOS", "ORBITAL"];
@@ -35,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const FIELDS_ZETRA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "ZIPS", "HISTORICO", "ORBITAL"];
     const FIELDS_CONSIGLOG = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "AVERBADOS", "ORBITAL"];
     const FIELDS_TO_IGEPREV = ["FRONT", "FUNCAO", "AVERBADOS_TO", "AVERBADOS_IGEPREV", "D8_TO", "D8_IGEPREV", "CONCILIACAO", "KOBRAKI"];
+    const FIELDS_RF1 = ["FRONT", "FUNCAO", "AVERBADOS", "CONCILIACAO", "KOBRAKI"];
 
     const fileDataMap = {}; 
     
@@ -217,6 +220,9 @@ document.addEventListener('DOMContentLoaded', () => {
             currentFields = FIELDS_ZETRA;
         } else if (TO_IGEPREV.includes(convenio)){
             currentFields = FIELDS_TO_IGEPREV;
+        } else if (CONVENIOS_RF1){
+            consignatariaArea.classList.remove('hidden');
+            currentFields = FIELDS_RF1;
         }
         else if (CONVENIOS_CONSIGFACIL.includes(convenio)){
             currentFields = FIELDS_CONSIGFACIL;
