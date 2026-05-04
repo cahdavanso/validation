@@ -171,7 +171,7 @@ async def read_and_unify_files(file_list: List[UploadFile]):
                 df = df.dropna(axis=1, how='all')
             elif "orbital" in name:
                 df = pd.read_excel(file_obj, header=3)
-                print(f'Cabeçalho de orbital:\n{df.head(10)}')
+                # print(f'Cabeçalho de orbital:\n{df.head(3)}')
             elif filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(file_obj) 
             else:

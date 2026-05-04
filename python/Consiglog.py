@@ -97,18 +97,28 @@ class CONSIGLOG:
         # Isso evita o erro clássico onde um lado é número e o outro é texto
         if orbital is not None:
             front_consig_esteiras['Contrato'] = front_consig_esteiras['Contrato'].astype(str).str.strip()
-            # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
+            # orbital.rename(columns={'id_contr_banco': 'CONTRATO'}, inplace=True)
+
+            if orbital['VALID DESCONTO FINAL'].dtype != "float64":
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
+                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+
+            for col in orbital.columns:
+                if "contrato" in col or "Contrato" in col:
+                    orbital.rename(columns={col:"CONTRATO"}, inplace=True)
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
 
             
 
-            orbital['Numero de Contrato'] = orbital['Numero de Contrato'].astype(str)
-            '''print(f'\nContrato 301268942 na coluna Numero de Contrato: {orbital.loc[orbital["Numero de Contrato"] == "301268942", "VALID DESCONTO FINAL"]}\n')
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
+            '''print(f'\nContrato 301268942 na coluna CONTRATO: {orbital.loc[orbital["CONTRATO"] == "301268942", "VALID DESCONTO FINAL"]}\n')
             print(f'Contrato 301268942 no front: {front_consig_esteiras.loc[front_consig_esteiras["Contrato"] == "301268942", "Prestacao"]}\n')'''
 
 
             # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
             # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
-            mapa_orbital = orbital.set_index('Numero de Contrato')['VALID DESCONTO FINAL']
+            mapa_orbital = orbital.set_index('CONTRATO')['VALID DESCONTO FINAL']
             # --- ETAPA 3: Definir quem vai ser alterado ---
             filtro_esteira = front_consig_esteiras['Esteira'] == '99 CARTAO UTILIZADO'
 
@@ -520,19 +530,19 @@ class CONSIGLOG:
             orbital['DESCRIÇÃO DO EMPREG'].str.contains('PREF GOIÂNIA|PM GOIANIA SEG', case=False, na=False),
             ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
         ].copy()
-        orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+        orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALID DESCONTO FINAL']
 
         front_so_orbital = front_para_separar.loc[
             front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
             ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
         
-        front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+        front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALID DESCONTO FINAL']
 
         # front_so_orbital['Proposta'] = front_so_orbital['Proposta'].astype(str).str.strip()
 
-        # front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace('.', '', regex=False)
-        front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace(',', '.', regex=False)
-        front_so_orbital['VALOR DESCONTO'] = pd.to_numeric(front_so_orbital['VALOR DESCONTO'], errors='coerce')
+        # front_so_orbital['VALID DESCONTO FINAL'] = front_so_orbital['VALID DESCONTO FINAL'].astype(str).str.replace('.', '', regex=False)
+        front_so_orbital['VALID DESCONTO FINAL'] = front_so_orbital['VALID DESCONTO FINAL'].astype(str).str.replace(',', '.', regex=False)
+        front_so_orbital['VALID DESCONTO FINAL'] = pd.to_numeric(front_so_orbital['VALID DESCONTO FINAL'], errors='coerce')
 
         orbital_final = pd.concat([front_so_orbital, orbital_preparado])
 
@@ -612,6 +622,9 @@ class CONSIGLOG:
         front = self.tratamento_front_preliminar()
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
+
         if front is False:
             print("trata_averbacao_1: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
@@ -622,6 +635,7 @@ class CONSIGLOG:
         convenio = self.convenio
 
         if convenio == 'PREF. GOIÂNIA':
+            # O ARQUIVO DE AVERBAÇÕES PRECISA TER OS DOIS TIPOS. COMPRA E SAQUE
             # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
             colunas = ['A D E', 'Servidor', 'Matricula', 'C P F', 'Valor Prestacao', 'Contrato Original', 'Qt Prestacao']
             data_averbados_bruto = data[colunas]
@@ -643,8 +657,8 @@ class CONSIGLOG:
             print(f'Tipo do concat_cpf_parcela: {data_averbados_bruto['CONCAT'].dtype}')
 
             orbital_tratado = self.orbital_tratado(self.orbital, front)
-            orbital_tratado['VALOR DESCONTO'] = pd.to_numeric(orbital_tratado['VALOR DESCONTO'], errors='coerce')
-            mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
+            orbital_tratado['VALID DESCONTO FINAL'] = pd.to_numeric(orbital_tratado['VALID DESCONTO FINAL'], errors='coerce')
+            mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALID DESCONTO FINAL'].sum()
             data_averbados_bruto['ORBITAL'] = ''
             data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF_Formatado'].map(mask_orbital)
 
@@ -669,12 +683,12 @@ class CONSIGLOG:
             print(f'data_averbados_bruto tipo {data_averbados_bruto['Qt Prestacao'].dtype}')
             print(f'\ndata_averbados_bruto unico {data_averbados_bruto['Qt Prestacao'].unique()}')
 
-            data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
+            data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, front)
 
             semi_front = front[front['Esteira'].isin(self.condicoes_1)]
             semi_front['Contrato'] = semi_front['Contrato'].astype(str).str.strip()
 
-            conciliacao_tratado = self.trata_conciliacao()
+            conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
             # Operações liquidadas. Tratando NRº OPER EDITADO
             # OP LIQUIDADO

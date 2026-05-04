@@ -27,7 +27,7 @@ class ZETRA:
 
         self.kobraki = kobraki
 
-        self.funcao = funcao
+        self.funcao = funcao if funcao is not None else None
 
         self.historico = historico if historico is not None else None
 
@@ -176,6 +176,72 @@ class ZETRA:
         averbacao_completa.to_excel(fr'{self.caminho}\{nome_averbacao_completa}.xlsx', index=False)
 
         return averbacao_completa
+    
+    def unifica_front_funcao(self):
+        front = self.front
+        funcao = self.funcao
+
+        if funcao is None:
+            return front
+
+        print(f"colunas de funcao: {funcao.columns}")
+
+        contrato_front = front['Contrato']
+        ccb_tratado = front['CCB'].astype(str).str.slice(0, 9)
+        ccb_tratado = ccb_tratado.astype('int64')
+
+        # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
+        contrato_funcao = funcao['NR_PROP']
+        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
+
+        # Tira os contratos do Front que já existem no Função
+        funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
+
+        # Tira os contratos CCB do Front que também existem no Função
+        funcao_tratado = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
+
+
+        # Juntar Funcao com Front
+        # 1. Defina o mapeamento de nomes (De: Para)
+        mapeamento = {
+            'NR_PROP': 'Contrato',
+            'CPF': 'CPF',
+            'MATRICULA': 'Matricula',
+            'CLIENTE': 'Nome',
+            'PARC': 'Prazo',
+            'VLR_PARC': 'Prestacao',
+            'PRODUTO': 'Tipo Operacao',
+            'ORIGEM_2': 'Consignataria',
+            'ORIGEM_4': 'Convenio'
+        }
+
+        # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
+        # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
+        funcao_ajustado = funcao_tratado[list(mapeamento.keys())].rename(columns=mapeamento)
+
+        # 3. Use o concat para unir os dois DataFrames
+        # O ignore_index=True serve para gerar um novo índice sequencial no DF final
+        front_unif = pd.concat([front, funcao_ajustado], ignore_index=True)
+
+        # Coloca Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
+        front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
+        # Coloca SIM onde é orbital no função
+        front_unif.loc[front_unif['Tipo Operacao'].isin(['CARTÃO PLÁSTICO', 'CARTÃO PLÁSTICO - RE']), 'Orbital'] = 'SIM'
+
+        # Preenche INSPFEM ONDE DEVE
+        front_unif.loc[front_unif['Convenio'].isin(['INSPFEM']), 'Consignataria'] = 'INSPFEM - CARD' 
+
+        front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
+        front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
+        front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
+        front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
+
+
+        # print(front_unif.tail())
+
+        # front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
+
+        return front_unif
 
     def tratamento_front_preliminar(self):
         front_consig = self.front.copy()
@@ -225,6 +291,15 @@ class ZETRA:
             front_consig_esteiras['Contrato'] = front_consig_esteiras['Contrato'].astype(str).str.strip()
             # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
 
+            if orbital['VALID DESCONTO FINAL'].dtype != "float64":
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
+                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+
+            for col in orbital.columns:
+                if "contrato" in col or "Contrato" in col:
+                    orbital.rename(columns={col:"CONTRATO"}, inplace=True)
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
             
 
             orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
@@ -376,6 +451,9 @@ class ZETRA:
         teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
+        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('float64')
+        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
+
         # Puxar o último status para o front
         status = conciliacao_tratado.filter(like='ST ')
         status_name = status.columns[-1]
@@ -398,17 +476,21 @@ class ZETRA:
         # print(f'status \n{front_copy[front_copy['Contrato'] == 300846910]}')
 
         # Puxar o saldo para o front
-        if not front_copy['Saldo'].dtype == 'float64':
+        if not front_copy['Saldo'].dtype != 'float64':
             front_copy['Saldo'] = front_copy['Saldo'].astype(str).replace('.', '', regex=False).replace(',', '.', regex=False)
             front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
+
+        print(f'Tipo da coluna Contrato no front: {front_copy['Contrato'].dtype}')
+        print(f'Tipo da coluna Contrato na conciliação: {conciliacao_tratado['CONTRATOS'].dtype}')
         mapeamento_saldo = conciliacao_tratado.set_index('CONTRATOS')['Saldo']
-        front_copy['Saldo'] = front_copy['Contrato'].map(mapeamento_saldo).fillna(0)
+        front_copy['Saldo'] = front_copy['Contrato'].map(mapeamento_saldo).fillna(-np.inf)
 
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Prestacao" seja escolhida)
-        front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace(".", "")
-        front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace(",", ".")
-        front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
+        if front_copy['Prestacao'].dtype != 'float64':
+            front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace(".", "")
+            front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace(",", ".")
+            front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
         print(f'\nTeste de Prestacao:\n{front_copy['Prestacao'].head()}\n')
         print(f'Tipo de prestacao: {front_copy['Prestacao'].dtype}')
         valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['Prestacao'])

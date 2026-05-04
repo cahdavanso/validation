@@ -311,7 +311,7 @@ class ANDAMENTO:
             contratos_usados_andamento = set(
                 df_andamento[col_destino]
                 .astype(str)
-                .str.replace(r'\s+', '', regex=True)    # Divide se houver barras
+                .str.split('/')   # Divide se houver barras
                 .explode()         # Transforma cada item da lista em uma linha
                 .str.strip()       # Remove espaços
                 .unique()

@@ -55,6 +55,9 @@ class CODATA:
         front = self.front
         funcao = self.funcao
 
+        if funcao is None:
+            return front
+
         print(f"colunas de funcao: {funcao.columns}")
 
         contrato_front = front['Contrato']
