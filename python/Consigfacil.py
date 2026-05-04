@@ -98,7 +98,7 @@ class CONSIGFACIL:
 
         # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
         contrato_funcao = funcao['NR_PROP']
-        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
+        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE')), 'Esteira'] = 'INTEGRADO'
 
         # Tira os contratos do Front que já existem no Função
         funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
@@ -870,7 +870,7 @@ class CONSIGFACIL:
         if self.convenio in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE', 'PREF. PORTO VELHO', 'PREF. NATAL','PREF. SANTA RITA']:
             averbados = averbados[averbados['Modalidade'].isin(['Cartão de Crédito', 'Cartão Benefício (Compras)', 'Cartão Benefício', 'Cartão Benefício(96)', 'Cartão Benefício Compra'])]
         else:
-            averbados = averbados[averbados['Modalidade'] == 'Cartão de Crédito']
+            averbados = averbados[averbados['Modalidade'].isin(['Cartão de Crédito', 'Cartão de Crédito [Previdência]', 'Cartão de Crédito [Prefeitura]'])]
 
         # Realoca a coluna "Login" para o início da planilha
         if averbados.columns[0] != 'Login':

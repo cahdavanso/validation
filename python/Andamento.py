@@ -113,7 +113,7 @@ class ANDAMENTO:
         if self.convenio == 'GOV. PARAÍBA':
             self.andamento = self.andamento[~((self.andamento['Situação'].isin(['Quitada', 'Baixada'])) & (self.andamento['Prazo'].isin(["1/1"])))].copy()
         else:
-            self.andamento = self.andamento[~((self.andamento['Modalidade'] == 'Cartão de Crédito') & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
+            self.andamento = self.andamento[~((self.andamento['Modalidade'].isin(['Cartão de Crédito', 'Cartão de Crédito [Prefeitura]', 'Cartão de Crédito [Previdência]'])) & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
 
         if self.convenio == 'GOV. PARAÍBA':
             if 'Contrato de Andamento' not in self.andamento.columns:

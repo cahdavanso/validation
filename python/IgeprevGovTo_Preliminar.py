@@ -114,7 +114,7 @@ class IGEPREV_GOVTO:
 
         # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
         contrato_funcao = funcao['NR_PROP']
-        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
+        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE')), 'Esteira'] = 'INTEGRADO'
 
         # Tira os contratos do Front que já existem no Função
         funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
