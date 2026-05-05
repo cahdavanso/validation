@@ -344,6 +344,17 @@ async def validar_planilhas(
                 historico=historico_df,
                 orbital=orbital_df
             )
+        elif convenio in RF1_CONVENIO:
+            logging.info("Usando o validador: RF1")
+            validador = RF1(
+                front=front_df,
+                portal_file_list=averbados_df,
+                convenio=convenio,
+                caminho=CAMINHO_SAIDA,
+                funcao=funcao_df,
+                conciliacao=conciliacao_df,
+                kobraki=kobraki_df
+            )
         elif convenio in TO_IGEPREV_CONVENIO:
             logging.info("Usando o validador: GOV TO e IGEPREV")
             validador = IGEPREV_GOVTO(
