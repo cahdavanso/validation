@@ -5,7 +5,7 @@ import xlrd
 import openpyxl
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
-from python.Andamento import ANDAMENTO
+from python.Andamento_GOVPB import ANDAMENTO
 from datetime import datetime
 import numpy as np
 import xlsxwriter
@@ -32,6 +32,32 @@ class CODATA:
 
         # Andamento
         self.andamento = andamento_list if andamento_list is not None else None
+        # Remove linhas vazias
+        if self.andamento is not None:
+            self.andamento = self.andamento.dropna(axis=0, how='all')
+            # Se algum CPF estiver sem nada, preenche com 0 e transforma em inteiro para impedir que ele coloque .0 no final
+            self.andamento['CPF'] = self.andamento['CPF'].fillna(0).astype(int)
+
+            # --- LÓGICA DA HIERARQUIA ---
+            # Mapeamento conforme sua solicitação
+            hierarquia = {
+                "Ativa": "1 - Ativa",
+                "Pendente": "2 - Pendente",
+                "Desc. a Menor": "3 - Desc. a Menor",
+                "Não Descontada": "4 - Não Descontada",
+                "Fora da Margem": "5 - Fora da Margem",
+                "Solicitada Suspensão": "6 - Solicitada Suspensão",
+                "Suspensa": "7 - Suspensa",
+                "Cancelada": "8 - Cancelada",
+                "Cancelamento": "9 - Cancelamento"
+            }
+
+            # Criamos a coluna 'Situacao_Formatada' baseada na coluna 'SITUACAO' do seu Excel
+            # .str.strip() remove espaços extras que podem causar erro de busca
+            self.andamento['Situação'] = self.andamento['Situação'].str.strip().map(hierarquia)
+
+            # Ordenamos o DataFrame pela nova coluna (1 até 9)
+            self.andamento = self.andamento.sort_values(by='Situação')
 
         self.convenio = convenio
         self.consignataria = consignataria
@@ -258,6 +284,7 @@ class CODATA:
         if self.consignataria == 'CAPITAL CONSIG':
             objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
             front_com_prazo = objeto_andamento.andamento_func_front()
+            front_com_prazo.drop_duplicates(subset=['Contrato'], keep='first', inplace=True)
 
             front_consig_validado_termino['PRAZO'] = front_consig_validado_termino['Contrato'].astype(str).map(front_com_prazo.set_index('Contrato')['PRAZO'])
             front_consig_validado_termino['Contrato'] = front_consig_validado_termino['Contrato'].astype('int64')
@@ -411,7 +438,7 @@ class CODATA:
         # print(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
 
         # Puxar o saldo para o credbase
-        front_copy['Saldo'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
+        front_copy['Saldo'] = front_copy['Contrato'].astype(int).map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
         # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
 
         front_copy.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)

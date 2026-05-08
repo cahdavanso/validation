@@ -4,14 +4,42 @@ from thefuzz import fuzz
 import os
 from python.ESTEIRAS import load_esteiras
 
-# front_bruto = r"F:\Dados\NOVA ESTRUTURA\LANÇAMENTO CARTÕES\TRABALHANDO\2026\05 - Maio\GUIDO ROBOTO\PAIUI\relatorio_2026-04-16_13-19-47_parte_1.csv"
-# andamento_bruto = r"F:\Dados\NOVA ESTRUTURA\LANÇAMENTO CARTÕES\TRABALHANDO\2026\05 - Maio\GUIDO ROBOTO\PAIUI\ANDAMENTO UNIFICADO GOV PI.csv"
-# caminho = r"F:\Dados\NOVA ESTRUTURA\LANÇAMENTO CARTÕES\TRABALHANDO\2026\05 - Maio\GUIDO ROBOTO\PAIUI\TRABALHADOS"
-# funcao_bruto = r"F:\Dados\NOVA ESTRUTURA\LANÇAMENTO CARTÕES\TRABALHANDO\2026\05 - Maio\GUIDO ROBOTO\PAIUI\FUNÇÃO GOV PI 04.2026.csv"
+'''front_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\relatorio_2026-05-06_11-45-47_parte_1.csv"
+andamento_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\Consignacao UNIFICADA GOV PB.xlsx"
+caminho = r"P:\PESSOAL\2026\MAIO\GOV PB\TRABALHADOS TESTE ANDAMENTO"
+funcao_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\RL167_v4.csv"
+kobraki_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\RECEBIVEIS KOBRAKI - ABRIL 2026.xlsx"
 
-# front = pd.read_csv(front_bruto, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
-# andamento = pd.read_csv(andamento_bruto, encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
-# funcao = pd.read_csv(funcao_bruto, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
+front = pd.read_csv(front_bruto, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
+andamento = pd.read_excel(andamento_bruto)
+funcao = pd.read_csv(funcao_bruto, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
+kobraki = pd.read_excel(kobraki_bruto, sheet_name='CONSOLIDADO')
+convenio = "GOV. PARAÍBA"
+
+andamento = andamento.dropna(axis=0, how='all')
+# Se algum CPF estiver sem nada, preenche com 0 e transforma em inteiro para impedir que ele coloque .0 no final
+andamento['CPF'] = andamento['CPF'].fillna(0).astype(int)
+
+# --- LÓGICA DA HIERARQUIA ---
+# Mapeamento conforme sua solicitação
+hierarquia = {
+    "Ativa": "1 - Ativa",
+    "Pendente": "2 - Pendente",
+    "Desc. a Menor": "3 - Desc. a Menor",
+    "Não Descontada": "4 - Não Descontada",
+    "Fora da Margem": "5 - Fora da Margem",
+    "Solicitada Suspensão": "6 - Solicitada Suspensão",
+    "Suspensa": "7 - Suspensa",
+    "Cancelada": "8 - Cancelada",
+    "Cancelamento": "9 - Cancelamento"
+}
+
+# Criamos a coluna 'Situacao_Formatada' baseada na coluna 'SITUACAO' do seu Excel
+# .str.strip() remove espaços extras que podem causar erro de busca
+andamento['Situação'] = andamento['Situação'].str.strip().map(hierarquia)
+
+# Ordenamos o DataFrame pela nova coluna (1 até 9)
+andamento = andamento.sort_values(by='Situação')'''
 
 
 class ANDAMENTO:
@@ -74,7 +102,7 @@ class ANDAMENTO:
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
         front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
 
-        print('front unif finalzin:\n', front_unif.tail())
+        # print('front unif finalzin:\n', front_unif.tail())
 
         # front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
 
@@ -154,8 +182,9 @@ class ANDAMENTO:
 
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
         if self.convenio == 'GOV. PARAÍBA':
-            andam_file, front_base = self.processar_contratos_otimizado(andam_referencia_prazos, front_para_processar)
+            andam_file= self.processar_contrato_simples(andam_referencia_prazos, front_para_processar)
             andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
+            andam_file= self.processar_contrato_simples(andam_file, front_para_processar)
             # Terceira passada
             # andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
             print(f'Andamento depois de extrair_contratos\n{andam_file.columns}')
@@ -199,13 +228,82 @@ class ANDAMENTO:
         front_final = pd.concat([front_preenchido, front_para_processar], ignore_index=True)
 
         try:
-            andam_file.to_excel(os.path.join(self.caminho, f"ANDAMENTO GERAL {self.convenio}.xlsx"), index=False)
+            andam_file.to_excel(os.path.join(self.caminho, f"ANDAMENTO GERAL {self.convenio} TESTE.xlsx"), index=False)
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR ANDAMENTO GERAL: {e}")
 
         front_final.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
 
         return front_final
+    
+    def processar_contrato_simples(self, df_andamento, df_front):
+        # 1. Limpeza e Padronização
+        df_andamento = df_andamento.drop_duplicates(subset=['Contrato']).copy()
+        
+        for df in [df_andamento, df_front]:
+            df['CPF'] = df['CPF'].astype(str).str.strip()
+
+        # Tratamento de valores numéricos (Andamento)
+        if df_andamento['Valor da Parcela'].dtype != 'float64':
+            df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(str).str.replace(".", "").str.replace(",", ".")
+            df_andamento['Valor da Parcela'] = pd.to_numeric(df_andamento['Valor da Parcela'], errors='coerce')
+        df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(float).round(2)
+
+        # Tratamento de valores numéricos (Front)
+        if df_front['Prestacao'].dtype != 'float64':
+            df_front['Prestacao'] = df_front['Prestacao'].astype(str).str.replace(".", "").str.replace(",", ".")
+            df_front['Prestacao'] = pd.to_numeric(df_front['Prestacao'], errors='coerce')
+        df_front['Prestacao'] = df_front['Prestacao'].astype(float).round(2)
+
+        # 2. Configuração de colunas de destino
+        if 'Contrato de Andamento' not in df_andamento.columns:
+            df_andamento.insert(2, 'Contrato de Andamento', df_andamento['Contrato'])
+
+        col_destino = 'Contrato Editado 1' if 'Contrato Editado 1' in df_andamento.columns else 'Contrato de Andamento'
+        
+        # 3. Filtrar Front disponível
+        ocupados = df_andamento['Contrato'].dropna().unique()
+        df_front_dispo = df_front[~df_front['Contrato'].astype(str).isin(map(str, ocupados))].copy()
+
+        # 4. Criar dicionário indexado por CPF
+        # O valor será uma lista de tuplas: [(contrato, valor_prestacao), ...]
+        dict_front = {}
+        for _, row in df_front_dispo.iterrows():
+            cpf = row['CPF']
+            if cpf not in dict_front:
+                dict_front[cpf] = []
+            dict_front[cpf].append((row['Contrato'], row['Prestacao']))
+
+        # 5. Busca com Tolerância (0.10)
+        vazios = df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")].copy()
+        tolerancia = 0.10
+
+        for idx, row in vazios.iterrows():
+            cpf_busca = row['CPF']
+            valor_alvo = float(row['Valor da Parcela'])
+            
+            if cpf_busca in dict_front:
+                lista_opcoes = dict_front[cpf_busca]
+
+                '''if cpf_busca == '037.685.094-94':
+                    print(f'Valor da Parcela\n{valor_alvo}\n')
+                    print(f'Prestacao\n{dict_front.loc[dict_front['CPF'] == cpf_busca, 'Prestacao']}')'''
+                
+                # Procurar na lista de contratos deste CPF um que esteja na margem
+                for i, (contrato_front, valor_front) in enumerate(lista_opcoes):
+                    if abs(valor_alvo - valor_front) <= tolerancia:
+                        # Match encontrado dentro da tolerância!
+                        # Force a conversão para string no momento da atribuição
+                        df_andamento.at[idx, col_destino] = str(contrato_front)
+                        
+                        # Remove esse contrato da lista para não ser usado de novo
+                        lista_opcoes.pop(i)
+                        break 
+
+        sobraram = df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")].shape[0]
+        print(f'Quantos vazios sobraram após busca com tolerância? {sobraram}')
+
+        return df_andamento.fillna('')
     
 
     def busca_greedy_backtracking(self, alvo, itens, max_contratos=5):
@@ -442,14 +540,15 @@ class ANDAMENTO:
                     
                     # Caso A: O contrato do texto está na esteira certa e o valor bate
                     if esteira_match_texto in self.esteiras and valor_match_texto == valor_parcela_suja and self.convenio != 'GOV. PARAÍBA':
+                    # if valor_match_texto == valor_parcela_suja:
                         metodo_aplicado = "Texto + Valor + Esteira Confirmados"
+
                     
                     # Caso B: O contrato do texto NÃO serve (ou valor errado ou esteira errada), 
                     # mas temos um reserva que bate valor e esteira
                         
-                    
-                    #elif possiveis_pelo_valor_e_esteira and self.convenio != 'GOV. PARAÍBA':
-                    elif possiveis_pelo_valor_e_esteira:
+                    elif possiveis_pelo_valor_e_esteira and self.convenio != 'GOV. PARAÍBA':
+                    # elif possiveis_pelo_valor_e_esteira:
                         contrato_reserva, esteira_reserva = possiveis_pelo_valor_e_esteira[0]
                         melhor_match = contrato_reserva
                         metodo_aplicado = f"Correção por Valor + Esteira ({esteira_reserva})"
@@ -523,3 +622,7 @@ class ANDAMENTO:
             print(f"ERRO AO SALVAR: {e}")
 
         return df_resultado.fillna('')
+    
+'''andamento_obj = ANDAMENTO(front=front, convenio=convenio, caminho=caminho, andamento=andamento, funcao=funcao)
+
+resultado = andamento_obj.andamento_func_front()'''

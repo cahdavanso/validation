@@ -172,6 +172,9 @@ async def read_and_unify_files(file_list: List[UploadFile]):
                 df = df[:-6]
                 df['Consignataria'] = consig
                 df = df.dropna(axis=1, how='all')
+            elif "andamento" in name and conv == 'GOV. PARAÍBA':
+                df_andamento = pd.read_excel(file_obj)
+                df = df_andamento[:-3]
             elif "orbital" in name:
                 df = pd.read_excel(file_obj, header=3)
                 # print(f'Cabeçalho de orbital:\n{df.head(3)}')

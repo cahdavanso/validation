@@ -174,6 +174,46 @@ class SERHA:
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
 
+        # --------------------------------------------- ORBITAL --------------------------------------------- #
+        # --- ETAPA 1: Garantir que as chaves são do mesmo tipo (Texto) ---
+        # Isso evita o erro clássico onde um lado é número e o outro é texto
+        if orbital is not None:
+            front_consig['Contrato'] = front_consig['Contrato'].astype(str).str.strip()
+            # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
+
+            if orbital['VALID DESCONTO FINAL'].dtype != "float64":
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
+                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+
+            for col in orbital.columns:
+                if "contrato" in col or "Contrato" in col:
+                    orbital.rename(columns={col:"CONTRATO"}, inplace=True)
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
+
+            # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
+            # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
+            mapa_orbital = orbital.set_index('CONTRATO')['VALID DESCONTO FINAL']
+            # --- ETAPA 3: Definir quem vai ser alterado ---
+            filtro_esteira = front_consig['Esteira'] == '99 CARTAO UTILIZADO'
+
+            # --- ETAPA 4: Fazer a mágica (Buscar valores) ---
+            # .loc[filtro, coluna] -> Seleciona só as linhas da esteira certa
+            # .map(mapa_orbital)   -> Faz o "PROCV" buscando no dicionário criado
+            valores_encontrados = front_consig.loc[filtro_esteira, 'Contrato'].map(mapa_orbital)
+
+            # --- ETAPA 5: Tratar quem não foi achado ---
+            # Se o contrato não existe na Orbital, o map devolve NaN.
+            # Usamos fillna(0) para trocar NaN por 0, conforme você pediu.
+            valores_encontrados = valores_encontrados.fillna(0)
+
+            # --- ETAPA 6: Gravar no DataFrame original ---
+            valores_encontrados_str = valores_encontrados # .astype(str)
+            front_consig.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
+
+        front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+
+
         # ------------------------------------ ESTEIRAS REMOVIDAS ------------------------------------- #
         front_consig_esteiras_removidas = front_consig[~front_consig['Esteira'].isin(esteiras_permitidas)].copy()
         try:
@@ -639,7 +679,7 @@ class SERHA:
             trabalhado_mes_passado.loc[
                 ~trabalhado_mes_passado['ContratoOriginal'].astype(str).str.contains('/'),
                 'ContratoOriginal'
-            ] = trabalhado_mes_passado['ContratoOriginal'].astype(str).str[:9]
+            ] = trabalhado_mes_passado['Contrato 1'].astype(str) # .str[:9]
 
             averbados = self.averbados.copy()
             if complemento is None:
@@ -846,7 +886,7 @@ class SERHA:
             trabalhado_mes_passado.loc[
                 ~trabalhado_mes_passado['ContratoOriginal'].astype(str).str.contains('/'),
                 'ContratoOriginal'
-            ] = trabalhado_mes_passado['ContratoOriginal'].astype(str).str[:9]
+            ] = trabalhado_mes_passado['Contrato 1'].astype(str) # .str[:9]
 
             # 1. Lista de colunas a verificar
             cols_contratos = ['ContratoOriginal'] + [col for col in trabalhado_mes_passado.columns if
