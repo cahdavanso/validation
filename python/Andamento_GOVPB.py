@@ -138,18 +138,11 @@ class ANDAMENTO:
         # self.andamento = self.andamento[self.andamento['Prazo Total'] != 1].copy()
 
         # Remoção de cartão de crédito com prazo 0 ou 1
-        if self.convenio == 'GOV. PARAÍBA':
-            print(f'cabeçalhos de andamento de paraíba: {self.andamento.columns}')
-            self.andamento = self.andamento[~((self.andamento['Situação'].isin(['Quitada', 'Baixada'])) | (self.andamento['Prazo'].isin(["1/1"])))].copy()
-        else:
-            self.andamento = self.andamento[~((self.andamento['Modalidade'].isin(['Cartão de Crédito', 'Cartão de Crédito [Prefeitura]', 'Cartão de Crédito [Previdência]'])) & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
-
-        if self.convenio == 'GOV. PARAÍBA':
-            if 'Contrato de Andamento' not in self.andamento.columns:
-                self.andamento.insert(8, 'Contrato de Andamento', self.andamento['Contrato'])
-        else:
-            if 'Contrato de Andamento' not in self.andamento.columns:
-                self.andamento.insert(2, 'Contrato de Andamento', self.andamento['Código na instituição'])
+        print(f'cabeçalhos de andamento de paraíba: {self.andamento.columns}')
+        self.andamento = self.andamento[~((self.andamento['Situação'].isin(['Quitada', 'Baixada'])) | (self.andamento['Prazo'].isin(["1/1"])))].copy()
+        
+        if 'Contrato de Andamento' not in self.andamento.columns:
+            self.andamento.insert(8, 'Contrato de Andamento', self.andamento['Contrato'])
         
         # Padronização de valores numéricos para os filtros funcionarem
         if self.andamento['Valor da Parcela'].dtype != 'float64':
@@ -157,44 +150,25 @@ class ANDAMENTO:
                 .str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
             self.andamento['Valor da Parcela'] = pd.to_numeric(self.andamento['Valor da Parcela'], errors='coerce')
 
-        if self.convenio == 'GOV. PARAÍBA':
-            andam_referencia_prazos = self.andamento.drop_duplicates(subset=['Contrato']).copy()
-            cpf_tratado = andam_referencia_prazos['CPF'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
-            andam_referencia_prazos['CPF'] = cpf_tratado
+        andam_referencia_prazos = self.andamento.drop_duplicates(subset=['Contrato']).copy()
+        cpf_tratado = andam_referencia_prazos['CPF'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
+        andam_referencia_prazos['CPF'] = cpf_tratado
 
-            # Renomear a coluna Prazo para Prazo Total
-            try:
-                andam_referencia_prazos.rename(columns={'Prazo': 'Prazo Total'}, inplace=True)
-            except Exception as e:
-                print('Erro ao renomear a coluna de Prazo', e)
-        else:
-            self.andamento = self.andamento.drop_duplicates(subset=['Código']).copy()
-            # Filtro de Previdência/Seguros/Mensalidade (Valores 20, 40, 60)
-
-            andam_referencia_prazos = self.andamento[~(((self.andamento['Modalidade'] == 'Previdência') | 
-                                                        (self.andamento['Modalidade'] == 'Seguros') | 
-                                                        (self.andamento['Modalidade'] == 'Mensalidade')) 
-                                                    & ((self.andamento['Valor da Parcela'] <= 20) | 
-                                                        (self.andamento['Valor da Parcela'] == 40) | 
-                                                        (self.andamento['Valor da Parcela'] == 60)))].copy()
-            
+        # Renomear a coluna Prazo para Prazo Total
+        try:
+            andam_referencia_prazos.rename(columns={'Prazo': 'Prazo Total'}, inplace=True)
+        except Exception as e:
+            print('Erro ao renomear a coluna de Prazo', e)
+        
         
 
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
-        if self.convenio == 'GOV. PARAÍBA':
-            andam_file= self.processar_contrato_simples(andam_referencia_prazos, front_para_processar)
-            andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
-            andam_file= self.processar_contrato_simples(andam_file, front_para_processar)
-            # Terceira passada
-            # andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
-            print(f'Andamento depois de extrair_contratos\n{andam_file.columns}')
-        else:
-            andam_file, front_base = self.processar_contratos_otimizado(andam_referencia_prazos, front_para_processar)
-            andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
-            print(f'Andamento depois de extrair_contratos\n{andam_file.columns}')
-
-            # Terceira passada
-            andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
+        andam_file= self.processar_contrato_simples(andam_referencia_prazos, front_para_processar)
+        andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
+        andam_file= self.processar_contrato_simples(andam_file, front_para_processar)
+        # Terceira passada
+        # andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
+        print(f'Andamento depois de extrair_contratos\n{andam_file.columns}')
 
         # 3. EXTRAÇÃO DOS PRAZOS
         # colunas_contratos = [col for col in andam_file.columns if 'Contrato' in col or 'Código' in col]
@@ -392,10 +366,8 @@ class ANDAMENTO:
         df_andamento[col_destino] = df_andamento[col_destino].astype(object)
         
         # 2. Filtrar Front disponível
-        if self.convenio == 'GOV. PARAÍBA':
-            ocupados = df_andamento['Contrato'].dropna().unique()
-        else:
-            ocupados = df_andamento['Código na instituição'].dropna().unique()
+        ocupados = df_andamento['Contrato'].dropna().unique()
+
         df_front_dispo = df_front[~df_front['Contrato'].astype(str).isin(map(str, ocupados))].copy()
         
         contratos_usados = set()
@@ -432,10 +404,6 @@ class ANDAMENTO:
             
 
             if possibilidades.empty: continue
-
-            # Joga só o que está nas esteiras corretas
-            if self.convenio != "GOV. PARAÍBA":
-                possibilidades = possibilidades[possibilidades['Esteira'].isin(self.esteiras)]
             
             lista_itens = list(possibilidades[['Contrato', 'Prestacao']].itertuples(index=False, name=None))
             
@@ -539,24 +507,24 @@ class ANDAMENTO:
                     # --- Lógica de Decisão ---
                     
                     # Caso A: O contrato do texto está na esteira certa e o valor bate
-                    if esteira_match_texto in self.esteiras and valor_match_texto == valor_parcela_suja and self.convenio != 'GOV. PARAÍBA':
-                    # if valor_match_texto == valor_parcela_suja:
-                        metodo_aplicado = "Texto + Valor + Esteira Confirmados"
+                    '''if esteira_match_texto in self.esteiras and valor_match_texto == valor_parcela_suja and self.convenio != 'GOV. PARAÍBA':
+                    if valor_match_texto == valor_parcela_suja:
+                        metodo_aplicado = "Texto + Valor + Esteira Confirmados"'''
 
                     
                     # Caso B: O contrato do texto NÃO serve (ou valor errado ou esteira errada), 
                     # mas temos um reserva que bate valor e esteira
                         
-                    elif possiveis_pelo_valor_e_esteira and self.convenio != 'GOV. PARAÍBA':
+                    '''elif possiveis_pelo_valor_e_esteira and self.convenio != 'GOV. PARAÍBA':
                     # elif possiveis_pelo_valor_e_esteira:
                         contrato_reserva, esteira_reserva = possiveis_pelo_valor_e_esteira[0]
                         melhor_match = contrato_reserva
-                        metodo_aplicado = f"Correção por Valor + Esteira ({esteira_reserva})"
+                        metodo_aplicado = f"Correção por Valor + Esteira ({esteira_reserva})"'''
 
                     # Caso C: O contrato do texto está na esteira certa, mas o valor diverge 
                     # (e não achamos nenhum outro contrato que bata o valor na esteira certa)
-                    elif esteira_match_texto in self.esteiras and self.convenio != 'GOV. PARAÍBA':
-                        metodo_aplicado = f"Fuzzy Match (Esteira {esteira_match_texto}) - Valor Divergente"
+                    '''elif esteira_match_texto in self.esteiras and self.convenio != 'GOV. PARAÍBA':
+                        metodo_aplicado = f"Fuzzy Match (Esteira {esteira_match_texto}) - Valor Divergente"'''
                         
                     # Caso D: Nada bate com as esteiras permitidas
                     '''else:
