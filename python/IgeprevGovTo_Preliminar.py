@@ -299,6 +299,7 @@ class IGEPREV_GOVTO:
                 d8_unificado['CONTSE SEQ'].astype(str)
             )
             # 3. Correção do .isin (precisa de uma lista [])
+            # valores_peculio = [20, 40, 60, 80, 100, 120]
             valores_peculio = [20]
             d8_peculios = d8_unificado[d8_unificado['R$ PARCELA'].isin(valores_peculio)].copy()
             convenio = 'GOV. TO'
@@ -316,6 +317,7 @@ class IGEPREV_GOVTO:
                     d8_unificado['CONTSE SEQ'].astype(str)
                 )
                 # 3. Correção do .isin (precisa de uma lista [])
+                # valores_peculio = [20, 40, 60, 80, 100, 120]
                 valores_peculio = [20]
                 d8_peculios = d8_unificado[d8_unificado['VLR.  ADE'].isin(valores_peculio)].copy()
 
@@ -334,17 +336,18 @@ class IGEPREV_GOVTO:
             )
         
         # Separa os valores de 20 no front
+        # front_peculios = front[front['Prestacao'].isin([20, 40, 60, 80, 100, 120])]
         front_peculios = front[front['Prestacao'].isin([20])]
         
         # 1. Pegamos a lista de chaves (CONCAT) que EXISTEM no front
         chaves_no_front = front_peculios['CONCAT CPF PARCELA'].unique()
 
-        # 2. Identificamos as chaves de valor 20 que estão no D8
+        # 2. Identificamos as chaves de valor 20, 40, 60, 80, 100, 120 que estão no D8
         # (Você já tem o d8_peculios, vamos usar a coluna dele)
         chaves_no_d8_vinte = d8_peculios['CONCAT CPF PARCELA'].unique()
 
         # 3. Criamos a lista de quem deve ser APAGADO:
-        # São as chaves que são de valor 20 no D8, mas NÃO estão no front
+        # São as chaves que são de valor 20, 40, 60, 80, 100, 120 no D8, mas NÃO estão no front
         excluir_casos_d8 = [c for c in chaves_no_d8_vinte if c not in chaves_no_front]
 
         # 4. Removemos do d8_unificado original
@@ -355,49 +358,6 @@ class IGEPREV_GOVTO:
     
     def unifica_d8_gov_to(self):
         d8_gov_to_unificado = self.d8_to
-
-        # print(f'HEAD de d8 unificado: {d8_gov_to_unificado.head()}')
-        
-        '''gov_to_d8_capital = d8_gov_to_capital
-        gov_to_d8_ciasprev = d8_gov_to_ciasprev
-        gov_to_d8_hp = d8_gov_to_hp
-        gov_to_d8_click = d8_gov_to_click
-        gov_to_d8_capital_parcial = d8_gov_to_capital_parciais
-        gov_to_d8_ciasprev_parcial = d8_gov_to_ciasprev_parciais
-        gov_to_d8_hp_parcial = d8_gov_to_hp_parciais
-        gov_to_d8_click_parcial = d8_gov_to_click_parciais'''
-
-        # Adiciona CONSIGNATARIA no final de cada DataFrame
-        '''gov_to_d8_capital['CONSIGNATARIA'] = 'CAPITAL'
-        gov_to_d8_ciasprev['CONSIGNATARIA'] = 'CIASPREV'
-        gov_to_d8_hp['CONSIGNATARIA'] = 'HP'
-        gov_to_d8_click['CONSIGNATARIA'] = "CLICK"'''
-
-        # Adiciona CONSIGNATARIA no final de cada DataFrame Parcial
-        '''gov_to_d8_capital_parcial['CONSIGNATARIA'] = 'CAPITAL'
-        gov_to_d8_ciasprev_parcial['CONSIGNATARIA'] = 'CIASPREV'
-        gov_to_d8_hp_parcial['CONSIGNATARIA'] = 'HP'
-        gov_to_d8_click_parcial['CONSIGNATARIA'] = "CLICK"'''
-
-        '''print(f'd8 parcial de gov to Capital\n{d8_gov_to_capital_parciais}\n')
-        print(f'd8 parcial de gov to Ciasprev\n{d8_gov_to_ciasprev_parciais}\n')
-        print(f'd8 parcial de gov to HP\n{d8_gov_to_hp_parciais}\n')
-        print(f'd8 parcial de gov to Click\n{d8_gov_to_click_parciais}\n')'''
-
-        # d8_gov_to_unificado_linhas = pd.concat([gov_to_d8_capital, gov_to_d8_ciasprev, gov_to_d8_hp, gov_to_d8_click], ignore_index=True)
-        # d8_gov_to_unificado_parciais = pd.concat([gov_to_d8_capital_parcial, gov_to_d8_ciasprev_parcial, gov_to_d8_hp_parcial, gov_to_d8_click_parcial], ignore_index=True)
-
-        # Muda o nome da coluna R$ PARCELA DESCONTADA da aba de Parciais para R$ PARCELA
-        # d8_gov_to_unificado_parciais.rename(columns={'R$ PARCELA DESCONTADA': 'R$ PARCELA'}, inplace=True)
-        # print(f'Colunas de d8_gov_to_unificado_parciais: {d8_gov_to_unificado_parciais.columns}')
-
-        # Mapeamento das colunas para concatenar
-        '''mapeamento_d8 = ["ORDEM", "REFERENCIA", "CPF", "MATRICULA", "NOME", "RUBRICA", "PARCELA", "ADF", "R$ PARCELA", "CONSIGNATARIA"]
-
-        d8_gov_to_unificado_linhas = d8_gov_to_unificado_linhas[mapeamento_d8]
-        d8_go_to_unificado_parciais_reduzido = d8_gov_to_unificado_parciais[mapeamento_d8]
-
-        d8_gov_to_unificado = pd.concat([d8_gov_to_unificado_linhas, d8_go_to_unificado_parciais_reduzido], ignore_index=True)'''
 
         if d8_gov_to_unificado['R$ PARCELA'].dtype != 'float64':
             d8_gov_to_unificado['R$ PARCELA'] = d8_gov_to_unificado['R$ PARCELA'].astype(str).str.replace("R$ ", "")
@@ -482,6 +442,9 @@ class IGEPREV_GOVTO:
         # Soma dos d8
         front_tratado['SOMAS DE D8'] = front_tratado['SOMASE D8 GOV TO'] + front_tratado['SOMASE IGEPREV']
 
+        # Adiciona mais 20 em cada cpf de hp
+        front_tratado.loc[front_tratado['Consignataria'] == 'HOJE PREVIDÊNCIA PRIVADA', 'Valor a lançar'] += 20
+
         # SOMASE LOCAL
         front_tratado['SOMASE LOCAL'] = front_tratado.groupby("CPF")['Valor a lançar'].transform('sum')
 
@@ -503,9 +466,6 @@ class IGEPREV_GOVTO:
 
         # Vamos salvar e retornar somente o que é maior que 0
         front_trabalhado = front_tratado[(front_tratado['Lançar'] > 0) & (front_tratado['Contse seq'] == 1)]
-
-        # Adiciona mais 20 em cada cpf de hp
-        front_trabalhado.loc[front_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA', 'Lançar'] += 20
         
         front_trabalhado.to_excel(fr'{self.caminho}\FRONT TOTALMENTE TRABALHADO.xlsx', index=False)
 
@@ -545,34 +505,79 @@ class IGEPREV_GOVTO:
         total_duplicados_anterior = gov_to_averbado_unificado.duplicated(subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA']).sum()
         # print(f'Quantos duplicados de MATRICULA, CONSIGNATARIA E PARCELA foram removidos antes da soma: {total_duplicados_anterior}')
 
-        gov_to_averbado_unificado = gov_to_averbado_unificado.drop_duplicates(
-            subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA'], 
+        '''gov_to_averbado_unificado = gov_to_averbado_unificado.drop_duplicates(
+            subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
             keep='first'
         )
 
 
 
         # Ele calcula a soma por grupo e "espalha" o resultado nas linhas originais
-        gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado.groupby(['MATRICULA', 'Consignataria'])['VALOR_PARCELA'].transform('sum')
+        gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado.groupby(['MATRICULA', 'RUBRICA_CODIGO', 'Consignataria'])['VALOR_PARCELA'].transform('sum')
         
         total_duplicados_posterior = gov_to_averbado_unificado.duplicated(subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA']).sum()
         # print(f'Quantos duplicados de MATRICULA, CONSIGNATARIA E PARCELA foram removidos depois da soma: {total_duplicados_posterior}')
 
         gov_to_averbado_unificado = gov_to_averbado_unificado.drop_duplicates(
-            subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA'], 
+            subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
             keep='first'
+        )'''
+
+        # 1. Identificamos os grupos e contamos quantos valores únicos de 'VALOR_PARCELA' existem em cada um
+        '''gov_to_averbado_unificado = gov_to_averbado_unificado.groupby(['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO']).filter(
+            lambda x: x['VALOR_PARCELA'].nunique() == 1 or len(x) == 1
+        )'''
+
+        # 1. Garantir que a coluna de valor seja numérica para ordenação correta
+        gov_to_averbado_unificado['VALOR_PARCELA'] = pd.to_numeric(gov_to_averbado_unificado['VALOR_PARCELA'], errors='coerce').fillna(0)
+
+        # 2. ORDENAÇÃO É A CHAVE: 
+        # Colocamos as colunas de agrupamento e o VALOR_PARCELA em ordem DECRESCENTE (ascending=False)
+        # Isso coloca o maior valor de cada grupo no topo da lista.
+        gov_to_averbado_unificado_sorted = gov_to_averbado_unificado.sort_values(
+            by=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
+            ascending=[True, True, True, False]
         )
 
+        # 3. IDENTIFICAÇÃO DAS DUPLICATAS DE GRUPO
+        # Marcamos todas as linhas que têm o mesmo grupo (sem olhar o valor ainda)
+        gov_to_averbado_unificado_sorted['is_duplicate_group'] = gov_to_averbado_unificado_sorted.duplicated(
+            subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO'], 
+            keep=False
+        )
+
+        # 4. IDENTIFICAÇÃO DE VALORES IGUAIS
+        # Marcamos se o valor da parcela é idêntico dentro do grupo
+        gov_to_averbado_unificado_sorted['is_value_match'] = gov_to_averbado_unificado_sorted.duplicated(
+            subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
+            keep=False
+        )
+
+        # 5. FILTRAGEM FINAL
+        # Mantemos a linha se:
+        # - Não for uma duplicata de grupo (é única)
+        # - OU se o valor for igual ao de outras do mesmo grupo (conforme seu pedido anterior)
+        # - OU se for a PRIMEIRA de um grupo de valores diferentes (que por causa do sort, é a maior)
+
+        resultado = gov_to_averbado_unificado_sorted[
+            (~gov_to_averbado_unificado_sorted['is_duplicate_group']) |      # Caso 1: Linha única
+            (gov_to_averbado_unificado_sorted['is_value_match']) |           # Caso 2: Valores iguais permanecem
+            (~gov_to_averbado_unificado_sorted.duplicated(subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO'], keep='first')) # Caso 3: Maior valor
+        ].copy()
+
+        # Limpeza final
+        gov_to_averbado_unificado_resultado = resultado.drop(columns=['is_duplicate_group', 'is_value_match'])
+
         # Adiciona ponto e traço
-        cpf_tratado = gov_to_averbado_unificado['CPF'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
-        gov_to_averbado_unificado['CPF'] = cpf_tratado
+        cpf_tratado = gov_to_averbado_unificado_resultado['CPF'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
+        gov_to_averbado_unificado_resultado['CPF'] = cpf_tratado
 
 
 
-        gov_to_averbado_unificado['Convenio'] = 'Governo de Tocantins'
+        gov_to_averbado_unificado_resultado['Convenio'] = 'Governo de Tocantins'
 
         # Pega só o que é cartão de GOV TO
-        gov_to_averbado_unificado = gov_to_averbado_unificado[(gov_to_averbado_unificado['PRAZO'].isin(['INDETERMINADO'])) & (gov_to_averbado_unificado['STATUS_ADF'].isin(['CONSOLIDADO', 'INSERIDO']))]
+        gov_to_averbado_unificado_resultado = gov_to_averbado_unificado_resultado[(gov_to_averbado_unificado_resultado['PRAZO'].isin(['INDETERMINADO'])) & (gov_to_averbado_unificado_resultado['STATUS_ADF'].isin(['CONSOLIDADO', 'INSERIDO']))]
 
         '''igeprev_capital_averbado = averbado_igeprev_capital.iloc[:-6]
         igeprev_ciasprev_averbado = averbado_igeprev_ciasprev.iloc[:-6]'''
@@ -603,7 +608,7 @@ class IGEPREV_GOVTO:
         # Mapeamento novo
         mapeamento = ['MATRICULA', 'CPF', 'NOME', 'PRAZO', 'VALOR_PARCELA', 'RUBRICA_DESCRICAO', 'RUBRICA_CODIGO', 'Convenio', 'Consignataria']
 
-        gov_to_remapeado = gov_to_averbado_unificado[mapeamento]
+        gov_to_remapeado = gov_to_averbado_unificado_resultado[mapeamento]
         
         igeprev_remapeado = igeprev_averbado_unificado[mapeamento]
         if igeprev_remapeado['VALOR_PARCELA'].dtype != 'float64':

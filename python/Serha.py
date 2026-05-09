@@ -58,16 +58,9 @@ class SERHA:
         self.orbital = orbital if orbital is not None else None
 
         if self.orbital is not None:
-                    
-            # O cabeçalho está linha 3, considerando que começa em 0
-            # 1. Localiza a linha 3 para ser o novo cabeçalho
-            novo_cabecalho = self.orbital.iloc[2] 
-
-            # 2. Pega os dados da linha 3 em diante
-            self.orbital = self.orbital.iloc[3:].copy() 
-            # 3. Define os nomes das colunas
-            self.orbital.columns = novo_cabecalho
             print(f'colunas de orbital: {self.orbital.columns}')
+
+        self.esteiras_permitidas = load_esteiras()
 
         self.main()
 
@@ -150,7 +143,7 @@ class SERHA:
         front_consig['Esteira'] = front_consig['Esteira'].apply(lambda x: '07.2 TED DEVOLVIDA PAGAMENTO AO CLIENTE' if isinstance(x, str) and x.startswith('07.2 TED DEVOLVIDA') else x)'''
 
         # Esteiras
-        esteiras_permitidas = load_esteiras()
+        esteiras_permitidas = self.esteiras_permitidas
         
         
         # Converte para lista de colunas
@@ -610,45 +603,102 @@ class SERHA:
         # Chama a função principal com os dataframes preparados
         df_codigos_tratados = extrair_contratos_com_referencia(averbados_puro, front_feito)
         return df_codigos_tratados
+    
 
-    def trata_orbital(self, front_para_separar, orbital):
+
+    import pandas as pd
+
+    def salvar_com_layout_original(self, df, caminho_arquivo):
+        # 1. Criar o ExcelWriter
+        writer = pd.ExcelWriter(caminho_arquivo, engine='xlsxwriter')
+        
+        # 2. Converter o DF para Excel, mas começando da linha 4 (índice 3)
+        # index=False remove os números das linhas
+        df.to_excel(writer, sheet_name='Sheet1', startrow=3, index=False)
+        
+        # 3. Acessar o objeto da planilha para escrever no topo
+        workbook  = writer.book
+        worksheet = writer.sheets['Sheet1']
+        
+        # 4. Escrever as linhas de metadados manualmente
+        worksheet.write(0, 0, "CAPITAL CONSIG - SCD") # Linha 1, Coluna A
+        worksheet.write(1, 0, "AVERBAÇÃO - CONTAS")  # Linha 2, Coluna A
+        # A linha 3 (índice 2) fica em branco automaticamente
+        
+        # 5. Salvar
+        writer.close()
+        print(f"Arquivo salvo com sucesso em: {caminho_arquivo}")
+
+
+    def trata_orbital(self, front_para_separar, averbado_trabalhado=None, orbital=None):
         '''
         Função que faz o tratamento do arquivo de Orbitall. Por enquanto ele ainda não tem utilidade
         :return:
         '''
 
         if orbital is None:
+            print(f'Arquivo de Orbitall não inserido')
             return None
-    
+        
+        tipo_operacao = "CARTAO DE CREDITO" if self.rubrica == 'CARTÃO' else "CARTAO BENEFICIO"
+        
         # Pegar do hífen para frente para conseguir pegar a autarquia do self.convenio, porque tem um padrão de "GOV. MG - IPSEMG" ou "GOV. MG - CBMMG"
         autarquia = self.convenio.split('-')[-1].strip()
 
-        orbital_preparado = orbital.loc[
-            orbital['DESCRIÇÃO DO EMPREG'].str.contains(autarquia, case=False, na=False),
-            ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
-        ].copy()
-        orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+        try:
+            # Versão otimizada
+            orbital_colunas_corretas = orbital.loc[
+                orbital['DESCRIÇÃO DO EMPREG'].str.contains(autarquia, case=False, na=False),
+                ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
+            ].copy()
+
+            orbital_colunas_corretas.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+        except Exception as e:
+            print('Exception do tratamento das colunas de orbital')
+            pass
 
 
-        if 'NÃO LANÇAR - ORBITAL' not in front_para_separar['OBS'].values:
-            print('Não há registros de ORBITAL para tratar.')
-            return None
+        # Preciso separar os tipos para que benefício não receba mais orbitais do que restou quando tratamos cartão
+        if tipo_operacao == "CARTAO DE CREDITO":
+            if 'NÃO LANÇAR - ORBITAL' not in front_para_separar['OBS'].values:
+                print('Não há registros de ORBITAL para tratar.')
+                return None
 
-        front_so_orbital = front_para_separar.loc[
-            front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
-            ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
-        
-        front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
+            front_so_orbital = front_para_separar.loc[
+                front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
+                ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
+            
+            front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
-        # front_so_orbital['Proposta'] = front_so_orbital['Proposta'].astype(str).str.strip()
+            # front_so_orbital['Proposta'] = front_so_orbital['Proposta'].astype(str).str.strip()
 
-        # front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace('.', '', regex=False)
-        front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace(',', '.', regex=False)
-        front_so_orbital['VALOR DESCONTO'] = pd.to_numeric(front_so_orbital['VALOR DESCONTO'], errors='coerce')
+            # front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace('.', '', regex=False)
+            front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace(',', '.', regex=False)
+            front_so_orbital['VALOR DESCONTO'] = pd.to_numeric(front_so_orbital['VALOR DESCONTO'], errors='coerce')
 
-        orbital_final = pd.concat([front_so_orbital, orbital])
+            orbital_final = pd.concat([front_so_orbital, orbital])
+        else:
+            orbital_final = orbital
 
+            
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
+        
+        # Vamos tentar deixar somente os CPF que exclusivamente estão na rubrica de benefício
+        if self.rubrica == 'CARTÃO':
+            averbado = averbado_trabalhado
+            # Vamos separar os CPFs de front cartao e averbado beneficio
+            cpf_averbado = averbado['CPF Ponto e Traço'].unique()
+
+            orbital_restante = orbital_final[~orbital_final['CPF/CNPJ'].isin(cpf_averbado)]
+
+            print(f'Teste de orbital que restou para a rubrica de beneficio\n{orbital_restante}')
+            
+            print(f"orbital_tratado: Salvando arquivo de orbital restante para beneficio")
+            caminho_salvar = fr'{self.caminho}\ORBITAL RESTANTE PARA BENEFICIO.xlsx'
+            self.salvar_com_layout_original(orbital_restante, caminho_salvar)
+            
+            # orbital_restante_para_beneficio.to_excel(os.path.join(self.caminho, f"ORBITAL RESTANTE PARA BENEFICIO.xlsx"), index=False)
+
 
         print(f"orbital_tratado: Salvando arquivo de orbital tratado teste com front")
         try:
@@ -886,7 +936,7 @@ class SERHA:
             trabalhado_mes_passado.loc[
                 ~trabalhado_mes_passado['ContratoOriginal'].astype(str).str.contains('/'),
                 'ContratoOriginal'
-            ] = trabalhado_mes_passado['Contrato 1'].astype(str) # .str[:9]
+            ] = trabalhado_mes_passado['Contrato editado'].astype(str) # .str[:9]
 
             # 1. Lista de colunas a verificar
             cols_contratos = ['ContratoOriginal'] + [col for col in trabalhado_mes_passado.columns if
@@ -1048,7 +1098,7 @@ class SERHA:
                 print(f"Aviso: A coluna '{col}' não segue o padrão 'Contrato [número]'."),
 
         # Orbitall
-        orbital = self.trata_orbital(front, self.orbital)
+        orbital = self.trata_orbital(front, trabalhado_mes_atual_tratado, self.orbital)
         if orbital is not None:
             # Vou tentar fazer somase de orbital
             somase_orbital = orbital.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum().to_dict()

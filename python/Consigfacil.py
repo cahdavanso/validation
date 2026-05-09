@@ -82,6 +82,7 @@ class CONSIGFACIL:
 
     def unifica_front_funcao(self):
         front = self.front
+        # print(f'colunas de front: {front.columns}')
         funcao = self.funcao
 
         if funcao is None:
