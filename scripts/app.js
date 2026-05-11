@@ -124,6 +124,16 @@ document.addEventListener('DOMContentLoaded', () => {
         consoleContainer.scrollTop = consoleContainer.scrollHeight; // Auto-scroll para o final
     };
 
+    const exibirAlertaUsuario = (mensagem) => {
+        // Usamos o tipo 'error' para a mensagem do Gemini se destacar em vermelho
+        logToConsole(`FALHA NO PROCESSAMENTO: ${mensagem}`, 'error');
+    };
+
+    const exibirSucesso = (mensagem) => {
+        // Usamos o tipo 'success' para a mensagem de conclusão
+        logToConsole(mensagem, 'success');
+    };
+
     const clearConsole = () => {
         consoleContainer.innerHTML = '';
         consoleContainer.style.display = 'none';
@@ -363,16 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedConsignataria) formData.append('consignataria', selectedConsignataria);
         if (selectedRubrica) formData.append('rubrica', selectedRubrica);
 
-        // NOVO: PEGA O CAMINHO DE SAÍDA
-        /*const outputPathInput = document.getElementById('output-path-input');
-        if (outputPathInput && outputPathInput.value.trim() !== "") {
-            formData.append('output_path', outputPathInput.value.trim());
-            logToConsole(`Caminho de saída definido: ${outputPathInput.value.trim()}`, 'info');
-        } else {
-            logToConsole(`Usando pasta de saída padrão do sistema`, 'info');
-        }*/
-
-        // Log detalhado dos arquivos
+        // Anexando arquivos conforme sua lógica [cite: 35, 36]
         for (const [fieldId, files] of Object.entries(fileDataMap)) {
             files.forEach(file => {
                 formData.append(fieldId, file, file.name);
@@ -380,31 +381,47 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        logToConsole("Enviando dados para o servidor...", 'warning');
-        logToConsole("Enviando dados para o servidor local (localhost:5000)...", 'warning');
-        logToConsole("Aguardando processamento do Python... Isso pode levar alguns minutos.", 'warning');
+        logToConsole("Aguardando processamento do Python...", 'warning');
 
-        const response = await fetch('/validar', { method: 'POST', body: formData });
+        try {
+            const response = await fetch('/validar', { 
+                method: 'POST', 
+                body: formData 
+            });
 
-        if (!response.ok) {
-            const err = await response.json().catch(() => ({ detail: response.statusText }));
-            throw new Error(err.detail || `Erro HTTP ${response.status}`);
+            const result = await response.json(); // Lemos o JSON apenas UMA vez aqui
+
+            if (response.ok) {
+                // --- BLOCO DE SUCESSO ---
+                logToConsole("------------------------------------------------", 'system');
+                logToConsole("PROCESSAMENTO CONCLUÍDO PELO SERVIDOR!", 'success');
+                logToConsole(`Mensagem: ${result.message}`, 'success');
+
+                exibirSucesso(result.message || "Validação concluída com sucesso!");
+                
+                if (result.filename) {
+                    logToConsole(`Baixando arquivo processado...`, 'success');
+                    // Usa a rota de download que você configurou no backend 
+                    window.open(`/download/${result.filename}`, '_blank'); 
+                }
+                return result;
+
+            } else {
+                // --- BLOCO DE ERRO TRATADO (GLOBAL EXCEPTION HANDLER) ---
+                const mensagemIA = result.mensagem_amigavel;
+                const erroTecnico = result.detail;
+
+                exibirAlertaUsuario(mensagemIA || "Ocorreu um erro inesperado.");
+                console.error("DEBUG TÉCNICO:", erroTecnico);
+                
+            }
+
+        } catch (error) {
+            // --- BLOCO DE ERRO DE REDE ---
+            console.error("Erro de conexão:", error);
+            exibirAlertaUsuario("Não foi possível conectar ao servidor.");
+            logToConsole("Erro crítico de conexão com o servidor.", 'error');
+            return null;
         }
-
-        const result = await response.json();
-        
-        // Logs de Sucesso vindos do servidor
-        logToConsole("------------------------------------------------", 'system');
-        logToConsole("PROCESSAMENTO CONCLUÍDO PELO SERVIDOR!", 'success');
-        logToConsole(`Mensagem: ${result.message}`, 'success');
-        
-        // Se o backend devolver o nome do arquivo gerado
-        if (result.filename) {
-            logToConsole(`Baixando arquivo processado...`, 'success');
-            // Cria um link invisível para forçar o download
-            window.open(`/download/${result.filename}`, '_blank'); 
-        }
-        
-        return result;
     };
 });

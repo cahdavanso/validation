@@ -3,6 +3,9 @@ from fastapi.staticfiles import StaticFiles # <--- Importante
 from fastapi.responses import FileResponse, HTMLResponse # <--- Importante
 from fastapi.middleware.cors import CORSMiddleware
 from flask import Flask, render_template, send_from_directory, jsonify
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from gemini_service import explicar_erro
 import shutil
 import gc
 import os
@@ -26,6 +29,30 @@ from python.Zetra import ZETRA
 from python.Rf1 import RF1
 
 app = FastAPI()
+# Mude para False quando subir para produção
+MODO_DESENVOLVIMENTO = True 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_traceback = traceback.format_exc()
+    erro_sanitizado = sanitizar_traceback(error_traceback)
+    
+    # --- TRAVA DE CRÉDITOS ---
+    if MODO_DESENVOLVIMENTO:
+        explicacao_amigavel = "MODO DEV ATIVO: O Gemini não foi chamado para economizar créditos. Verifique o console do VS Code."
+        logging.info("Gemini bypassado - Modo Desenvolvimento ativo.")
+    else:
+        # Só chama o Gemini se não estiver em desenvolvimento
+        explicacao_amigavel = explicar_erro(erro_sanitizado)
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": erro_sanitizado,
+            "mensagem_amigavel": explicacao_amigavel,
+            "tipo": type(exc).__name__
+        }
+    )
 
 # 1. Configura as pastas para o site (CSS, JS, Imagens)
 # O servidor precisa saber onde estão esses arquivos para entregar ao navegador
@@ -34,6 +61,7 @@ app.mount("/scripts", StaticFiles(directory="scripts"), name="scripts")
 app.mount("/python", StaticFiles(directory="python"), name="python")
 # Se tiver pasta assets, descomente a linha abaixo:
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+
 
 # 2. Rota para servir a página principal (Seu Frontend)
 @app.get("/", response_class=HTMLResponse)
@@ -110,13 +138,15 @@ def abas(excel_file):
         else:
             continue
 
+
 # --- Função Auxiliar de Leitura ---
 async def read_and_unify_files(file_list: List[UploadFile]):
     conv: str = Form(...)
 
     if not file_list:
-        return None
+        return None, []
     lista_df = []
+    erros = []
     for uploaded_file in file_list:
         try:
             filename = uploaded_file.filename.lower()
@@ -193,17 +223,42 @@ async def read_and_unify_files(file_list: List[UploadFile]):
                         df = pd.read_csv(file_obj, encoding="latin1", sep=",", on_bad_lines="skip", low_memory=False)
             lista_df.append(df)
         except Exception as e:
-            error_msg = traceback.format_exc()
-            logging.error(f"Erro ao ler {uploaded_file.filename}:\n{error_msg}")
+
+            logging.exception(
+                f"Erro ao ler {uploaded_file.filename}"
+            )
+
+            erros.append({
+                "arquivo": uploaded_file.filename,
+                "tipo": type(e).__name__,
+                "mensagem": str(e)
+            })
             continue
     
     if not lista_df:
-        return None
-    return pd.concat(lista_df, ignore_index=True)
+        return None, []
+    # return pd.concat(lista_df, ignore_index=True)
+    return pd.concat(lista_df, ignore_index=True), erros
 
 @app.get("/test")
 def test_endpoint():
     return {"message": "Servidor Online"}
+
+def sanitizar_traceback(tb):
+
+    # Remove caminhos do Windows
+    tb = re.sub(r"[A-Z]:\\\\[^\\n]+", "[CAMINHO_REMOVIDO]", tb)
+
+    # Remove CPF
+    tb = re.sub(r"\\b\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}\\b", "[CPF]", tb)
+
+    # Remove tokens
+    tb = re.sub(r"token\\s*=\\s*['\\\"].+?['\\\"]", "token=[REMOVIDO]", tb)
+
+    # Remove emails
+    tb = re.sub(r"[\\w\\.-]+@[\\w\\.-]+", "[EMAIL]", tb)
+
+    return tb
     
 
 @app.post("/validar")
@@ -256,178 +311,172 @@ async def validar_planilhas(
     try:
         os.makedirs(CAMINHO_SAIDA, exist_ok=True)
     except Exception as e:
-        error_trace = traceback.format_exc()
-        raise HTTPException(status_code=500, detail=f"Erro ao criar pasta de saída:\n{error_trace}")
+        raise HTTPException(status_code=500, detail=f"Erro ao criar pasta de saída:\n{e}")
     
+    # 2. Leitura dos arquivos
+    averbados_df, erros = await read_and_unify_files(AVERBADOS)
+    averbados_to_df, erros = await read_and_unify_files(AVERBADOS_TO)
+    averbados_igeprev_df, erros = await read_and_unify_files(AVERBADOS_IGEPREV)
+    conciliacao_df, erros = await read_and_unify_files(CONCILIACAO)
+    kobraki_df, erros = await read_and_unify_files(KOBRAKI)
+    d8_df_to, erros = await read_and_unify_files(D8_TO)
+    d8_df_igeprev, erros = await read_and_unify_files(D8_IGEPREV)
+    liquidados_df, erros = await read_and_unify_files(LIQUIDADOS)
+    liminar_df, erros = await read_and_unify_files(LIMINAR)
+    historico_df, erros = await read_and_unify_files(HISTORICO)
+    credbase_df, erros = await read_and_unify_files(CREDBASE)
+    front_df, erros = await read_and_unify_files(FRONT)
+    funcao_df, erros = await read_and_unify_files(FUNCAO)
+    andamento_df, erros = await read_and_unify_files(ANDAMENTO)
+    trabalhado_anterior_df, erros = await read_and_unify_files(TRABALHADO_ANTERIOR)
+    orbital_df, erros = await read_and_unify_files(ORBITAL)
+    complementar_df, erros = await read_and_unify_files(COMPLEMENTAR)
+    casoscapital_df, erros = await read_and_unify_files(CASOS_CAPITAL)
+
+    # 3. SELEÇÃO DO VALIDADOR (SEM A VARIÁVEL PROBLEMÁTICA)
+    
+    if convenio in CODATA_CONVENIO:
+        logging.info("Usando validador: CODATA")
+        validador = CODATA(
+            portal_file_list=averbados_df,
+            convenio=convenio,
+            front = front_df,
+            funcao=funcao_df,
+            consignataria=consignataria, 
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            andamento_list=andamento_df,
+            orbital=orbital_df,
+            caminho=CAMINHO_SAIDA
+        )
+
+    elif convenio in INSS_CONVENIO:
+        logging.info("Usando validador: INSS")
+        validador = INSS(
+            portal_file_list=averbados_df,
+            front=front_df,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            caminho=CAMINHO_SAIDA,
+            casos_capital=casoscapital_df
+        )
+    elif convenio in SERHA_CONVENIO:
+        logging.info("Usando validador: SERHA")
+        validador = SERHA(
+            portal_file_list=averbados_df,
+            convenio=convenio,
+            front=front_df,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            trabalhado_anterior=trabalhado_anterior_df,
+            rubrica=rubrica,
+            caminho=CAMINHO_SAIDA,
+            complementar=complementar_df,
+            orbital=orbital_df
+        )
+    elif convenio in CONSIGLOG_CONVENIO:
+        logging.info("Usando validador: CONSIGLOG")
+        validador = CONSIGLOG(
+            portal_file_list=averbados_df, 
+            convenio=convenio,
+            front=front_df,
+            consignataria=consignataria,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            caminho=CAMINHO_SAIDA,
+            orbital=orbital_df
+        )
+    
+    elif convenio in ZETRA_CONVENIO:
+        logging.info("Usando o validador: ZETRA")
+        validador = ZETRA(
+            portal_file_path=ZIPS,
+            convenio=convenio,
+            front=front_df,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            consignataria=consignataria,
+            caminho=CAMINHO_SAIDA,
+            historico=historico_df,
+            orbital=orbital_df
+        )
+    elif convenio in RF1_CONVENIO:
+        logging.info("Usando o validador: RF1")
+        validador = RF1(
+            front=front_df,
+            portal_file_list=averbados_df,
+            convenio=convenio,
+            caminho=CAMINHO_SAIDA,
+            funcao=funcao_df,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df
+        )
+    elif convenio in TO_IGEPREV_CONVENIO:
+        logging.info("Usando o validador: GOV TO e IGEPREV")
+        validador = IGEPREV_GOVTO(
+            portal_file_path_to=averbados_to_df,
+            portal_file_path_igeprev=averbados_igeprev_df,
+            d8_file_path_to=d8_df_to,
+            d8_file_path_igeprev=d8_df_igeprev,
+            front=front_df,
+            funcao=funcao_df,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            caminho=CAMINHO_SAIDA
+        )
+    elif convenio in CONSIGFACIL_CONVENIOS:
+        # Padrão para todos os outros (Consigfacil)
+        logging.info("Usando validador: CONSIGFACIL")
+        validador = CONSIGFACIL(
+            portal_file_list=averbados_df, 
+            convenio=convenio,
+            front=front_df,
+            funcao=funcao_df,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            andamento_list=andamento_df,
+            caminho=CAMINHO_SAIDA,
+        )
+    else:
+        raise Exception ('O convênio selecionado está fora dos parâmetros.')
+    
+
+    # 1. Pequena pausa para garantir que o sistema de arquivos liberou os .xlsx
+    sleep(1) 
+
+    # 2. Verifica se realmente há arquivos para zipar
+    arquivos_gerados = os.listdir(CAMINHO_SAIDA)
+    if not arquivos_gerados:
+        raise HTTPException(status_code=500, detail="Validador não gerou arquivos para o ZIP.")
+
+    # 3. Define os nomes
+    nome_zip = f"resultado_{convenio.replace(' ', '_').replace('.', '')}"
+    # Onde o arquivo ZIP vai ficar (na raiz da PASTA_BASE)
+    caminho_zip_destino = os.path.join(PASTA_BASE, nome_zip) 
+
     try:
-        # 2. Leitura dos arquivos
-        averbados_df = await read_and_unify_files(AVERBADOS)
-        averbados_to_df = await read_and_unify_files(AVERBADOS_TO)
-        averbados_igeprev_df = await read_and_unify_files(AVERBADOS_IGEPREV)
-        conciliacao_df = await read_and_unify_files(CONCILIACAO)
-        kobraki_df = await read_and_unify_files(KOBRAKI)
-        d8_df_to = await read_and_unify_files(D8_TO)
-        d8_df_igeprev = await read_and_unify_files(D8_IGEPREV)
-        liquidados_df = await read_and_unify_files(LIQUIDADOS)
-        liminar_df = await read_and_unify_files(LIMINAR)
-        historico_df = await read_and_unify_files(HISTORICO)
-        credbase_df = await read_and_unify_files(CREDBASE)
-        front_df = await read_and_unify_files(FRONT)
-        funcao_df = await read_and_unify_files(FUNCAO)
-        andamento_df = await read_and_unify_files(ANDAMENTO)
-        trabalhado_anterior_df = await read_and_unify_files(TRABALHADO_ANTERIOR)
-        orbital_df = await read_and_unify_files(ORBITAL)
-        complementar_df = await read_and_unify_files(COMPLEMENTAR)
-        casoscapital_df = await read_and_unify_files(CASOS_CAPITAL)
-
-        # 3. SELEÇÃO DO VALIDADOR (SEM A VARIÁVEL PROBLEMÁTICA)
+        # 4. Cria o ZIP
+        # 'zip', CAMINHO_SAIDA -> Pega tudo dentro da pasta do convênio e gera o .zip
+        shutil.make_archive(caminho_zip_destino, 'zip', CAMINHO_SAIDA)
+        logging.info(f"ZIP criado com sucesso: {nome_zip}.zip")
         
-        if convenio in CODATA_CONVENIO:
-            logging.info("Usando validador: CODATA")
-            validador = CODATA(
-                portal_file_list=averbados_df,
-                convenio=convenio,
-                front = front_df,
-                funcao=funcao_df,
-                consignataria=consignataria, 
-                conciliacao=conciliacao_df,
-                kobraki=kobraki_df,
-                andamento_list=andamento_df,
-                orbital=orbital_df,
-                caminho=CAMINHO_SAIDA
-            )
+        # 5. Limpeza de memória estratégica
+        # (Pegue a lista de variáveis que definimos antes)
+        for var in ['averbados_df', 'conciliacao_df', 'liquidados_df', 'front_df']:
+            if var in locals():
+                del locals()[var]
+        gc.collect()
 
-        elif convenio in INSS_CONVENIO:
-            logging.info("Usando validador: INSS")
-            validador = INSS(
-                portal_file_list=averbados_df,
-                front=front_df,
-                conciliacao=conciliacao_df,
-                kobraki=kobraki_df,
-                caminho=CAMINHO_SAIDA,
-                casos_capital=casoscapital_df
-            )
-        elif convenio in SERHA_CONVENIO:
-            logging.info("Usando validador: SERHA")
-            validador = SERHA(
-                portal_file_list=averbados_df,
-                convenio=convenio,
-                front=front_df,
-                conciliacao=conciliacao_df,
-                kobraki=kobraki_df,
-                trabalhado_anterior=trabalhado_anterior_df,
-                rubrica=rubrica,
-                caminho=CAMINHO_SAIDA,
-                complementar=complementar_df,
-                orbital=orbital_df
-            )
-        elif convenio in CONSIGLOG_CONVENIO:
-            logging.info("Usando validador: CONSIGLOG")
-            validador = CONSIGLOG(
-                portal_file_list=averbados_df, 
-                convenio=convenio,
-                front=front_df,
-                consignataria=consignataria,
-                conciliacao=conciliacao_df,
-                kobraki=kobraki_df,
-                caminho=CAMINHO_SAIDA,
-                orbital=orbital_df
-            )
-        
-        elif convenio in ZETRA_CONVENIO:
-            logging.info("Usando o validador: ZETRA")
-            validador = ZETRA(
-                portal_file_path=ZIPS,
-                convenio=convenio,
-                front=front_df,
-                conciliacao=conciliacao_df,
-                kobraki=kobraki_df,
-                consignataria=consignataria,
-                caminho=CAMINHO_SAIDA,
-                historico=historico_df,
-                orbital=orbital_df
-            )
-        elif convenio in RF1_CONVENIO:
-            logging.info("Usando o validador: RF1")
-            validador = RF1(
-                front=front_df,
-                portal_file_list=averbados_df,
-                convenio=convenio,
-                caminho=CAMINHO_SAIDA,
-                funcao=funcao_df,
-                conciliacao=conciliacao_df,
-                kobraki=kobraki_df
-            )
-        elif convenio in TO_IGEPREV_CONVENIO:
-            logging.info("Usando o validador: GOV TO e IGEPREV")
-            validador = IGEPREV_GOVTO(
-                portal_file_path_to=averbados_to_df,
-                portal_file_path_igeprev=averbados_igeprev_df,
-                d8_file_path_to=d8_df_to,
-                d8_file_path_igeprev=d8_df_igeprev,
-                front=front_df,
-                funcao=funcao_df,
-                conciliacao=conciliacao_df,
-                kobraki=kobraki_df,
-                caminho=CAMINHO_SAIDA
-            )
-        else:
-            # Padrão para todos os outros (Consigfacil)
-            logging.info("Usando validador: CONSIGFACIL")
-            validador = CONSIGFACIL(
-                portal_file_list=averbados_df, 
-                convenio=convenio,
-                front=front_df,
-                funcao=funcao_df,
-                conciliacao=conciliacao_df,
-                kobraki=kobraki_df,
-                andamento_list=andamento_df,
-                caminho=CAMINHO_SAIDA,
-            )
+        # 6. Retorna o nome do arquivo ZIP para o download
+        return {
+            "message": "Validação concluída com sucesso!",
+            "filename": f"{nome_zip}.zip" 
+        }
 
-        # 1. Pequena pausa para garantir que o sistema de arquivos liberou os .xlsx
-        sleep(1) 
-
-        # 2. Verifica se realmente há arquivos para zipar
-        arquivos_gerados = os.listdir(CAMINHO_SAIDA)
-        if not arquivos_gerados:
-            raise HTTPException(status_code=500, detail="Validador não gerou arquivos para o ZIP.")
-
-        # 3. Define os nomes
-        nome_zip = f"resultado_{convenio.replace(' ', '_').replace('.', '')}"
-        # Onde o arquivo ZIP vai ficar (na raiz da PASTA_BASE)
-        caminho_zip_destino = os.path.join(PASTA_BASE, nome_zip) 
-
-        try:
-            # 4. Cria o ZIP
-            # 'zip', CAMINHO_SAIDA -> Pega tudo dentro da pasta do convênio e gera o .zip
-            shutil.make_archive(caminho_zip_destino, 'zip', CAMINHO_SAIDA)
-            logging.info(f"ZIP criado com sucesso: {nome_zip}.zip")
-            
-            # 5. Limpeza de memória estratégica
-            # (Pegue a lista de variáveis que definimos antes)
-            for var in ['averbados_df', 'conciliacao_df', 'liquidados_df', 'front_df']:
-                if var in locals():
-                    del locals()[var]
-            gc.collect()
-
-            # 6. Retorna o nome do arquivo ZIP para o download
-            return {
-                "message": "Validação concluída com sucesso!",
-                "filename": f"{nome_zip}.zip" 
-            }
-
-        except Exception as e:
-            logging.error(f"Erro ao criar ZIP: {e}")
-            raise HTTPException(status_code=500, detail="Erro na compactação dos arquivos.")
-    
     except Exception as e:
-        error_traceback = traceback.format_exc()
-        logging.error("##################################################")
-        logging.error(error_traceback)
-        logging.error("##################################################")
-        
-        raise HTTPException(status_code=500, detail=f"Erro Técnico Detalhado:\n{error_traceback}")
+        logging.error(f"Erro ao criar ZIP: {e}")
+        raise HTTPException(status_code=500, detail="Erro na compactação dos arquivos.")
+
     
 # 3. NOVA ROTA: Download do Arquivo
 # Note o ":path" depois de filename. Isso permite baixar arquivos dentro de subpastas
@@ -449,6 +498,6 @@ async def download_file(filename: str):
 
 # É melhor comentar do que apagar na próxima vez que precisar testar no render
 if __name__ == "__main__":
-    # Pega a porta do Render ou usa 5000 se estiver local
-    port = int(os.environ.get("PORT", 5000))
+    # Pega a porta do Render ou usa 8000 se estiver local
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)

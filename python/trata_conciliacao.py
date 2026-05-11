@@ -58,6 +58,8 @@ class TRATA_CONCILIACAO:
             conciliacao_tratado[colunas_d8] = conciliacao_tratado[colunas_d8].apply(pd.to_numeric, errors='coerce')
 
             soma_d8 = conciliacao_tratado.filter(regex=r'^(?!.*PRODUTO)D8').sum(axis=1)
+            inad_d8 = conciliacao_tratado.filter(like='INAD ').sum(axis=1)
+            super_saldo = soma_d8 + inad_d8
 
             # Vamos criar uma coluna "KOBRAKI" na conciliação, e usar a coluna de "CONTRATOS" da conciliação 
             # para puxar os valores de "VALOR RECEBIDO" no kobraki puxando da coluna "CONTRATO"
@@ -76,7 +78,7 @@ class TRATA_CONCILIACAO:
             prestacao_vezes_prazo = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']
 
             # 3. Calcular o resultado final
-            conciliacao_tratado['Pago'] = soma_d8 - prestacao_vezes_prazo
+            conciliacao_tratado['Pago'] = super_saldo - prestacao_vezes_prazo
             conciliacao_tratado['Saldo'] = conciliacao_tratado['Pago'] + conciliacao_tratado['TOTAL RECEBIDO']
 
             return conciliacao_tratado
