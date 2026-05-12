@@ -375,9 +375,9 @@ class ZETRA:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão Conciliação
-        if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS', 'PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']:
+        if self.convenio in ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']:
             print(f'Convenio é {self.convenio}')
-            print(f'Convenio está em PREF GOIÂNIA, PREF. DUQUE DE CAXIAS, , PREF. BELO HORIZONTE? {self.convenio in ["PREF. GOIÂNIA", "PREF. DUQUE DE CAXIAS", 'PREF. BELO HORIZONTE']}')
+            print(f'Convenio está em PREF. BELO HORIZONTE? {self.convenio in ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']}')
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         else:
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
@@ -743,14 +743,9 @@ class ZETRA:
         orbital_tratado = self.orbital_tratado(self.orbital, front)
         convenio = self.convenio
 
-        if self.convenio == 'IGEPREV':
-            data.insert(0, 'Órgão', '1', True)
-            data.insert(13, 'Categoria', '', True)
-            data.insert(14, 'Id. órgão', '1', True)
-            data.insert(15, 'Órgão.1', '1', True)
-        if self.convenio == 'GOV. PARANÁ':
+        '''if self.convenio == 'GOV. PARANÁ':
             data.insert(14, 'Id. serviço', '', True)
-            data.insert(15, 'Serviço', '', True)
+            data.insert(15, 'Serviço', '', True)'''
 
         # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
         data.rename(columns={'Matrícula (ID Funcional + Vínculo)': 'Matrícula'}, inplace=True)
