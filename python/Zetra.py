@@ -65,8 +65,6 @@ class ZETRA:
                             "COMP": 6, "OP": 1},
             "IGEPREV": {"MAT": 20, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 5, "VAL": 10, "PRZ": 3, "COMP": 6,
                         "OP": 1},
-            "GOV. RIO DE JANEIRO": {"MAT": 13, "CPF": 11, "NOME": 50, "EST": 2, "ORG": 0, "COD": 25, "VAL": 10, "PRZ": 0, "COMP": 6,
-                       "OP": 1},
             "GOV. ESPÍRITO SANTO": {"MAT": 12, "CPF": 11, "NOME": 50, "EST": 0, "ORG": 0, "COD": 24, "VAL": 10, "PRZ": 3, "COMP": 6,
                        "OP": 1},
             "PREF. CAMPINAS": {"MAT": 10, "ORG": 2, "COD": 3, "OP": 1, "PRZ": 2, "VAL": 10, "COMP": 8},
@@ -96,21 +94,20 @@ class ZETRA:
                         nome_upper = arquivo_interno.upper()
                         
                         if arquivo_interno.lower().endswith('.csv') and \
-                        ("ALTERACAO" in nome_upper or "INCLUSAO" in nome_upper):
+                        ("ALTERACAO" in nome_upper or "INCLUSAO" in nome_upper or 'PROVISIONAMENTO' in nome_upper):
                             
                             with zf.open(arquivo_interno) as f:
                                 # Lendo o CSV direto da memória
-                                if self.convenio != 'IGEPREV':
-                                    df_temp = pd.read_csv(f, sep=';', encoding='latin1')
-                                else:
-                                    df_temp = pd.read_excel(f, header=5)
-                                    df_temp = df_temp.iloc[:-5]
-                                    df_temp = df_temp.dropna(axis=1, how='all')
-                                    df_temp.insert(0, "Matrícula", "", True)
+                                df_temp = pd.read_csv(f, sep=';', encoding='latin1')
+                                # df_temp = df_temp.dropna(axis=1, how='all')
+                                # Expand=True transforma o resultado em duas colunas novas
+                                # n=1 garante que ele só separe no PRIMEIRO separador encontrado
+                                df_temp.insert(1, "Matrícula", "", True)
+                                df_temp.insert(2, "Servidor", "", True)
+                                df_temp[['Matrícula', 'Servidor']] = df_temp['SERVIDOR'].str.split(' - ', n=1, expand=True)
+                                df_temp.rename(columns={'VLR RESERV.': 'Vlr novo'}, inplace=True)
+                                print(f'Colunas de df_temp: {df_temp.columns}')
 
-                                    # Expand=True transforma o resultado em duas colunas novas
-                                    # n=1 garante que ele só separe no PRIMEIRO separador encontrado
-                                    df_temp[['Matrícula', 'Servidor']] = df_temp['Servidor'].str.split(' - ', n=1, expand=True)
                                 
                                 if len(df_temp) > 3:
                                     df_temp = df_temp.iloc[:-3]
@@ -133,7 +130,8 @@ class ZETRA:
         averbados_atual = self.averbados
         colunas = averbados_atual.columns
 
-        hist_df = self.historico if self.historico is not None else pd.DataFrame(columns=[colunas])
+        # FORMA CORRETA
+        hist_df = self.historico if self.historico is not None else pd.DataFrame(columns=colunas)
 
         hist_df_reduzido = hist_df[colunas].copy()
 
@@ -164,7 +162,7 @@ class ZETRA:
             averbacao_completa = averbacao_completa.sort_values(by=['Data', 'Hora'], ascending=[False, False])
 
             # Remove duplicatas por Matrícula
-            averbacao_completa.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
+            # averbacao_completa.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
 
             # Transforma toda a coluna de Vlr novo em string
             averbacao_completa['Vlr novo'] = averbacao_completa['Vlr novo'].astype(str).str.replace(".", ",")
@@ -245,6 +243,9 @@ class ZETRA:
 
     def tratamento_front_preliminar(self):
         front_consig = self.front.copy()
+
+        if "OBS" in front_consig.columns:
+            front_consig = front_consig.drop(columns=['OBS'])
 
         conciliacao = self.conciliacao.copy()
 
@@ -687,11 +688,7 @@ class ZETRA:
                 orbital['DESCRIÇÃO DO EMPREG'].str.contains('PREF PIRA SEMAE', case=False, na=False),
                 ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
             ].copy()
-        elif self.convenio == 'GOV. RIO DE JANEIRO':
-            orbital_preparado = orbital.loc[
-                orbital['DESCRIÇÃO DO EMPREG'].str.contains('GOV RJ|GOV RJ DG|GOV RJ SEG|GOV RJ M NEG', case=False, na=False),
-                ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
-            ].copy()
+
         elif self.convenio == 'PREF. CAMPINAS':
             orbital_preparado = orbital.loc[
                 orbital['DESCRIÇÃO DO EMPREG'].str.contains('PREF CAMPINAS', case=False, na=False),
@@ -747,30 +744,7 @@ class ZETRA:
             data.insert(14, 'Id. serviço', '', True)
             data.insert(15, 'Serviço', '', True)'''
 
-        # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
-        data.rename(columns={'Matrícula (ID Funcional + Vínculo)': 'Matrícula'}, inplace=True)
-        data.rename(columns={'Situação do contrato': 'Situação'}, inplace=True)
-
-        print(f'data antes de separar as colunas:\n{data.columns}')
-        colunas = ['Órgão', 'Matrícula', 'Servidor', 'CPF', 'Situação', 'Categoria', 'Consignatária', 'Id. órgão',
-                   'Órgão.1', 'Id. serviço', 'Serviço', 'Nº ADE', 'Id. ADE', 'Data inc.', 'Vlr ant.', 'Vlr novo']
-
-        data_averbados_bruto = data[colunas]
-        print(f'data depois de separar as colunas:\n{data_averbados_bruto.columns}')
-        print(f'Colunas de data:\n{data_averbados_bruto.columns}')
-        # Tentando remover .0 do final dos contratos
-        # 1. Verifica se a COLUNA é do tipo float
-        # 1. Tenta converter tudo para número. 
-        # O que for texto ("parcial_...") vira NaN temporariamente nesta série auxiliar
-        numeros_convertidos = pd.to_numeric(data_averbados_bruto['Id. ADE'], errors='coerce')
-
-        # 2. Criamos a máscara: apenas onde a conversão funcionou (não é nulo)
-        mask_numerica = numeros_convertidos.notna()
-
-        # 3. Aplicamos a conversão apenas nessas linhas
-        # Usamos o numeros_convertidos para garantir que o ".0" suma ao virar Int64
-        data_averbados_bruto.loc[mask_numerica, 'Id. ADE'] = \
-            numeros_convertidos[mask_numerica].astype('Int64')
+        data_averbados_bruto = data
 
         # Vou tentar colocar a coluna de Orbital aqui no meio mesmo
         if orbital_tratado is not None:
@@ -783,7 +757,7 @@ class ZETRA:
             # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
             averbado_novo = averbado_trabalhado
             # Remoção de duplicatas por matrícula
-            averbado_novo.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
+            # averbado_novo.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
             
             front_preliminar = front_trabalhar.copy()
 
@@ -829,7 +803,7 @@ class ZETRA:
 
             return averbado_novo
         
-        if self.convenio == 'GOV. PARANÁ':
+        if self.convenio != 'GOV. RIO DE JANEIRO':
             data_averbados = distribuicao_valores(data_averbados_bruto, front)
 
             # print("Cálculos de Soma e Diferença finalizados.")
@@ -971,7 +945,7 @@ class ZETRA:
             data_averbados.loc[condicao_liminar, 'Lançar'] = 0
 
         # Remoção de duplicatas por matrícula
-        data_averbados.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
+        # data_averbados.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
 
         # print("Cálculos de Soma e Diferença finalizados.")
         data_averbados.to_excel(fr'{self.caminho}\TRABALHADO CARTAO {convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
@@ -1112,15 +1086,13 @@ class ZETRA:
     def arquivo_lancamento(self):
         print(f'arquivo_lancamento foi acionado')
         data_averbados = self.trata_averbacao()
-        if self.convenio == 'IGEPREV':
-            convenio = f'IGEPREV {self.consignataria}'
-        else:
-            convenio = self.convenio
+        
+        convenio = self.convenio
 
         codigo_desconto_dict = {"PREF. AÇAILÂNDIA": "382", "GOV. RIO DE JANEIRO": "4541CARTAO DE CREDITO I", "IGEPREV CAPITAL": "04072",
                                 "IGEPREV CIASPREV": "02470", "PREF. PIRACICABA": "5600", "PREF. PIRACICABA - SEMAE": "675",
                                 "PREV. PIRACICABA": "6277", "PREF. BELO HORIZONTE CB": "204U", "PREF. BELO HORIZONTE CC": "204V",
-                                "PREF. MACAÉ": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894", "PREF. CAMPINAS": "011",
+                                "PREF. MACAÉ": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894", "PREF. CAMPINAS": "435",
                                 "GOV. PARANÁ": "5408"}
 
         estab_dict = {"PREF. AÇAILÂNDIA": "001", "IGEPREV CAPITAL": "001", "IGEPREV CIASPREV": "001",
@@ -1172,8 +1144,11 @@ class ZETRA:
         front_trabalhado = self.tratamento_front(data_averbados)
         
         temp = data_averbados[data_averbados['Lançar'] > 0]
-        colunas_alancar = ['Órgão', 'Matrícula', 'Servidor', 'CPF', 'Situação', 'Categoria', 'Consignatária', 'Id. órgão',
-                   'Órgão.1', 'Id. serviço', 'Serviço', 'Nº ADE', 'Id. ADE', 'Data inc.', 'Vlr ant.', 'Vlr novo', 'Lançar']
+        if self.convenio == 'GOV. RIO DE JANEIRO':
+            colunas_alancar = ['Órgão', 'Matrícula', 'Servidor', 'CPF', 'Situação', 'Categoria', 'Consignatária', 'Id. órgão',
+                    'Órgão.1', 'Id. serviço', 'Serviço', 'Nº ADE', 'Id. ADE', 'Data inc.', 'Vlr ant.', 'Vlr novo', 'Lançar']
+        else:
+            colunas_alancar = ['CORRESPONDENTE', 'Matrícula', 'Servidor', 'CPF', 'SITUAÇÃO', 'CATEGORIA', 'SERVIÇO', 'DATA', 'Vlr novo', 'Lançar']
         a_lancar = pd.DataFrame(temp[colunas_alancar])
 
         # Calcule a SOMASE para cada categoria no Averbacoes Trabalhadas
@@ -1218,7 +1193,11 @@ class ZETRA:
         a_lancar.insert(9, "CÓDIGO DA OPERAÇÃO", "", True)
 
         a_lancar["ESTABELECIMENTO"] = estabelecimento if self.convenio != 'GOV. RIO DE JANEIRO' else a_lancar['Órgão.1'].map(emp_dict_gov_rj)
-        a_lancar['ÓRGÃO'] = a_lancar['Id. órgão'] if self.convenio != 'GOV. RIO DE JANEIRO' else a_lancar['Órgão.1']
+        if self.convenio not in ['GOV. RIO DE JANEIRO']:
+            a_lancar['ÓRGÃO'] = '1'
+        else:
+            a_lancar['ÓRGÃO'] = a_lancar['Id. órgão'] if self.convenio != 'GOV. RIO DE JANEIRO' else a_lancar['Órgão.1']
+
         a_lancar['CÓDIGO DE DESCONTO'] = codigo_de_desconto
 
         self.process_layout(a_lancar, self.caminho)
@@ -1227,6 +1206,9 @@ class ZETRA:
     # --- FUNÇÕES DE FORMATAÇÃO (Mantive as seguras) ---
     def format_number(self, series, length):
         if length == 0: return ""
+
+        if isinstance(series, (str, int, float)):
+            series = [series]
 
         # 1. Garante que é número (transforma erros/texto em NaN) e preenche vazios com 0
         s = pd.to_numeric(series, errors='coerce').fillna(0)
@@ -1270,7 +1252,7 @@ class ZETRA:
 
         # 3. Preenche com zeros à esquerda até atingir o tamanho
         # Importante: O ponto conta como 1 caractere no tamanho total
-        return s.str.zfill(length)
+        return s.str.zfill(length) if self.convenio != 'PREF. CAMPINAS' else s.str.replace(".", ",", regex=False).str.zfill(length)
 
     def format_constant(self, valor, length):
         """Para campos fixos como Competência, Prazo ou Operação"""
@@ -1287,6 +1269,7 @@ class ZETRA:
 
         # 2. Gera os campos usando as regras dinâmicas
         # Note que agora o segundo argumento vem do dicionário 'regras'
+        print(f'O que está em ÓRGÃO?\n{df['ÓRGÃO']}')
 
         matricula = self.format_number(df['Matrícula'], regras['MAT'])
         cpf = self.format_cpf(df['CPF'], regras['CPF']) if not self.convenio == 'PREF. CAMPINAS' else ''
@@ -1303,7 +1286,7 @@ class ZETRA:
         # Como Prazo e Operação são constantes mas podem ter tamanho variável:
         prazo = self.format_constant('1', regras['PRZ'])  # Assumi '1' como padrão, ajuste se for coluna
         comp = self.format_constant(competencia_atual, regras['COMP'])
-        operacao = self.format_constant('I', regras['OP'])  # 'I' de Inclusão
+        operacao = self.format_constant('I', regras['OP']) if self.convenio != 'PREF. CAMPINAS' else self.format_constant('7', regras['OP'])  # 'I' de Inclusão
 
         # 3. Concatena tudo
         if self.convenio in ['PREF. AÇAILÂNDIA', 'PREF. MACAÉ', 'PREVIPALMAS', 'PREF. BELO HORIZONTE']:
