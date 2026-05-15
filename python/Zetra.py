@@ -21,7 +21,7 @@ class ZETRA:
 
         self.consignataria = consignataria
 
-        self.averbados = self.processar_arquivos_zip(portal_file_path)
+        self.averbados = portal_file_path
 
         self.front = front
 
@@ -128,6 +128,19 @@ class ZETRA:
 
     def unifica_historico_averb(self):
         averbados_atual = self.averbados
+        print(f'Averbados atual:\n{averbados_atual.tail()}')
+        # O r'\s*-\s*' trata: " - ", " -", "- " e "-"
+        split_data = averbados_atual['SERVIDOR'].str.split(r'\s*-\s*', n=1, expand=True)
+
+        # Garantimos que o resultado tenha 2 colunas para evitar o ValueError
+        if split_data.shape[1] == 2:
+            averbados_atual['Matrícula'] = split_data[0]
+            averbados_atual['Servidor'] = split_data[1]
+        else:
+            # Caso ainda assim falhe em alguma linha (ex: linha sem hífen nenhum)
+            averbados_atual['Matrícula'] = split_data[0]
+            averbados_atual['Servidor'] = ""
+        averbados_atual.rename(columns={'VLR RESERV.': 'Vlr novo'}, inplace=True)
         colunas = averbados_atual.columns
 
         # FORMA CORRETA
@@ -242,7 +255,7 @@ class ZETRA:
         return front_unif
 
     def tratamento_front_preliminar(self):
-        front_consig = self.front.copy()
+        front_consig = self.unifica_front_funcao()
 
         if "OBS" in front_consig.columns:
             front_consig = front_consig.drop(columns=['OBS'])
@@ -760,6 +773,9 @@ class ZETRA:
             # averbado_novo.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
             
             front_preliminar = front_trabalhar.copy()
+            # Transforma vazios no OBS em aspas vazias
+            front_preliminar['OBS'] = front_preliminar['OBS'].fillna('')
+            front_preliminar = front_preliminar[front_preliminar['OBS'] == '']
 
             soma_series_averb = front_preliminar.groupby('CPF')['Valor a lançar'].sum()
 

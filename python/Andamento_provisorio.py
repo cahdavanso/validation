@@ -14,7 +14,7 @@ from python.ESTEIRAS import load_esteiras
 # funcao = pd.read_csv(funcao_bruto, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
 
 
-class ANDAMENTO:
+class ANDAMENTO_PROVISORIO:
     def __init__(self, front, convenio, caminho, andamento=None, funcao=None):
         self.front = front
         self.andamento = andamento
@@ -110,10 +110,10 @@ class ANDAMENTO:
         # self.andamento = self.andamento[self.andamento['Prazo Total'] != 1].copy()
 
         # Remoção de cartão de crédito com prazo 0 ou 1
-        self.andamento = self.andamento[~((self.andamento['Modalidade'].isin(['Cartão de Crédito', 'Cartão de Crédito [Prefeitura]', 'Cartão de Crédito [Previdência]'])) & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
+        # self.andamento = self.andamento[~((self.andamento['Modalidade'].isin(['Cartão de Crédito', 'Cartão de Crédito [Prefeitura]', 'Cartão de Crédito [Previdência]'])) & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
 
-        '''if 'Clone na instituição' not in self.andamento.columns:
-            self.andamento.insert(2, 'Clone na instituição', self.andamento['Código na instituição'])'''
+        if 'Clone na instituição' not in self.andamento.columns:
+            self.andamento.insert(2, 'Clone na instituição', self.andamento['Código na instituição'])
 
 
         if 'Contrato de Andamento' not in self.andamento.columns:
@@ -135,18 +135,17 @@ class ANDAMENTO:
                                                     (self.andamento['Valor da Parcela'] == 40) | 
                                                     (self.andamento['Valor da Parcela'] == 60)))].copy()
         
-        # andam_file_simples = self.extrair_contratos_simples(andam_referencia_prazos, front_para_processar)
+        andam_file_simples = self.extrair_contratos_simples(andam_referencia_prazos, front_para_processar)
             
         
 
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
-        andam_file, front_base = self.processar_contratos_otimizado(andam_referencia_prazos, front_para_processar)
+        andam_file, front_base = self.processar_contratos_otimizado(andam_file_simples, front_para_processar)
         andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
         print(f'Andamento depois de extrair_contratos\n{andam_file.columns}')
 
         # Terceira passada
         andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
-        andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
 
         # 3. EXTRAÇÃO DOS PRAZOS
         # colunas_contratos = [col for col in andam_file.columns if 'Contrato' in col or 'Código' in col]

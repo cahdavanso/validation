@@ -1,9 +1,16 @@
 import pandas as pd
+import numpy as np
 
 class TRATA_CONCILIACAO:
     def __init__(self, conciliacao, kobraki=None):
         self.conciliacao = conciliacao
         self.kobraki = kobraki
+
+        self.conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
+        self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
+                                         'PRODUTO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO',
+                                         'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
+        self.conciliacao.rename(columns={'PMT': 'PRESTAÇÃO'}, inplace=True)
 
     def trata_conciliacao(self):
             # Vamos verificar o tipo da coluna VALOR RECEBIDO de KOBRAKI para garantir que é numérica
@@ -75,10 +82,17 @@ class TRATA_CONCILIACAO:
                 conciliacao_tratado['TOTAL RECEBIDO'] = conciliacao_tratado['RECEBIDO GERAL']
 
             # 2. Calcular prestação * prazo
+            # Garante que cada linha tenha um índice único de 0 até o final
+            # Remove colunas com nomes duplicados, mantendo apenas a primeira vez que aparecem
+            conciliacao_tratado = conciliacao_tratado.loc[:, ~conciliacao_tratado.columns.duplicated()]
+
+            # Agora a conta vai funcionar porque só existe uma coluna 'PRESTAÇÃO' e uma 'PRAZO'
+            conciliacao_tratado['TOTAL'] = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']
             prestacao_vezes_prazo = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']
 
             # 3. Calcular o resultado final
             conciliacao_tratado['Pago'] = super_saldo - prestacao_vezes_prazo
             conciliacao_tratado['Saldo'] = conciliacao_tratado['Pago'] + conciliacao_tratado['TOTAL RECEBIDO']
+            conciliacao_tratado['Saldo'] = conciliacao_tratado['Saldo'].fillna(-np.inf)
 
             return conciliacao_tratado

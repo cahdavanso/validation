@@ -27,14 +27,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CONVENIOS_RF1 = ["PREF. ANANINDEUA"];
 
-    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_RF1, ...CONVENIOS_CONSIGLOG].sort();
+    const CONVENIOS_INFOCONSIG = ["PREF. ÁGUAS LINDAS DE GOIÁS", "PREF. PIRACICABA", "PREF. FLORIANÓPOLIS", 
+                                  "SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA", "PREV. PIRACICABA IPASP",
+                                 ];
+
+    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_RF1, ...CONVENIOS_INFOCONSIG, ...CONVENIOS_CONSIGLOG].sort();
 
     const FIELDS_CONSIGFACIL = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_CODATA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "ANDAMENTO", "AVERBADOS", "ORBITAL"];
     const FIELDS_INSS = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "AVERBADOS", "CASOS_CAPITAL"];
     const FIELDS_SERHA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "AVERBADOS", "TRABALHADO_ANTERIOR", "COMPLEMENTAR", "ORBITAL"];
-    const FIELDS_ZETRA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "ZIPS", "HISTORICO", "ORBITAL"];
+    const FIELDS_ZETRA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "AVERBADOS", "HISTORICO", "ORBITAL"];
     const FIELDS_CONSIGLOG = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "AVERBADOS", "ORBITAL"];
+    const FIELDS_INFOCONSIG = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "AVERBADOS", "ORBITAL"];
     const FIELDS_TO_IGEPREV = ["FRONT", "FUNCAO", "AVERBADOS_TO", "AVERBADOS_IGEPREV", "D8_TO", "D8_IGEPREV", "CONCILIACAO", "KOBRAKI"];
     const FIELDS_RF1 = ["FRONT", "FUNCAO", "AVERBADOS", "CONCILIACAO", "KOBRAKI"];
 
@@ -224,7 +229,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (CONVENIOS_SERHA.includes(convenio)) {
             rubricaArea.classList.remove('hidden');
             currentFields = FIELDS_SERHA;
-        } else if (CONVENIOS_ZETRA.includes(convenio)){
+        } else if (CONVENIOS_INFOCONSIG.includes(convenio)) {
+            rubricaArea.classList.remove('hidden')
+            consignatariaArea.classList.remove('hidden');
+            currentFields = FIELDS_INFOCONSIG;
+        }else if (CONVENIOS_ZETRA.includes(convenio)){
             consignatariaArea.classList.remove('hidden');
             currentFields = FIELDS_ZETRA;
         } else if (TO_IGEPREV.includes(convenio)){
@@ -319,6 +328,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         else if (selectedConvenio && CONVENIOS_SERHA.includes(selectedConvenio)) {
+            if (!selectedRubrica) valid = false;
+        }
+        else if (selectedConvenio && CONVENIOS_INFOCONSIG.includes(selectedConvenio)) {
+            if (!selectedConsignataria) valid = false;
             if (!selectedRubrica) valid = false;
         }
         submitButton.disabled = !(hasFiles && valid);

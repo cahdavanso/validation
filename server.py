@@ -26,11 +26,12 @@ from python.Serha import SERHA
 from python.Consiglog import CONSIGLOG
 from python.IgeprevGovTo_Preliminar import IGEPREV_GOVTO
 from python.Zetra import ZETRA
+from python.Infoconsig import INFOCONSIG
 from python.Rf1 import RF1
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = False 
+MODO_DESENVOLVIMENTO = True 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -99,6 +100,10 @@ ZETRA_CONVENIO = [
 
 RF1_CONVENIO = ["PREF. ANANINDEUA"]
 
+INFOCONSIG_CONVENIO = ["PREF. ÁGUAS LINDAS DE GOIÁS", "PREF. PIRACICABA", "PREF. FLORIANÓPOLIS",
+                        "SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA", "PREV. PIRACICABA IPASP",
+                                 ]
+
 TO_IGEPREV_CONVENIO = ["GOV. TOCANTINS e IGEPREV"]
 
 # Todos os outros são Consigfacil
@@ -140,8 +145,8 @@ def abas(excel_file):
 
 
 # --- Função Auxiliar de Leitura ---
-async def read_and_unify_files(file_list: List[UploadFile]):
-    conv: str = Form(...)
+async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
+    conv = convenio
 
     if not file_list:
         return None, []
@@ -160,8 +165,7 @@ async def read_and_unify_files(file_list: List[UploadFile]):
             file_obj = io.BytesIO(content)
             logging.info(f"Lendo: {uploaded_file.filename}")
 
-            print(f'File list: {file_list}')
-
+            # print(f'File list: {file_list}')
             
             
             if "kobraki" in filename and filename.endswith(('.xlsx', '.xls')):
@@ -202,6 +206,19 @@ async def read_and_unify_files(file_list: List[UploadFile]):
                 df = df[:-6]
                 df['Consignataria'] = consig
                 df = df.dropna(axis=1, how='all')
+            elif conv in ZETRA_CONVENIO and 'averbados' in name:
+                df_temp = pd.read_csv(file_obj, sep=';', encoding='latin1')
+                if len(df_temp) > 3:
+                    df = df_temp.iloc[:-3]
+            elif conv in INFOCONSIG_CONVENIO and 'averbados' in name:
+                df = pd.read_csv(
+                        file_obj, 
+                        sep=';', 
+                        encoding='latin1', 
+                        header=None, # Lemos sem cabeçalho para ele não se confundir
+                        names=range(25), # Forçamos a leitura de várias colunas (ajuste o número se precisar)
+                        on_bad_lines='skip' 
+                    )
             elif "andamento" in name and conv == 'GOV. PARAÍBA':
                 df_andamento = pd.read_excel(file_obj)
                 df = df_andamento[:-3]
@@ -211,6 +228,7 @@ async def read_and_unify_files(file_list: List[UploadFile]):
             elif filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(file_obj) 
             else:
+                print(f'Caiu no else')
                 try:
                     file_obj.seek(0)
                     df = pd.read_csv(file_obj, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
@@ -314,24 +332,24 @@ async def validar_planilhas(
         raise HTTPException(status_code=500, detail=f"Erro ao criar pasta de saída:\n{e}")
     
     # 2. Leitura dos arquivos
-    averbados_df, erros = await read_and_unify_files(AVERBADOS)
-    averbados_to_df, erros = await read_and_unify_files(AVERBADOS_TO)
-    averbados_igeprev_df, erros = await read_and_unify_files(AVERBADOS_IGEPREV)
-    conciliacao_df, erros = await read_and_unify_files(CONCILIACAO)
-    kobraki_df, erros = await read_and_unify_files(KOBRAKI)
-    d8_df_to, erros = await read_and_unify_files(D8_TO)
-    d8_df_igeprev, erros = await read_and_unify_files(D8_IGEPREV)
-    liquidados_df, erros = await read_and_unify_files(LIQUIDADOS)
-    liminar_df, erros = await read_and_unify_files(LIMINAR)
-    historico_df, erros = await read_and_unify_files(HISTORICO)
-    credbase_df, erros = await read_and_unify_files(CREDBASE)
-    front_df, erros = await read_and_unify_files(FRONT)
-    funcao_df, erros = await read_and_unify_files(FUNCAO)
-    andamento_df, erros = await read_and_unify_files(ANDAMENTO)
-    trabalhado_anterior_df, erros = await read_and_unify_files(TRABALHADO_ANTERIOR)
-    orbital_df, erros = await read_and_unify_files(ORBITAL)
-    complementar_df, erros = await read_and_unify_files(COMPLEMENTAR)
-    casoscapital_df, erros = await read_and_unify_files(CASOS_CAPITAL)
+    averbados_df, erros = await read_and_unify_files(AVERBADOS, convenio=convenio)
+    averbados_to_df, erros = await read_and_unify_files(AVERBADOS_TO, convenio=convenio)
+    averbados_igeprev_df, erros = await read_and_unify_files(AVERBADOS_IGEPREV, convenio=convenio)
+    conciliacao_df, erros = await read_and_unify_files(CONCILIACAO, convenio=convenio)
+    kobraki_df, erros = await read_and_unify_files(KOBRAKI, convenio=convenio)
+    d8_df_to, erros = await read_and_unify_files(D8_TO, convenio=convenio)
+    d8_df_igeprev, erros = await read_and_unify_files(D8_IGEPREV, convenio=convenio)
+    liquidados_df, erros = await read_and_unify_files(LIQUIDADOS, convenio=convenio)
+    liminar_df, erros = await read_and_unify_files(LIMINAR, convenio=convenio)
+    historico_df, erros = await read_and_unify_files(HISTORICO, convenio=convenio)
+    credbase_df, erros = await read_and_unify_files(CREDBASE, convenio=convenio)
+    front_df, erros = await read_and_unify_files(FRONT, convenio=convenio)
+    funcao_df, erros = await read_and_unify_files(FUNCAO, convenio=convenio)
+    andamento_df, erros = await read_and_unify_files(ANDAMENTO, convenio=convenio)
+    trabalhado_anterior_df, erros = await read_and_unify_files(TRABALHADO_ANTERIOR, convenio=convenio)
+    orbital_df, erros = await read_and_unify_files(ORBITAL, convenio=convenio)
+    complementar_df, erros = await read_and_unify_files(COMPLEMENTAR, convenio=convenio)
+    casoscapital_df, erros = await read_and_unify_files(CASOS_CAPITAL, convenio=convenio)
 
     # 3. SELEÇÃO DO VALIDADOR (SEM A VARIÁVEL PROBLEMÁTICA)
     
@@ -386,11 +404,36 @@ async def validar_planilhas(
             caminho=CAMINHO_SAIDA,
             orbital=orbital_df
         )
-    
+    elif convenio in CONSIGLOG_CONVENIO:
+        logging.info("Usando validador: CONSIGLOG")
+        validador = CONSIGLOG(
+            portal_file_list=averbados_df, 
+            convenio=convenio,
+            front=front_df,
+            consignataria=consignataria,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            caminho=CAMINHO_SAIDA,
+            orbital=orbital_df
+        )
+    elif convenio in INFOCONSIG_CONVENIO:
+        logging.info("Usando validador: INFOCONSIG")
+        validador = INFOCONSIG(
+            portal_file_list=averbados_df, 
+            convenio=convenio,
+            front=front_df,
+            consignataria=consignataria,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            caminho=CAMINHO_SAIDA,
+            rubrica=rubrica,
+            funcao=funcao_df,
+            orbital=orbital_df
+        )
     elif convenio in ZETRA_CONVENIO:
         logging.info("Usando o validador: ZETRA")
         validador = ZETRA(
-            portal_file_path=ZIPS,
+            portal_file_path=averbados_df,
             convenio=convenio,
             front=front_df,
             conciliacao=conciliacao_df,

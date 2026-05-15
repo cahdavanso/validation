@@ -6,6 +6,7 @@ from thefuzz import fuzz
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.Andamento import ANDAMENTO
+from python.Andamento_provisorio import ANDAMENTO_PROVISORIO
 import os
 import logging
 import chardet
@@ -99,13 +100,16 @@ class CONSIGFACIL:
 
         # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
         contrato_funcao = funcao['NR_PROP']
+        print(f'Contrato 301120431 está no função ainda?\n{funcao.loc[funcao['NR_PROP'] == 301120431, 'NR_PROP']}')
         front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE')), 'Esteira'] = 'INTEGRADO'
 
         # Tira os contratos do Front que já existem no Função
-        funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
+        # funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
 
         # Tira os contratos CCB do Front que também existem no Função
         funcao = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
+
+        print(f'Contrato 301120431 está no função ainda?\n{funcao.loc[funcao['NR_PROP'] == 301120431, 'NR_PROP']}')
 
         # Juntar Funcao com Front
         # 1. Defina o mapeamento de nomes (De: Para)
@@ -123,6 +127,8 @@ class CONSIGFACIL:
         # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
         # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
         funcao_ajustado = funcao[list(mapeamento.keys())].rename(columns=mapeamento)
+
+        print(f'Contrato 301120431 está no função ainda?\n{funcao.loc[funcao['NR_PROP'] == 301120431, 'NR_PROP']}')
 
         # 3. Use o concat para unir os dois DataFrames
         # O ignore_index=True serve para gerar um novo índice sequencial no DF final
@@ -210,7 +216,7 @@ class CONSIGFACIL:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS|FUTURO', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO ERRADO'
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
-        objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
+        objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.andamento, self.funcao) if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
         front_com_prazo = objeto_andamento.andamento_func_front()
         front_consig_validado_termino['PRAZO'] = front_consig_validado_termino['Contrato'].astype(str).map(front_com_prazo.set_index('Contrato')['PRAZO'])
         front_consig_validado_termino['Contrato'] = front_consig_validado_termino['Contrato'].astype('int64')
@@ -850,7 +856,7 @@ class CONSIGFACIL:
             ((front['CONTSE HP'] > 0) & 
             (front['CONTSE GERAL'] > 0) & 
             (front['CONTSE HP'] == front['CONTSE GERAL'])) |
-            (front['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA')
+            (front['Consignataria'] == 'HOJE PREVIDÊNCIA PRIVADA')
         )
         
         front.loc[mask_peculio, 'Valor a lançar'] += 20
@@ -1024,14 +1030,14 @@ class CONSIGFACIL:
             # 5. Atribui o resultado final arredondado às colunas.
             averbado_novo['VALOR A LANÇAR MATRICULA'] = averbado_novo['VALOR A LANÇAR MATRICULA'].round(2)
             # averbado_novo['VALOR A LANÇAR CPF'] = averbado_novo['VALOR A LANÇAR CPF'].round(2)
-            averbado_novo['VALOR ATRIBUIDO'] = valor_a_lancar.round(2)
+            averbado_novo['VALOR A LANÇAR'] = valor_a_lancar.round(2)
 
             # 6. Preenche a coluna OBS para linhas que não receberam nada.
             averbado_novo.loc[averbado_novo['VALOR A LANÇAR MATRICULA'] == 0, 'OBS'] = 'NÃO'
             # averbado_novo.loc[averbado_novo['VALOR A LANÇAR CPF'] == 0, 'OBS'] = 'NÃO'
 
             # 7. Vamos criar a coluna Diff para lançar os parciais
-            somase_lancar = averbado_novo.groupby('CPF')['VALOR ATRIBUIDO'].transform('sum')
+            somase_lancar = averbado_novo.groupby('CPF')['VALOR A LANÇAR'].transform('sum')
             averbado_novo['DIFF'] = somase_lancar - averbado_novo['SOMASE CRED']
             averbado_novo['DIFF'] = averbado_novo['DIFF'].round(2)
 

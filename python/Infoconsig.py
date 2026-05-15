@@ -10,14 +10,32 @@ import os
 import re
 
 
-class CONSIGLOG:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, funcao=None, conciliacao=None, kobraki=None, orbital=None):
+class INFOCONSIG:
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, rubrica, funcao=None, conciliacao=None, kobraki=None, orbital=None):
         self.averbados = portal_file_list
+        for i in range(len(self.averbados)):
+            linha_valores = self.averbados.iloc[i].astype(str).tolist()
+            # Procuramos por uma palavra que você sabe que está no cabeçalho real
+            if any('CPF' in str(s).upper() for s in linha_valores):
+                self.averbados.columns = self.averbados.iloc[i] # Define a linha atual como cabeçalho
+                self.averbados = self.averbados[i+1:].reset_index(drop=True) # Corta o que está acima
+                break
+
+        # 3. Limpeza final: remove colunas totalmente vazias que o 'range(25)' pode ter criado
+        self.averbados = self.averbados.dropna(axis=1, how='all')
+        self.averbados['Nr Doc / Contrato'] = self.averbados['Nr Doc / Contrato'].str.replace(r'[="]', '', regex=True)
+        # 1. Criamos uma máscara booleana para identificar os contratos com mais de 9 caracteres
+        condicao = self.averbados['Nr Doc / Contrato'].astype(str).str.len() > 9
+        # 2. Aplicamos a substituição apenas onde a condição for verdadeira
+        self.averbados.loc[condicao, 'Nr Doc / Contrato'] = self.averbados.loc[condicao, 'Nr Doc / Contrato'].astype(str).str.replace('000', '/', regex=False)
+        self.averbados['CPF'] = self.averbados['CPF'].str.replace(r'[="]', '', regex=True)
 
 
         self.convenio = convenio
 
         self.front= front
+
+        self.rubrica = rubrica
 
         # Funcao
         self.funcao = funcao if funcao is not None else None
@@ -120,9 +138,21 @@ class CONSIGLOG:
 
             return front_unif
 
-
     def tratamento_front_preliminar(self):
         front_consig = self.unifica_front_funcao()
+        # Criar uma lista com todos os nomes de colunas
+        cols = front_consig.columns
+
+        '''# Filtrar apenas os que aparecem mais de uma vez
+        duplicadas_por_nome = cols[cols.duplicated()].unique()
+
+        if len(duplicadas_por_nome) > 0:
+            print(f"⚠️ Colunas com nomes duplicados encontradas em front_consig: {list(duplicadas_por_nome)}")
+        else:
+            print("✅ Não existem nomes de colunas duplicados em front_consig.")'''
+
+        if "OBS" in front_consig.columns:
+            front_consig = front_consig.drop(columns=['OBS'])
 
         conciliacao = self.conciliacao.copy()
 
@@ -169,7 +199,7 @@ class CONSIGLOG:
 
         # Agora insira sem permitir duplicatas (o padrão é False)
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci)
-        
+
         # Adiciona só as esteiras que podem ser lançadas
         front_consig_esteiras = front_consig[front_consig['Esteira'].isin(self.condicoes_1)].copy()
 
@@ -177,62 +207,72 @@ class CONSIGLOG:
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
 
         # --------------------------------------------- ORBITAL --------------------------------------------- #
-        # --- ETAPA 1: Garantir que as chaves são do mesmo tipo (Texto) ---
-        # Isso evita o erro clássico onde um lado é número e o outro é texto
-        if orbital is not None:
-            front_consig_esteiras['Contrato'] = front_consig_esteiras['Contrato'].astype(str).str.strip()
-            # orbital.rename(columns={'id_contr_banco': 'CONTRATO'}, inplace=True)
+        # --- ETAPA 0: Limpar as colunas de valor da Front ANTES de misturar com Orbital ---
+        # Fazemos isso primeiro para que a coluna toda seja float64
+        print(f'Series ou DataFrame? {type(front_consig_esteiras['Prestacao'])}')
 
-            if orbital['VALID DESCONTO FINAL'].dtype != "float64":
-                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
-                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
-                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+        cols = front_consig_esteiras.columns
 
-            for col in orbital.columns:
-                if "contrato" in col or "Contrato" in col:
-                    orbital.rename(columns={col:"CONTRATO"}, inplace=True)
-            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
+        # Filtrar apenas os que aparecem mais de uma vez
+        '''duplicadas_por_nome = cols[cols.duplicated()].unique()
 
+        if len(duplicadas_por_nome) > 0:
+            print(f"⚠️ Colunas com nomes duplicados encontradas em front_consig_esteiras: {list(duplicadas_por_nome)}")
+        else:
+            print("✅ Não existem nomes de colunas duplicados em front_consig_esteiras.")'''
+        
+        for col in ['Prestacao', 'Valor a lançar']:
+            # Selecionamos a coluna e garantimos que pegamos apenas a primeira caso haja duplicada
+            coluna_data = front_consig_esteiras.loc[:, col]
             
+            # Se o resultado for um DataFrame (duplicadas), pegamos a primeira coluna dele
+            if isinstance(coluna_data, pd.DataFrame):
+                coluna_data = coluna_data.iloc[:, 0]
 
-            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
-            '''print(f'\nContrato 301268942 na coluna CONTRATO: {orbital.loc[orbital["CONTRATO"] == "301268942", "VALID DESCONTO FINAL"]}\n')
-            print(f'Contrato 301268942 no front: {front_consig_esteiras.loc[front_consig_esteiras["Contrato"] == "301268942", "Prestacao"]}\n')'''
+            if not pd.api.types.is_float_dtype(coluna_data):
+                # Fazemos o tratamento na Series auxiliar
+                coluna_tratada = (
+                    coluna_data.astype(str)
+                    .str.replace('.', '', regex=False)
+                    .str.replace(',', '.', regex=False)
+                )
+                # Devolvemos para o DataFrame original
+                front_consig_esteiras[col] = pd.to_numeric(coluna_tratada, errors='coerce').fillna(0)
 
+        # --- ETAPA 1: Preparar Orbital ---
+        if orbital is not None:
+            # Garantir que o valor da Orbital é numérico
+            if orbital['VALID DESCONTO FINAL'].dtype != "float64":
+                orbital['VALID DESCONTO FINAL'] = (
+                    orbital['VALID DESCONTO FINAL']
+                    .astype(str)
+                    .str.replace('.', '', regex=False)
+                    .str.replace(',', '.', regex=False)
+                )
+                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce').fillna(0)
 
-            # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
-            # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
+            # Padronizar nomes de colunas de contrato
+            for col_name in orbital.columns:
+                if "contrato" in col_name.lower():
+                    orbital.rename(columns={col_name: "CONTRATO"}, inplace=True)
+            
+            # Chaves como string para o DE-PARA
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str).str.strip()
+            front_consig_esteiras['Contrato'] = front_consig_esteiras['Contrato'].astype(str).str.strip()
+
+            # --- ETAPA 2: Mapeamento (O "PROCV") ---
             mapa_orbital = orbital.set_index('CONTRATO')['VALID DESCONTO FINAL']
-            # --- ETAPA 3: Definir quem vai ser alterado ---
             filtro_esteira = front_consig_esteiras['Esteira'] == '99 CARTAO UTILIZADO'
 
-            # --- ETAPA 4: Fazer a mágica (Buscar valores) ---
-            # .loc[filtro, coluna] -> Seleciona só as linhas da esteira certa
-            # .map(mapa_orbital)   -> Faz o "PROCV" buscando no dicionário criado
-            valores_encontrados = front_consig_esteiras.loc[filtro_esteira, 'Contrato'].map(mapa_orbital)
+            # Buscamos os valores (eles virão como float/número)
+            valores_encontrados = front_consig_esteiras.loc[filtro_esteira, 'Contrato'].map(mapa_orbital).fillna(0)
 
-            # --- ETAPA 5: Tratar quem não foi achado ---
-            # Se o contrato não existe na Orbital, o map devolve NaN.
-            # Usamos fillna(0) para trocar NaN por 0, conforme você pediu.
-            valores_encontrados = valores_encontrados.fillna(0)
+            # --- ETAPA 3: Gravar direto como número ---
+            # Como limpamos a Front na ETAPA 0, agora é só atribuir o número direto
+            front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_encontrados
+            front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_encontrados
 
-            # --- ETAPA 6: Gravar no DataFrame original ---
-            valores_encontrados_str = valores_encontrados.astype(str)
-            front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
-            front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_encontrados_str  
-
-        # Tentar transformar em string com virgula
-        front_consig_esteiras.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
-
-        if front_consig_esteiras['Prestacao'].dtype != 'float64':
-            front_consig_esteiras['Prestacao'] = front_consig_esteiras['Prestacao'].astype(str).str.replace('.', '', regex=False)
-            front_consig_esteiras['Prestacao'] = front_consig_esteiras['Prestacao'].str.replace(',', '.', regex=False)
-            front_consig_esteiras['Prestacao'] = pd.to_numeric(front_consig_esteiras['Prestacao'], errors='coerce')
-
-        if front_consig_esteiras['Valor a lançar'].dtype != 'float64':
-            front_consig_esteiras['Valor a lançar'] = front_consig_esteiras['Valor a lançar'].astype(str).str.replace('.', '', regex=False)
-            front_consig_esteiras['Valor a lançar'] = front_consig_esteiras['Valor a lançar'].astype(str).str.replace(',', '.', regex=False)
-            front_consig_esteiras['Valor a lançar'] = pd.to_numeric(front_consig_esteiras['Valor a lançar'], errors='coerce')
+        print("Processamento concluído: Valores da Orbital integrados como numéricos.")
 
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
@@ -250,7 +290,7 @@ class CONSIGLOG:
         front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CAPITAL CONSIG ", "CAPITAL CONSIG")
         front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CLICKBANK ", "CLICKBANK")
         front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CIASPREV ", "CIASPREV")
-        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("HOJE PREVIDENCIA PRIVADA ", "HOJE PREVIDÊNCIA PRIVADA")
+        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace('HOJE PREVIDÊNCIA PRIVADA ', "'HOJE PREVIDÊNCIA PRIVADA'")
 
         front_consig_validado_termino['Consignataria'].fillna('', inplace=True)
 
@@ -274,13 +314,13 @@ class CONSIGLOG:
         # Marca tudo que é orbital
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
-        # Marcar o que não é cartão Conciliação
-        if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS']:
-            print(f'Convenio é {self.convenio}')
-            print(f'Convenio está em PREF GOIÂNIA ou PREF. DUQUE DE CAXIAS? {self.convenio in ["PREF. GOIÂNIA", "PREF. DUQUE DE CAXIAS"]}')
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        if self.rubrica == 'CARTÃO':
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            pass
         else:
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            # front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
 
         # Marcar liquidados em StatusContrato
         front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
@@ -307,12 +347,12 @@ class CONSIGLOG:
             return False
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        if self.convenio == 'PREF. GOIÂNIA':
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
-        elif self.convenio == 'PREF. DUQUE DE CAXIAS':
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)].copy()
+        if self.rubrica == 'CARTÃO':
+            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
+            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
         else:
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
+            # front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False)].copy()
+            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('CARTAO BENEFICIO', na=False)].copy()
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -335,7 +375,7 @@ class CONSIGLOG:
         front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Valor a lançar'] > 0].copy()
 
         # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
-        '''mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDÊNCIA PRIVADA'
+        '''mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA'
         front_consig_trabalhado.loc[mask_peculio, 'Valor a lançar'] += 20'''
 
         # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
@@ -384,6 +424,16 @@ class CONSIGLOG:
 
         # print(f'status \n{front_copy[front_copy["Contrato"] == 300846910]}')
 
+        cols = front_copy.columns
+
+        # Filtrar apenas os que aparecem mais de uma vez
+        duplicadas_por_nome = cols[cols.duplicated()].unique()
+
+        '''if len(duplicadas_por_nome) > 0:
+            print(f"⚠️ Colunas com nomes duplicados encontradas em front_copy: {list(duplicadas_por_nome)}")
+        else:
+            print("✅ Não existem nomes de colunas duplicados em front_copy.")'''
+
         # Puxar o saldo para o front usando o map, que é mais eficiente que o merge para esse tipo de operação
         front_copy['Saldo'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
         # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
@@ -394,7 +444,7 @@ class CONSIGLOG:
             front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
             front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
 
-        print(f'Contrato 301268942 no front no validacao_termino: {front_copy.loc[front_copy["Contrato"] == "301268942", "Prestacao"]}\n')
+        # print(f'Contrato 301268942 no front no validacao_termino: {front_copy.loc[front_copy["Contrato"] == "301268942", "Prestacao"]}\n')
  
 
         # Valor que vai ser lançado
@@ -409,7 +459,7 @@ class CONSIGLOG:
         front_copy['Valor a lançar'] = valor_a_lancar
 
         # 3. Agora seu print vai mostrar -1000
-        print(front_copy.loc[front_copy["Contrato"] == "302298345", "Saldo"])
+        # print(front_copy.loc[front_copy["Contrato"] == "302298345", "Saldo"])
 
         return front_copy
 
@@ -435,10 +485,10 @@ class CONSIGLOG:
             # --- Passo 2: Definir a função que será aplicada em cada linha (LÓGICA ALTERADA) ---
             def encontrar_contratos_na_linha(row):
                 cpf = row['CPF_Formatado']
-                texto_contratos_sujo = str(row['Contrato Original']).strip()
+                texto_contratos_sujo = str(row['Nr Doc / Contrato']).strip()
             
                 cpf = row['CPF_Formatado']
-                texto_contratos_sujo = str(row['Contrato Original'])
+                texto_contratos_sujo = str(row['Nr Doc / Contrato'])
 
                 # Garante que as listas existam
                 contratos_validos_para_cpf = cpf_contratos.get(cpf, [])
@@ -532,7 +582,7 @@ class CONSIGLOG:
 
             # --- Passo 3: Aplicar a função e criar as novas colunas (sem alterações) ---
             print("Analisando a Planilha A e extraindo os contratos...")
-            df_sujo['Contrato Original'] = df_sujo['Contrato Original'].astype(str).str.replace('nan', '')
+            df_sujo['Nr Doc / Contrato'] = df_sujo['Nr Doc / Contrato'].astype(str).str.replace('nan', '')
 
 
             lista_de_contratos_encontrados = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
@@ -601,7 +651,7 @@ class CONSIGLOG:
                 data_averbados.loc[mascara_esteira_valida, 'Soma_Calculada'] += (valores_validos + 20)
 
         # 3. Aplica a comparação final com o Valor Prestação (Teto)
-        data_averbados['Lançar'] = np.minimum(data_averbados['Soma_Calculada'], data_averbados['Valor Prestacao'])
+        data_averbados['Lançar'] = np.minimum(data_averbados['Soma_Calculada'], data_averbados['Margem Reservada'])
 
         # (Opcional) Remove a coluna temporária se não precisar mais
         data_averbados = data_averbados.drop(columns=['Soma_Calculada'])
@@ -610,11 +660,25 @@ class CONSIGLOG:
 
     def orbital_tratado(self, orbital, front_para_separar):
 
-        orbital_preparado = orbital.loc[
-            orbital['DESCRIÇÃO DO EMPREG'].str.contains('PREF GOIÂNIA|PM GOIANIA SEG', case=False, na=False),
-            ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
-        ].copy()
-        orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALID DESCONTO FINAL']
+        empregador_dict = {'PREF. PIRACICABA': 'PREF PIRACICABA', 
+                           'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA': 'PM PIRA SEMAE',
+                           'PREV. PIRACICABA IPASP': 'PREF PIRA IPASP'}
+        
+        empregador = empregador_dict.get(self.convenio)
+
+        if empregador:
+            # Filtro dinâmico
+            orbital_preparado = orbital.loc[
+                orbital['DESCRIÇÃO DO EMPREG'].str.contains(empregador, case=False, na=False),
+                ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
+            ].copy()
+        else:
+            # Opcional: log de erro ou retorno vazio se o convênio não existir no dict
+            print(f"Aviso: Convênio '{self.convenio}' não mapeado.")
+            orbital_preparado = pd.DataFrame()
+
+
+        orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
         front_so_orbital = front_para_separar.loc[
             front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
@@ -661,7 +725,7 @@ class CONSIGLOG:
         # Primeiro, tentamos o match exato (valor igual)
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_exact, 
-            left_on=['CPF_Formatado', 'Valor Prestacao'], 
+            left_on=['CPF_Formatado', 'Margem Reservada'], 
             right_on=['CPF', 'Prestacao'], 
             how='left'
         )
@@ -673,7 +737,7 @@ class CONSIGLOG:
         # Segundo merge: Caso de +20 reais
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_plus20, 
-            left_on=['CPF_Formatado', 'Valor Prestacao'], 
+            left_on=['CPF_Formatado', 'Margem Reservada'], 
             right_on=['CPF', 'Prestacao_Ajustada'], 
             how='left', 
             suffixes=('', '_20')
@@ -685,7 +749,7 @@ class CONSIGLOG:
         # Terceiro merge: Caso de +40 reais
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_plus40, 
-            left_on=['CPF_Formatado', 'Valor Prestacao'], 
+            left_on=['CPF_Formatado', 'Margem Reservada'], 
             right_on=['CPF', 'Prestacao_Ajustada'], 
             how='left', 
             suffixes=('', '_40')
@@ -705,6 +769,10 @@ class CONSIGLOG:
         data = self.averbados
         front = self.tratamento_front_preliminar()
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
+        if self.orbital is not None:
+            preparando_orbital = TRATA_ORBITAL(self.orbital, front, self.convenio, self.caminho)
+            orbital_tratado = preparando_orbital.orbital_tratado()
+        convenio = self.convenio
 
         teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
@@ -716,215 +784,119 @@ class CONSIGLOG:
         print(f'Contrato 301268942 no front em trata_averbacao: {front.loc[front["Contrato"] == "301268942", "Prestacao"]}\n')
 
         consig = self.consignataria
-        convenio = self.convenio
-
-        if convenio == 'PREF. GOIÂNIA':
-            # O ARQUIVO DE AVERBAÇÕES PRECISA TER OS DOIS TIPOS. COMPRA E SAQUE
-            # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
-            colunas = ['A D E', 'Servidor', 'Matricula', 'C P F', 'Valor Prestacao', 'Contrato Original', 'Qt Prestacao']
-            data_averbados_bruto = data[colunas]
-
-            # Passo 1: Garantir que a coluna é do tipo string
-            cpf_str = data_averbados_bruto['C P F'].astype(str)
-            cpf_str_ajustado = cpf_str.str.zfill(11)
-            cpf_formatado = cpf_str_ajustado.str.slice(0, 3) + '.' + \
-                            cpf_str_ajustado.str.slice(3, 6) + '.' + \
-                            cpf_str_ajustado.str.slice(6, 9) + '-' + \
-                            cpf_str_ajustado.str.slice(9, 11)
-
-            data_averbados_bruto.insert(4, 'CPF_Formatado', cpf_formatado, True)
-
-            concat_cpf_parcela = data_averbados_bruto['C P F'].astype(str) + data_averbados_bruto['Valor Prestacao'].astype(str)
-
-            data_averbados_bruto.insert(5, 'CONCAT', concat_cpf_parcela, True)
-
-            print(f'Tipo do concat_cpf_parcela: {data_averbados_bruto['CONCAT'].dtype}')
-
-            if self.orbital is not None:
-                preparando_orbital = TRATA_ORBITAL(self.orbital, front, self.convenio, self.caminho)
-                orbital_tratado = preparando_orbital.orbital_tratado()
-            orbital_tratado['VALID DESCONTO FINAL'] = pd.to_numeric(orbital_tratado['VALID DESCONTO FINAL'], errors='coerce')
-            mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALID DESCONTO FINAL'].sum()
-            data_averbados_bruto['ORBITAL'] = ''
-            data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF_Formatado'].map(mask_orbital)
-
-
-            data_averbados_bruto['CONTSE'] = data_averbados_bruto.groupby('CONCAT')['CONCAT'].transform('count')
-
-            # 1. Cria a máscara Booleana (True/False)
-            # Note os parênteses extras envolvendo cada comparação
-            cont_orbital_mask = (data_averbados_bruto['CONTSE'] > 1) & \
-                                ((data_averbados_bruto['ORBITAL'] == '') | (data_averbados_bruto['ORBITAL'].isna()))
-
-            # 2. Filtra mantendo apenas o que NÃO (~) for Verdadeiro na máscara
-            data_averbados_bruto = data_averbados_bruto.loc[~cont_orbital_mask]
-
-            print(f"trata_averbacao: Salvando arquivo de averbacao teste com orbital")
-            try:
-                data_averbados_bruto.to_excel(os.path.join(self.caminho, f"Averbacao com orbital teste {self.convenio}.xlsx"), index=False)
-            except Exception as e:
-                print(f"trata_averbacao: ERRO AO SALVAR AVERBAÇÃO COM ORBITAL TESTE: {e}")
-
-            data_averbados_bruto = data_averbados_bruto.loc[data_averbados_bruto['Qt Prestacao'] != 96]
-            print(f'data_averbados_bruto tipo {data_averbados_bruto['Qt Prestacao'].dtype}')
-            print(f'\ndata_averbados_bruto unico {data_averbados_bruto['Qt Prestacao'].unique()}')
-
-            data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, front)
-
-            semi_front = front[front['Esteira'].isin(self.condicoes_1)]
-            semi_front['Contrato'] = semi_front['Contrato'].astype(str).str.strip()
-
-            conciliacao_tratado = teste_conciliacao.trata_conciliacao()
-
-            # Operações liquidadas. Tratando NRº OPER EDITADO
-            # OP LIQUIDADO
-            try:
-                oper_liq = self.front[self.front['Status'].str.contains('Liquidado|CANCELADO', na=False)][['Contrato']].copy()
-                contratos_tratados_liq = oper_liq['Contrato'].str.slice(0, 9)
-                oper_liq.insert(1, "Nº OPERAÇÃO EDITADO", contratos_tratados_liq, True)
-
-            except Exception as e:
-                oper_liq = pd.DataFrame(columns=['Contrato', 'Nº OPERAÇÃO EDITADO'])
-                print(f"Planilha de Operações Liquidadas está vazia {e}")
-
-            tutela = self.front[self.front['Acao Judicial'] == 1][['CPF', 'Acao Judicial']].copy()
-
-            # consig = self.consignataria
-
-            # --- 1. Identifica TODAS as colunas que contêm contratos ---
-            # Inclui a coluna original e as que foram extraídas pela função anterior.
-            # Ajuste 'Contrato' se a sua coluna original tiver um nome diferente (ex: 'Identificador')
-            # colunas_com_contratos = ['Contrato'] + [col for col in data_averbados.columns if 'Contrato Editado' in col]
-            colunas_com_contratos = [col for col in data_averbados.columns if 'Contrato Editado' in col]
-
-            # Remove duplicatas, caso o nome 'Contrato' já esteja na lista
-            colunas_com_contratos = list(dict.fromkeys(colunas_com_contratos))
-
-            # print(f"Colunas de contrato identificadas para análise: {colunas_com_contratos}")
-
-            # --- 2. Loop único para criar as colunas de Esteira e Valor para CADA contrato ---
-            # O enumerate nos dá um índice numérico (i) para criar nomes de coluna únicos.
-            for i, nome_coluna_contrato in enumerate(colunas_com_contratos, start=1):
-                # print(f"Processando coluna '{nome_coluna_contrato}'...")
-
-                # Cria a coluna de Esteira correspondente
-                data_averbados[f'Esteira_{i}'] = data_averbados[nome_coluna_contrato].map(
-                    front.set_index('Contrato')['Esteira'].to_dict()
-                )
-
-                # Cria a coluna de Valor da Parcela correspondente
-                data_averbados[f'Valor_Unif_{i}'] = data_averbados[nome_coluna_contrato].map(
-                    semi_front.set_index('Contrato')['Prestacao'].to_dict()
-                )
-
-                # Puxa os valores de saldo da conciliação
-                data_averbados[f'Saldo {i}'] = data_averbados[nome_coluna_contrato].map(
-                    conciliacao_tratado.set_index('CONTRATOS')['Saldo'].to_dict()
-                )
-
-                # Puxando os contratos liquidados (FORMA CORRIGIDA)
-                # Cria a nova coluna 'OP LIQ {i}' com o resultado do map
-                data_averbados[f'OP LIQ {i}'] = data_averbados[nome_coluna_contrato].map(
-                    oper_liq.set_index('Nº OPERAÇÃO EDITADO')['Contrato'].to_dict()
-                )
-
-
-                # --- PASSO 2: PREPARAÇÃO E LIMPEZA DE DADOS ---
-                # Agora que todas as colunas foram criadas, garantimos que sejam numéricas para os cálculos.
-                data_averbados[f'Valor_Unif_{i}'] = pd.to_numeric(data_averbados[f'Valor_Unif_{i}'],
-                                                                  errors='coerce').fillna(0)
-                data_averbados[f'Saldo {i}'] = pd.to_numeric(data_averbados[f'Saldo {i}'], errors='coerce').fillna(0)
-
-                # --- PASSO 3: CONSTRUIR AS CONDIÇÕES E APLICAR A LÓGICA ---
-
-                # Condição 1: Encontra todas as linhas onde o Saldo (já limpo) é >= 0
-                condicao_saldo_positivo = data_averbados[f'Saldo {i}'] >= -1
-
-                # Condição 2: Encontra onde um contrato liquidado foi efetivamente encontrado (FORMA CORRIGIDA E ROBUSTA)
-                # .notna() garante que só pegamos as linhas onde o map retornou um valor, e não NaN.
-                condicao_op_liq = data_averbados[f'OP LIQ {i}'].notna()
-
-                # Ação: Nessas linhas, define o 'Valor_Unif' correspondente como 0
-                # O operador | significa OU (se uma condição OU a outra for verdadeira)
-                data_averbados.loc[(condicao_saldo_positivo | condicao_op_liq), f'Valor_Unif_{i}'] = 0
-                # --- FIM DA NOVA LÓGICA ---
-
-                # Condição de Operações Liquidadas, se a linha estiver preenchida vai lançar 0
-
-            # --- 2.5 Puxa as liminares ---
-            data_averbados["LIMINAR"] = data_averbados['CPF_Formatado'].map(
-                self.front.set_index('CPF')['Acao Judicial'].to_dict())
-            condicao_liminar = data_averbados['LIMINAR'] == 1
-
-            # --- 3. Soma todos os valores encontrados (forma eficiente) ---
-
-            # Pega a lista de colunas de valor
-            colunas_valores_unificados = [col for col in data_averbados.columns if 'Valor_Unif_' in col]
-
-            if colunas_valores_unificados:
-                # 1. Define o filtro de quem deve ser ZERADO
-                # Lógica: Se CONTSE for maior que 1, zeramos os valores.
-                filtro_zerar = data_averbados['CONTSE'] > 1
-
-                # 2. Zera todas as colunas de valor nessas linhas de uma vez só
-                # .loc[linhas_ruins, colunas_alvo] = 0
-                data_averbados.loc[filtro_zerar, colunas_valores_unificados] = 0.0
-
-                # 3. Agora você pode fazer a soma simples (sem filtro),
-                # pois os linhas indesejadas já valem 0.
-                data_averbados['Soma'] = data_averbados[colunas_valores_unificados].sum(axis=1)
-            else:
-                print("Nenhuma coluna de valor encontrada. A coluna 'Soma' será inicializada com 0.")
-                data_averbados['Soma'] = 0
-
-            # --- 4. Cálculo da Diferença e Formatação Final ---
-
-            # Garante que a coluna de Valor Prestacao é numérica antes do cálculo
-            data_averbados['Valor Prestacao'] = pd.to_numeric(data_averbados['Valor Prestacao'],
-                                                              errors='coerce').fillna(0)
-
-            data_averbados['Diff'] = data_averbados['Soma'] - data_averbados['Valor Prestacao']
-            data_averbados['Diff'] = data_averbados['Diff'].round(2)
-
-            # 2. Filtra todas as colunas que começam com "Parcela "
-            colunas_parcelas = data_averbados.filter(like='Valor_Unif_')
-
-            # NOVO PASSO: Adiciona a coluna 'ORBITAL' ao DataFrame de colunas para soma
-            colunas_para_somar = colunas_parcelas.copy()  # Cria uma cópia para garantir a segurança
-
-            # Verifica se 'ORBITAL' já existe antes de adicionar (apenas por garantia, embora o código garanta)
-            if 'ORBITAL' in data_averbados.columns:
-                # Usa .loc para garantir que a coluna seja adicionada
-                colunas_para_somar.loc[:, 'ORBITAL'] = data_averbados['ORBITAL']
-
-            # 3. Soma as colunas horizontalmente (axis=1)
-            data_averbados['Soma'] = colunas_para_somar.sum(axis=1)
-
-            data_averbados['Lançar'] = np.minimum(data_averbados['Soma'], data_averbados['Valor Prestacao'])
-            data_averbados.loc[condicao_liminar, 'Lançar'] = 0
-
-            return data_averbados
+        # convenio = self.convenio
 
         # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
-        colunas = ['A D E', 'Servidor', 'Matricula', 'C P F', 'Valor Prestacao', 'Contrato Original']
-        data_averbados_bruto = data[colunas]
+        # colunas = ['A D E', 'Servidor', 'Matricula', 'C P F', 'Valor Prestacao', 'Contrato Original']
+        data_averbados_bruto = data
+
+        if self.convenio == 'PREF. FLORIANÓPOLIS' and self.rubrica == 'BENEFÍCIO':
+            data_averbados_bruto = data_averbados_bruto[data_averbados_bruto['Tipo de Solicitacao'].str.contains('Compra')]
 
         # Passo 1: Garantir que a coluna é do tipo string
-        cpf_str = data_averbados_bruto['C P F'].astype(str)
+        cpf_str = data_averbados_bruto['CPF'].astype(str)
         cpf_str_ajustado = cpf_str.str.zfill(11)
         cpf_formatado = cpf_str_ajustado.str.slice(0, 3) + '.' + \
                               cpf_str_ajustado.str.slice(3, 6) + '.' + \
                               cpf_str_ajustado.str.slice(6, 9) + '-' + \
                               cpf_str_ajustado.str.slice(9, 11)
 
-        data_averbados_bruto.insert(4, 'CPF_Formatado', cpf_formatado, True)
+        data_averbados_bruto.insert(10, 'CPF_Formatado', cpf_formatado, True)
 
         semi_front = self.tratamento_front_preliminar()
         if semi_front is False:
             print("trata_averbacao_2: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
         
-        data_averbados_bruto = self.adiciona_contratos_faltando(data_averbados_bruto, semi_front)
+        # Vou tentar colocar a coluna de Orbital aqui no meio mesmo
+        if orbital_tratado is not None:
+            mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
+            data_averbados_bruto['ORBITAL'] = ''
+            data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF_Formatado'].map(mask_orbital)
+
+        def distribuicao_valores(averbado_trabalhado, front_trabalhar, orbital=None):
+            # IMPORTANTE: Garanta que as colunas de valores são numéricas, não texto.
+            # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
+            averbado_novo = averbado_trabalhado
+            # Remoção de duplicatas por matrícula
+            # averbado_novo.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
+            
+            front_preliminar = front_trabalhar.copy()
+
+            # Transforma vazios no OBS em aspas vazias
+            front_preliminar['OBS'] = front_preliminar['OBS'].fillna('')
+            front_preliminar = front_preliminar[front_preliminar['OBS'] == '']
+
+            soma_series_averb = front_preliminar.groupby('CPF')['Valor a lançar'].sum()
+            if orbital is not None:
+                print('orbital is not None')
+                somase_orbital = orbital.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
+                print(f'somase_orbital\n{somase_orbital}')
+
+                # 4. Combina tudo em um único dataframe
+                soma_total = (
+                    soma_series_averb
+                    .add(somase_orbital, fill_value=0)
+                )
+                # soma_total_cpf = (soma_condicional_dict_averb_cpf.add(somase_orbital, fill_value=0))
+
+                averbado_novo['SOMASE FRONT'] = averbado_novo['CPF_Formatado'].map(soma_total)
+                print(f'SOMASE FRONT:\n{averbado_novo['SOMASE FRONT']}')
+            else:
+                averbado_novo['SOMASE FRONT'] = averbado_novo['CPF_Formatado'].map(soma_series_averb)
+                averbado_novo['SOMASE FRONT'] = pd.to_numeric(averbado_novo['SOMASE FRONT'], errors='coerce').fillna(0)
+
+            # 2. Agora o .add() vai funcionar, pois soma_series_averb ainda é um objeto Pandas
+            # Supondo que mask_orbital também seja uma Series de CPFs e valores
+            # soma_total = soma_series_averb.add(mask_orbital, fill_value=0)
+
+            if averbado_novo['Margem Reservada'].dtype != 'float64':
+                averbado_novo['Margem Reservada'] = averbado_novo['Margem Reservada'].astype(str).str.replace(".", "")
+                averbado_novo['Margem Reservada'] = averbado_novo['Margem Reservada'].astype(str).str.replace(",", ".")
+                averbado_novo['Margem Reservada'] = pd.to_numeric(averbado_novo['Margem Reservada'], errors='coerce').fillna(0)
+
+            
+
+            # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
+            # da ordem atual do DataFrame. Se precisar de uma ordem específica,
+            # um .sort_values() viria aqui.
+
+            # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
+            # Esta é a "mágica" que substitui a necessidade de um loop.
+            averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF')['Margem Reservada'].cumsum()
+            
+
+            # 2. Calcula o valor que JÁ FOI ALOCADO para as linhas ANTERIORES.
+            # É a soma acumulada até a linha atual, menos o valor da própria linha.
+            alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Margem Reservada']
+            averbado_novo['ALOCADO ANTERIORMENTE'] = alocado_anteriormente
+
+            # 3. Calcula o saldo restante do SOMASE ANTES de processar a linha atual.
+            saldo_restante = averbado_novo['SOMASE FRONT'] - alocado_anteriormente
+            averbado_novo['SALDO RESTANTE'] = saldo_restante
+            print(f'Saldo restante:\n{averbado_novo['SALDO RESTANTE']}')
+
+            # 4. O valor a lançar é o MÍNIMO entre o que a reserva da linha pede e o saldo que ainda temos.
+            # Usamos .clip(0) para garantir que o saldo não seja negativo (se já estourou, é 0).
+            valor_a_lancar = np.minimum(averbado_novo['Margem Reservada'], saldo_restante.clip(0))
+
+            # 5. Atribui o resultado final arredondado às colunas.
+            averbado_novo['Lançar'] = valor_a_lancar.round(2)
+
+            print(f'Valor a lançar em distribuicao_valores:\n{averbado_novo['Lançar']}')
+
+            return averbado_novo
+        
+        if self.convenio in ['PREF. PIRACICABA', 'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA', 'PREV. PIRACICABA IPASP']:
+            data_averbados = distribuicao_valores(data_averbados_bruto, front, orbital_tratado)
+
+            # print("Cálculos de Soma e Diferença finalizados.")
+            # data_averbados.to_excel(fr'{self.caminho}\TRABALHADO CARTAO {convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
+
+            return data_averbados
+
+        
+        # data_averbados_bruto = self.adiciona_contratos_faltando(data_averbados_bruto, semi_front)
 
         semi_front['Contrato'] = semi_front['Contrato'].astype(str).str.strip()
 
@@ -986,7 +958,7 @@ class CONSIGLOG:
                 oper_liq.set_index('Nº OPERAÇÃO EDITADO')['Contrato'].to_dict()
             )
 
-            print(f'Verificar qual é o saldo do contrato "302298345": {data_averbados.loc[data_averbados[f"Contrato Editado {i}"] == "302298345", f"Saldo {i}"]}')
+            # print(f'Verificar qual é o saldo do contrato "302298345": {data_averbados.loc[data_averbados[f"Contrato Editado {i}"] == "302298345", f"Saldo {i}"]}')
 
             # --- PASSO 2: PREPARAÇÃO E LIMPEZA DE DADOS ---
             # Agora que todas as colunas foram criadas, garantimos que sejam numéricas para os cálculos.
@@ -1022,26 +994,36 @@ class CONSIGLOG:
         if colunas_valores_unificados:
             # print(f"Somando os valores das colunas: {colunas_valores_unificados}")
             data_averbados['Soma'] = data_averbados[colunas_valores_unificados].sum(axis=1)
+            print(f'Soma:\n{data_averbados['Soma']}')
+            data_averbados['Soma Total'] = data_averbados['Soma'] + data_averbados['ORBITAL'].fillna(0)
+            print(f'Soma Total:\n{data_averbados['Soma Total']}')
+            print(f'Soma Total vazios:\n{data_averbados['Soma Total'].isin(['', np.nan])}')
+            # data_averbados['Soma Total'] = data_averbados['Soma Total'].fillna(0)
         else:
             print("Nenhuma coluna de valor encontrada. A coluna 'Soma' será inicializada com 0.")
             data_averbados['Soma'] = 0
+            data_averbados['Soma Total'] = 0
 
         # --- 4. Cálculo da Diferença e Formatação Final ---
 
         # Garante que a coluna de Valor Prestacao é numérica antes do cálculo
-        data_averbados['Valor Prestacao'] = pd.to_numeric(data_averbados['Valor Prestacao'], errors='coerce').fillna(0)
+        if data_averbados['Margem Reservada'].dtype != 'float64':
+            data_averbados['Margem Reservada'] = data_averbados['Margem Reservada'].astype(str).str.replace(".", "")
+            data_averbados['Margem Reservada'] = data_averbados['Margem Reservada'].astype(str).str.replace(",", ".")
+            data_averbados['Margem Reservada'] = pd.to_numeric(data_averbados['Margem Reservada'], errors='coerce').fillna(0)
 
-        data_averbados['Diff'] = data_averbados['Soma'] - data_averbados['Valor Prestacao']
+        # data_averbados['Soma Total'] = data_averbados['Soma Total'].fillna(0)
+        data_averbados['Diff'] = data_averbados['Soma Total'] - data_averbados['Margem Reservada']
         data_averbados['Diff'] = data_averbados['Diff'].round(2)
 
         # --- 5. Cria a coluna Lançar ---
         if consig == 'HOJE PREVIDÊNCIA PRIVADA':
             data_averbados = self.adiciona_peculio(data_averbados)
         else:
-            data_averbados['Lançar'] = np.minimum(data_averbados['Soma'], data_averbados['Valor Prestacao'])
+            data_averbados['Lançar'] = np.minimum(data_averbados['Soma Total'], data_averbados['Margem Reservada'])
             data_averbados.loc[condicao_liminar, 'Lançar'] = 0
 
-        # print("Cálculos de Soma e Diferença finalizados.")
+        # print("Cálculos de Soma Total e Diferença finalizados.")
 
         return data_averbados
 
@@ -1050,28 +1032,29 @@ class CONSIGLOG:
         data_averbados = self.trata_averbacao()
         front_trabalhado = self.tratamento_front()
         temp = data_averbados[data_averbados['Lançar'] != 0]
-        colunas_alancar = ['Servidor', 'C P F', 'Matricula', 'Lançar', 'A D E']
+        colunas_alancar = ['Servidor', 'CPF', 'MatrÃ­cula', 'Lançar']
         a_lancar = pd.DataFrame(temp[colunas_alancar])
-        a_lancar = a_lancar.rename(columns={'Lançar': 'VALOR', 'Servidor': 'NOME', 'Matricula': 'MATRICULA'})
+        a_lancar = a_lancar.rename(columns={'Lançar': 'VALOR DO DESCONTO', 'Servidor': 'Nome', 'MatrÃ­cula': 'MATRICULA'})
 
 
         # Calcule a SOMASE para cada categoria no Averbacoes Trabalhadas
         somas_por_categoria = data_averbados.groupby('CPF_Formatado')['Lançar'].transform('sum')
-        data_averbados['SOMASE'] = somas_por_categoria
-        data_averbados['SOMASE'] = data_averbados['SOMASE'].astype(float)
+        data_averbados['SOMASE LANCAMENTO'] = somas_por_categoria
+        data_averbados['SOMASE LANCAMENTO'] = data_averbados['SOMASE LANCAMENTO'].astype(float)
 
 
         # Calcula o Somase Front para cada CPF no DataFrame de Averbados, usando o front_trabalhado como referência
-        data_averbados['SOMASE FRONT'] = ''
+        if 'SOMASE FRONT' not in data_averbados.columns:
+            data_averbados['SOMASE FRONT'] = ''
 
-        soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
-        data_averbados['SOMASE FRONT'] = data_averbados['CPF_Formatado'].map(soma_condicional_dict_averb)
+            soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
+            data_averbados['SOMASE FRONT'] = data_averbados['CPF_Formatado'].map(soma_condicional_dict_averb)
 
-        
-        data_averbados['SOMASE FRONT'] = data_averbados['SOMASE FRONT'].map('{:.2f}'.format).astype(float)
+            
+            data_averbados['SOMASE FRONT'] = data_averbados['SOMASE FRONT'].map('{:.2f}'.format).astype(float)
 
         # DIFF
-        data_averbados['DIFF'] = data_averbados['SOMASE FRONT'] - data_averbados['SOMASE']
+        data_averbados['DIFF'] = data_averbados['SOMASE FRONT'] - data_averbados['SOMASE LANCAMENTO']
 
         # SOMASE NO FRONT TRABALHADO
         front_somase = front_trabalhado.groupby('CPF')['Valor a lançar'].transform('sum')
@@ -1089,43 +1072,25 @@ class CONSIGLOG:
     
 
         # Arredonda os números
-        a_lancar['VALOR'] = a_lancar['VALOR'].astype(float)
-        a_lancar['VALOR'] = a_lancar['VALOR'].map('{:.2f}'.format)
+        a_lancar['VALOR DO DESCONTO'] = a_lancar['VALOR DO DESCONTO'].astype(float)
+        a_lancar['VALOR DO DESCONTO'] = a_lancar['VALOR DO DESCONTO'].map('{:.2f}'.format)
+        a_lancar['VALOR DO DESCONTO'] = a_lancar['VALOR DO DESCONTO'].astype(str).str.replace(".", ",")
+
+        # Transforma matrícula em inteiro
+        a_lancar['MATRICULA'] = a_lancar['MATRICULA'].astype(float)
 
         # Cria colunas no meio do Averbações a Lançar
-        if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
-            if datetime.now().month == 12 and datetime.now().day > 10:
-                folha_inclusao = f'01{datetime.now().year + 1}'
-            elif datetime.now().day < 10:
-                folha_inclusao = f'{str(datetime.now().month).zfill(2)}{datetime.now().year}'
-            else:
-                folha_inclusao = f'{str(datetime.now().month + 1).zfill(2)}{datetime.now().year}'
-        else:
-            folha_inclusao = f'{str(datetime.now().month).zfill(2)}{datetime.now().year}'
+        folha_inclusao = f'{str(datetime.now().month).zfill(2)}/{datetime.now().year}'
+        
+        a_lancar['Folha Inclusao'] = folha_inclusao
     
-        a_lancar.insert(3, 'COD ORGAO','', True)
-    
-        a_lancar.insert(5, 'FOLHA INCLUSAO', folha_inclusao, True)
-    
-        if self.convenio == 'PREF ARAGUAINA':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '816', True)
-        elif self.convenio == 'PREF GOIANIA':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '4925', True)
-        elif self.convenio == 'PREF TAUBATE':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '388', True)
-        elif self.convenio == 'PREF DUQUE DE CAXIAS':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '10321', True)
-        elif self.convenio == 'PREF SAO GONCALO':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '1546', True)
-        elif self.convenio == 'PREV SAO GONCALO':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '344', True)
         # a_lancar['Valor Prestacao'] =  a_lancar['Valor Prestacao'].apply(substituir_virgula_por_ponto)
     
         # --- 1. data_averbados ---
 
         # SOMASE Interno (Averbados)
         # transform('sum') já mantém o índice alinhado, perfeito.
-        data_averbados['SOMASE'] = data_averbados.groupby('CPF_Formatado')['Lançar'].transform('sum').round(2)
+        data_averbados['SOMASE LANCAMENTO'] = data_averbados.groupby('CPF_Formatado')['Lançar'].transform('sum').round(2)
 
         # SOMASE Externo (Vem do Front)
         soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
@@ -1134,7 +1099,7 @@ class CONSIGLOG:
         data_averbados['SOMASE FRONT'] = data_averbados['CPF_Formatado'].map(soma_condicional_dict_averb).fillna(0).round(2)
 
         # Cálculo do DIFF
-        data_averbados['DIFF'] = data_averbados['SOMASE FRONT'] - data_averbados['SOMASE']
+        data_averbados['DIFF'] = data_averbados['SOMASE FRONT'] - data_averbados['SOMASE LANCAMENTO']
 
 
         # --- 2. front_trabalhado ---
@@ -1167,19 +1132,8 @@ class CONSIGLOG:
         front_trabalhado['DIFF'] = front_trabalhado['SOMASE FRONT'] - front_trabalhado['SOMASE AVERB']
     
         # Cria o arquivo Averbações Trabalhadas
-        if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
-            if datetime.now().month == 12:
-                if datetime.now().day > 10:
-                    file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'
-                else:
-                    file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
-            else:
-                if datetime.now().day > 10:
-                    file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month + 1).zfill(2)}-{datetime.now().year}.xlsx'
-                else:
-                    file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
-        else:
-            file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
+
+        file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'
     
         # Salva o DataFrame no arquivo Excel
         print(f"arquivo_lancamento: Salvando o arquivo de Averbados Trabalhados")
