@@ -31,7 +31,7 @@ from python.Rf1 import RF1
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = True 
+MODO_DESENVOLVIMENTO = False 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
