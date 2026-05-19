@@ -11,7 +11,7 @@ import re
 
 
 class CONSIGLOG:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, funcao=None, conciliacao=None, kobraki=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, funcao=None, conciliacao=None, kobraki=None, tacs=None, orbital=None):
         self.averbados = portal_file_list
 
 
@@ -23,6 +23,8 @@ class CONSIGLOG:
         self.funcao = funcao if funcao is not None else None
 
         self.kobraki = kobraki
+
+        self.tacs = tacs if tacs is not None else None
 
 
         conciliacao_falso = pd.DataFrame(
@@ -364,7 +366,7 @@ class CONSIGLOG:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Front trabalhado são do mesmo tipo
@@ -706,7 +708,7 @@ class CONSIGLOG:
         front = self.tratamento_front_preliminar()
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         if front is False:

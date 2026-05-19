@@ -11,7 +11,7 @@ import re
 
 
 class INFOCONSIG:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, rubrica, funcao=None, conciliacao=None, kobraki=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, rubrica, funcao=None, conciliacao=None, kobraki=None, tacs=None, orbital=None):
         self.averbados = portal_file_list
         for i in range(len(self.averbados)):
             linha_valores = self.averbados.iloc[i].astype(str).tolist()
@@ -41,6 +41,8 @@ class INFOCONSIG:
         self.funcao = funcao if funcao is not None else None
 
         self.kobraki = kobraki
+
+        self.tacs = tacs if tacs is not None else None
 
 
         conciliacao_falso = pd.DataFrame(
@@ -404,7 +406,7 @@ class INFOCONSIG:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Front trabalhado são do mesmo tipo
@@ -774,7 +776,7 @@ class INFOCONSIG:
             orbital_tratado = preparando_orbital.orbital_tratado()
         convenio = self.convenio
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         if front is False:

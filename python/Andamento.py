@@ -117,7 +117,7 @@ class ANDAMENTO:
 
 
         if 'Contrato de Andamento' not in self.andamento.columns:
-            self.andamento.insert(3, 'Contrato de Andamento', self.andamento['Código na instituição'])
+            self.andamento.insert(2, 'Contrato de Andamento', self.andamento['Código na instituição'])
         
         # Padronização de valores numéricos para os filtros funcionarem
         if self.andamento['Valor da Parcela'].dtype != 'float64':
@@ -141,16 +141,17 @@ class ANDAMENTO:
 
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
         andam_file, front_base = self.processar_contratos_otimizado(andam_referencia_prazos, front_para_processar)
-        andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
+        andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar, 'Contrato de Andamento')
         print(f'Andamento depois de extrair_contratos\n{andam_file.columns}')
 
         # Terceira passada
         andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
-        andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar)
+        andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar, 'Contrato Editado 1')
 
         # 3. EXTRAÇÃO DOS PRAZOS
         # colunas_contratos = [col for col in andam_file.columns if 'Contrato' in col or 'Código' in col]
         colunas_contratos = [col for col in andam_file.columns if 'Contrato Editado' in col]
+        print(f'Colunas contrato {colunas_contratos}')
         
         contrato_para_prazo = {}
         for _, row in andam_file.iterrows():
@@ -330,7 +331,6 @@ class ANDAMENTO:
         df_front_final = df_front_dispo[~df_front_dispo['Contrato'].isin(contratos_usados)]
         return df_andamento, df_front_final
     
-    import re
 
     def extrair_contratos_simples(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
         print("Iniciando o processo de extração e unificação de contratos...")
@@ -419,7 +419,7 @@ class ANDAMENTO:
         return df_sujo
 
     
-    def extrair_contratos_com_referencia(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
+    def extrair_contratos_com_referencia(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame, coluna_destino) -> pd.DataFrame:
         print("Iniciando o processo de extração de contratos...")
         
         def limpar_contrato(texto: str) -> str:
@@ -428,40 +428,55 @@ class ANDAMENTO:
             return re.sub(r'[^0-9a-zA-Z]', '', texto).replace(" ", "")
         
         # --- Passo 1: Preparar Mapas de Referência ---
-        df_limpo['Contrato'] = df_limpo['Contrato'].astype(str).str.strip()
+        df_limpo['Contrato'] = df_limpo['Contrato'].astype(str).str.strip() # -> Transforma a coluna de Contrato no Front em string
         
         
-        if df_limpo['Prestacao'].dtype != 'float64':
+        if df_limpo['Prestacao'].dtype != 'float64': # -> Transforma a coluna Prestacao do Front em número
             df_limpo['Prestacao'] = df_limpo['Prestacao'].astype(str).str.replace(".", "").str.replace(",", ".")
             df_limpo['Prestacao'] = pd.to_numeric(df_limpo['Prestacao'], errors='coerce')
         
         cpf_parcelas = df_limpo.groupby('CPF').apply(
             lambda x: list(zip(x['Prestacao'].round(2), x['Contrato'], x['Esteira']))
-        ).to_dict()
+        ).to_dict() # -> Cria um grupo organizado por CPF, onde estão organizados as colunas Prestacao; Contrato; e Esteira
 
-        cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict()
+        cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict() # -> Cria um grupo organizado por CPF ordenando os Contratos
 
         # --- Passo 2: Lógica de Extração com Rastreamento de Método ---
         def encontrar_contratos_na_linha(row):
-            cpf = row['CPF']
-            texto_contratos_sujo = str(row['Contrato de Andamento']).strip()
-            valor_parcela_suja = round(float(row.get('Valor da Parcela', 0)), 2)
+            cpf = row['CPF'] # -> Pegamos um CPF
+            if '443.xxx.xxx-xx' in row['CPF']:
+                print(f'Como está o contrato sujo do CPF 443.911.370-20: {row[coluna_destino]}')
+            # texto_contratos_sujo = str(row['Contrato de Andamento']).strip() # -> Pegamos contrato
+            texto_contratos_sujo = str(row[coluna_destino]).strip() # -> Pegamos contrato
+            valor_parcela_suja = round(float(row.get('Valor da Parcela', 0)), 2) # -> Pegamos a parcela
             
             resultados = [] # Lista de tuplas: (contrato, metodo)
 
             # MÉTODO 1: Se o código estiver vazio, busca apenas pela parcela
-            if not texto_contratos_sujo or texto_contratos_sujo.lower() == 'nan':
-                lista_parcelas_validas = cpf_parcelas.get(cpf, [])
-                for valor_ref, contrato_ref, _ in lista_parcelas_validas:
-                    if valor_parcela_suja == valor_ref:
-                        return [(contrato_ref, "Valor da Parcela")]
-                return []
+            if not texto_contratos_sujo or texto_contratos_sujo.lower() == 'nan': # -> Aqui é para as linhas de Contrato vazias; 
+                                                                                  # então vamos usar a parcela para fazer a busca
+                lista_parcelas_validas = cpf_parcelas.get(cpf, []) # -> Eu preciso verificar com o Gemini, mas acredito que usando o CPF, a gente armazena 
+                                                                   # x['Prestacao'].round(2), x['Contrato'], x['Esteira'] do cpf_parcelas que contém dados do front
+
+                for valor_ref, contrato_ref, _ in lista_parcelas_validas: # -> Vamos iterar por essa variável
+                    if valor_parcela_suja == valor_ref: # -> uma comparação suave entre o valor do andamento com o do front
+                        return [(contrato_ref, "Valor da Parcela")] # -> Retornamos o contrato de referência e o método usado
+                return [] # -> Isso eu não entendi... Mas acredito que para essa condição  funcionar, usamos o valor de parcela da linha que está atrelado a um CPF, 
+                          # e procuramos no Front algo que seja do mesmo valor no mesmo CPF para então nos retornar um número de contrato; senão, retorna nada
 
             # Lógica de Fuzzy/Texto
-            contratos_validos_para_cpf = cpf_contratos.get(cpf, [])
-            if not contratos_validos_para_cpf: return []
+            contratos_validos_para_cpf = cpf_contratos.get(cpf, []) # -> Armazenamos os contratos pelo CPF do Front
+            if not contratos_validos_para_cpf: return [] # -> Se nada for armazenado retorna vazio
 
-            partes_sujas = [p for p in re.split(r'[/,;\s]+', texto_contratos_sujo) if p]
+            # Teste de contrato_sujo
+            if '443.911.370-20' in row['CPF']:
+                print(f'Como está o contrato sujo do CPF 443.911.370-20: {texto_contratos_sujo}')
+
+            partes_sujas = [p for p in re.split(r'[/,;\s]+', texto_contratos_sujo) if p] # -> Aqui é onde eu acho que os contratos que tem barra são separados, 
+                                                                                         # minha principal suspeita do porque algumas linhas permanecerem juntas... 
+                                                                                         # Só não consigo deduzir o que pode estar errado.
+                                                                                         # Talvez, antes dessa linha eu faça um print. Se cpf x estiver contido na linha, imprime.
+            
             contratos_disponiveis = list(contratos_validos_para_cpf)
             LIMIAR_SEGURO = 97
 
@@ -506,14 +521,17 @@ class ANDAMENTO:
                     # --- Lógica de Decisão ---
                     
                     # Caso A: O contrato do texto está na esteira certa e o valor bate
-                    if esteira_match_texto in self.esteiras and valor_match_texto == valor_parcela_suja:
-                        metodo_aplicado = "Texto + Valor + Esteira Confirmados"
+                    # --- Lógica de Decisão Corrigida ---
+                    if melhor_match:
+                        # Se achou por texto/fuzzy, mantemos o contrato encontrado e apenas classificamos o motivo
+                        if esteira_match_texto in self.esteiras and valor_match_texto == valor_parcela_suja:
+                            metodo_aplicado = "Texto + Valor + Esteira Confirmados"
+                        elif esteira_match_texto in self.esteiras:
+                            metodo_aplicado = f"Fuzzy Match (Esteira {esteira_match_texto}) - Valor Divergente"
+                        else:
+                            metodo_aplicado = f"Fuzzy Match ({maior_score}%) - Esteira Divergente"
                     
-                    # Caso B: O contrato do texto NÃO serve (ou valor errado ou esteira errada), 
-                    # mas temos um reserva que bate valor e esteira
-                        
-                    
-                    #elif possiveis_pelo_valor_e_esteira and self.convenio != 'GOV. PARAÍBA':
+                    # Caso NÃO tenha achado por texto, aí sim recorremos ao reserva pelo valor
                     elif possiveis_pelo_valor_e_esteira:
                         contrato_reserva, esteira_reserva = possiveis_pelo_valor_e_esteira[0]
                         melhor_match = contrato_reserva
@@ -521,8 +539,8 @@ class ANDAMENTO:
 
                     # Caso C: O contrato do texto está na esteira certa, mas o valor diverge 
                     # (e não achamos nenhum outro contrato que bata o valor na esteira certa)
-                    elif esteira_match_texto in self.esteiras:
-                        metodo_aplicado = f"Fuzzy Match (Esteira {esteira_match_texto}) - Valor Divergente"
+                    '''elif esteira_match_texto in self.esteiras:
+                        metodo_aplicado = f"Fuzzy Match (Esteira {esteira_match_texto}) - Valor Divergente"'''
                         
                     # Caso D: Nada bate com as esteiras permitidas
                     '''else:
@@ -537,18 +555,16 @@ class ANDAMENTO:
             return resultados
 
         # --- Passo 3: Aplicação e Expansão de Colunas ---
-        df_sujo['Contrato de Andamento'] = df_sujo['Contrato de Andamento'].astype(str).replace('nan', '')
+        df_sujo[coluna_destino] = df_sujo[coluna_destino].astype(str).replace('nan', '')
         
         # Processa a busca
         res_raw = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
-        print(f'O que está em res_raw: {res_raw}')
 
         # Criar DataFrames separados para Contratos e Métodos
         contratos_data = []
         metodos_data = []
 
         for lista in res_raw:
-            # Separa as tuplas (contrato, metodo) em duas listas
             contratos_data.append([item[0] for item in lista])
             metodos_data.append([item[1] for item in lista])
 
@@ -559,22 +575,74 @@ class ANDAMENTO:
         df_cont.columns = [f'Contrato Editado {i+1}' for i in df_cont.columns]
         df_meto.columns = [f'Metodo {i+1}' for i in df_meto.columns]
 
-        # Concatenar e Reordenar
-        df_resultado = pd.concat([df_sujo, df_cont, df_meto], axis=1)
+        # =========================================================================
+        # REESTRUTURAÇÃO INTELIGENTE: CONSOLIDAÇÃO CIRÚRGICA DE DADOS
+        # =========================================================================
         
-        # Organizar colunas para que o Metodo fique logo após o respectivo Contrato
-        cols_finais = df_sujo.columns.tolist()
-        for i in range(len(df_cont.columns)):
+        # 1. Separamos apenas as colunas "fixas/base" do seu DataFrame original
+        cols_base = [c for c in df_sujo.columns if not c.startswith('Contrato Editado ') and not c.startswith('Metodo ')]
+        df_base_limpo = df_sujo[cols_base].copy()
+
+        # 2. Resgatamos o histórico de colunas já editadas (se existirem)
+        cols_editadas_antigas = [c for c in df_sujo.columns if c.startswith('Contrato Editado ') or c.startswith('Metodo ')]
+        if cols_editadas_antigas:
+            df_editadas_consolidado = df_sujo[cols_editadas_antigas].copy()
+        else:
+            # Na primeiríssima passada, iniciamos um DataFrame vazio estruturado com o mesmo índice
+            df_editadas_consolidado = pd.DataFrame(index=df_sujo.index)
+
+        # 3. ATUALIZAÇÃO CIRÚRGICA: Só mexe na linha se tiver um contrato real ali
+        # Isso impede que os NaNs gerados na rodada atual apaguem o histórico das passadas anteriores!
+        for col in df_cont.columns:
+            # Máscara booleana: Garante que só vamos ler o que for string válida e populada
+            novo_valido = df_cont[col].notna() & (df_cont[col].astype(str).str.strip() != "") & (df_cont[col].astype(str).str.strip() != "nan")
+            
+            if col in df_editadas_consolidado.columns:
+                # Atualiza EXCLUSIVAMENTE as linhas onde encontramos um novo contrato válido
+                df_editadas_consolidado.loc[novo_valido, col] = df_cont.loc[novo_valido, col]
+            else:
+                # Se a coluna acabou de nascer (ex: Contrato Editado 3), cria vazia e insere os válidos
+                df_editadas_consolidado[col] = ""
+                df_editadas_consolidado.loc[novo_valido, col] = df_cont.loc[novo_valido, col]
+
+        # Repete a mesma segurança cirúrgica para a coluna de Métodos
+        for col in df_meto.columns:
+            novo_valido = df_meto[col].notna() & (df_meto[col].astype(str).str.strip() != "") & (df_meto[col].astype(str).str.strip() != "nan")
+            
+            if col in df_editadas_consolidado.columns:
+                df_editadas_consolidado.loc[novo_valido, col] = df_meto.loc[novo_valido, col]
+            else:
+                df_editadas_consolidado[col] = ""
+                df_editadas_consolidado.loc[novo_valido, col] = df_meto.loc[novo_valido, col]
+
+        # Garante a limpeza de eventuais resíduos nulos que sobraram
+        df_editadas_consolidado = df_editadas_consolidado.fillna("")
+
+        # 4. Definimos o ponto cirúrgico de inserção (sempre após o Contrato de Andamento)
+        idx_base = cols_base.index('Contrato de Andamento') + 1
+
+        # 5. Juntamos as colunas base com as colunas editadas consolidadas
+        df_resultado = pd.concat([df_base_limpo, df_editadas_consolidado], axis=1)
+        
+        # 6. Descobrimos o número máximo de pares para ordenar perfeitamente na tela
+        cols_contratos = [c for c in df_editadas_consolidado.columns if c.startswith('Contrato Editado ')]
+        max_pares = max([int(c.split()[-1]) for c in cols_contratos], default=0)
+
+        cols_finais = cols_base.copy()
+        for i in range(max_pares):
             c_name = f'Contrato Editado {i+1}'
             m_name = f'Metodo {i+1}'
+            
             if c_name in df_resultado.columns:
-                # Insere após o código ou após o último par inserido
-                idx = cols_finais.index('Contrato de Andamento') + 1 + (i * 2)
-                cols_finais.insert(idx, c_name)
-                cols_finais.insert(idx + 1, m_name)
+                cols_finais.insert(idx_base + (i * 2), c_name)
+            if m_name in df_resultado.columns:
+                cols_finais.insert(idx_base + (i * 2) + 1, m_name)
+
+        # 7. Filtra o DataFrame final pela ordenação estrita
+        df_resultado = df_resultado[cols_finais]
 
         # Remover duplicatas de colunas que possam ter surgido na reordenação
-        df_resultado = df_resultado.loc[:, ~df_resultado.columns.duplicated()]
+        # df_resultado = df_resultado.loc[:, ~df_resultado.columns.duplicated()]
         
         # Garantir que todas as colunas originais existam antes de filtrar pela ordem final
         ordem_existente = [c for c in cols_finais if c in df_resultado.columns]

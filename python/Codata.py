@@ -15,7 +15,7 @@ rejeitados = ['/']
 class CODATA:
 # Dentro de python/Codata.py
 
-    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, caminho, kobraki=None, funcao=None, andamento_list=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, caminho, tacs=None, kobraki=None, funcao=None, andamento_list=None, orbital=None):
 
         # A API FastAPI já leu, unificou e tratou a codificação. 
         # Aqui, apenas atribuímos o DataFrame ou inicializamos como vazio se for None.
@@ -68,6 +68,9 @@ class CODATA:
 
         # Kobrakai
         self.kobraki = kobraki
+
+        # Tacs
+        self.tacs = tacs if tacs is not None else None
 
         # Orbital
         self.orbital = orbital if orbital is not None else None
@@ -419,7 +422,7 @@ class CODATA:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo

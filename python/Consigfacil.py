@@ -19,7 +19,7 @@ rejeitados = ['/']
 class CONSIGFACIL:
     # O init foi adaptado para receber os DataFrames do server.py, mas prepara os dados
     # exatamente como o original esperava (convertendo tipos, etc.)
-    def __init__(self, front, portal_file_list, convenio,  caminho, funcao=None, conciliacao=None, kobraki=None, andamento_list=None):
+    def __init__(self, front, portal_file_list, convenio,  caminho, funcao=None, conciliacao=None, kobraki=None, tacs=None, andamento_list=None):
         
         self.convenio = convenio
         self.caminho = caminho
@@ -67,6 +67,8 @@ class CONSIGFACIL:
                                          'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
         
         self.kobraki = kobraki if kobraki is not None else None
+
+        self.tacs = tacs if tacs is not None else None
         
         # 5. Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
@@ -216,7 +218,7 @@ class CONSIGFACIL:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS|FUTURO', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO ERRADO'
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
-        objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.andamento, self.funcao) if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
+        objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.andamento, self.funcao) # if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
         front_com_prazo = objeto_andamento.andamento_func_front()
         front_consig_validado_termino['PRAZO'] = front_consig_validado_termino['Contrato'].astype(str).map(front_com_prazo.set_index('Contrato')['PRAZO'])
         front_consig_validado_termino['Contrato'] = front_consig_validado_termino['Contrato'].astype('int64')
@@ -380,7 +382,7 @@ class CONSIGFACIL:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo

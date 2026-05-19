@@ -13,7 +13,7 @@ import openpyxl
 
 
 class ZETRA:
-    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, funcao=None, historico=None, conciliacao=None, kobraki=None, orbital=None):
+    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, funcao=None, historico=None, conciliacao=None, kobraki=None, tacs=None, orbital=None):
 
         self.caminho = caminho
 
@@ -26,6 +26,8 @@ class ZETRA:
         self.front = front
 
         self.kobraki = kobraki
+
+        self.tacs = tacs if tacs is not None else None
 
         self.funcao = funcao if funcao is not None else None
 
@@ -462,7 +464,7 @@ class ZETRA:
     def validacao_termino(self, front):
         print(f'validacao_termino acionado')
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('float64')
@@ -831,7 +833,7 @@ class ZETRA:
 
         semi_front = front[front['Esteira'].isin(self.condicoes_1)]
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO

@@ -17,7 +17,7 @@ rejeitados = ['/']
 class RF1:
     # O init foi adaptado para receber os DataFrames do server.py, mas prepara os dados
     # exatamente como o original esperava (convertendo tipos, etc.)
-    def __init__(self, front, portal_file_list, convenio,  caminho, funcao=None, conciliacao=None, kobraki=None):
+    def __init__(self, front, portal_file_list, convenio,  caminho, funcao=None, conciliacao=None, tacs=None, kobraki=None):
         
         self.convenio = convenio
         self.caminho = caminho
@@ -65,6 +65,8 @@ class RF1:
                                          'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
         
         self.kobraki = kobraki if kobraki is not None else None
+
+        self.tacs = tacs if tacs is not None else None
 
         # --- GATILHO: Inicia a lógica original automaticamente ---
         logging.info("Iniciando lógica original do Consigfacil...")
@@ -334,7 +336,7 @@ class RF1:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo

@@ -31,7 +31,7 @@ from python.Rf1 import RF1
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = False 
+MODO_DESENVOLVIMENTO = True 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -108,7 +108,7 @@ TO_IGEPREV_CONVENIO = ["GOV. TOCANTINS e IGEPREV"]
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
-    "GOV. MARANHÃO", "GOV. MATO GROSSO", "GOV. PAUÍ", "GOV. PERNAMBUCO","PREF. BAYEUX", "PREF. CAJAMAR",
+    "GOV. MARANHÃO", "GOV. MATO GROSSO", "GOV. PIAUÍ", "GOV. PERNAMBUCO","PREF. BAYEUX", "PREF. CAJAMAR",
     "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. PORTO VELHO",
     "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
     "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
@@ -294,6 +294,7 @@ async def validar_planilhas(
     ZIPS: List[UploadFile] = File(None, alias="ZIPS"),
     CONCILIACAO: List[UploadFile] = File(None, alias="CONCILIACAO"),
     KOBRAKI: List[UploadFile] = File(None, alias="KOBRAKI"),
+    TACS: List[UploadFile] = File(None, alias="TACS"),
     D8_TO: List[UploadFile] = File(None, alias="D8_TO"),
     D8_IGEPREV: List[UploadFile] = File(None, alias="D8_IGEPREV"),
     LIQUIDADOS: List[UploadFile] = File(None, alias="LIQUIDADOS"),
@@ -337,6 +338,7 @@ async def validar_planilhas(
     averbados_igeprev_df, erros = await read_and_unify_files(AVERBADOS_IGEPREV, convenio=convenio)
     conciliacao_df, erros = await read_and_unify_files(CONCILIACAO, convenio=convenio)
     kobraki_df, erros = await read_and_unify_files(KOBRAKI, convenio=convenio)
+    tacs_df, erros = await read_and_unify_files(TACS, convenio=convenio)
     d8_df_to, erros = await read_and_unify_files(D8_TO, convenio=convenio)
     d8_df_igeprev, erros = await read_and_unify_files(D8_IGEPREV, convenio=convenio)
     liquidados_df, erros = await read_and_unify_files(LIQUIDADOS, convenio=convenio)
@@ -363,6 +365,7 @@ async def validar_planilhas(
             consignataria=consignataria, 
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            tacs=tacs_df,
             andamento_list=andamento_df,
             orbital=orbital_df,
             caminho=CAMINHO_SAIDA
@@ -375,6 +378,7 @@ async def validar_planilhas(
             front=front_df,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             casos_capital=casoscapital_df
         )
@@ -386,6 +390,7 @@ async def validar_planilhas(
             front=front_df,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            tacs=tacs_df,
             trabalhado_anterior=trabalhado_anterior_df,
             rubrica=rubrica,
             caminho=CAMINHO_SAIDA,
@@ -401,6 +406,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             orbital=orbital_df
         )
@@ -413,6 +419,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             orbital=orbital_df
         )
@@ -425,6 +432,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             rubrica=rubrica,
             funcao=funcao_df,
@@ -438,6 +446,7 @@ async def validar_planilhas(
             front=front_df,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            tacs=tacs_df,
             consignataria=consignataria,
             caminho=CAMINHO_SAIDA,
             historico=historico_df,
@@ -452,6 +461,7 @@ async def validar_planilhas(
             caminho=CAMINHO_SAIDA,
             funcao=funcao_df,
             conciliacao=conciliacao_df,
+            tacs=tacs_df,
             kobraki=kobraki_df
         )
     elif convenio in TO_IGEPREV_CONVENIO:
@@ -465,6 +475,7 @@ async def validar_planilhas(
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            tacs=tacs_df,
             caminho=CAMINHO_SAIDA
         )
     elif convenio in CONSIGFACIL_CONVENIOS:
@@ -476,6 +487,7 @@ async def validar_planilhas(
             front=front_df,
             funcao=funcao_df,
             conciliacao=conciliacao_df,
+            tacs=tacs_df,
             kobraki=kobraki_df,
             andamento_list=andamento_df,
             caminho=CAMINHO_SAIDA,

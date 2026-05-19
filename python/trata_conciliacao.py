@@ -2,9 +2,10 @@ import pandas as pd
 import numpy as np
 
 class TRATA_CONCILIACAO:
-    def __init__(self, conciliacao, kobraki=None):
+    def __init__(self, conciliacao, kobraki=None, tacs=None):
         self.conciliacao = conciliacao
-        self.kobraki = kobraki
+        self.kobraki = kobraki if kobraki is not None else None
+        self.tacs = tacs if tacs is not None else None
 
         self.conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
         self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
@@ -31,7 +32,8 @@ class TRATA_CONCILIACAO:
                 print(f"Tipo da coluna CONTRATOS: {self.conciliacao['CONTRATOS'].dtype}")'''
 
             
-            kobraki_tratado = self.kobraki if self.kobraki is not None else None
+            kobraki_tratado = self.kobraki
+            tacs_tratado = self.tacs
 
             conciliacao_tratado = self.conciliacao
             # Converte para lista de colunas
@@ -68,15 +70,34 @@ class TRATA_CONCILIACAO:
             inad_d8 = conciliacao_tratado.filter(like='INAD ').sum(axis=1)
             super_saldo = soma_d8 + inad_d8
 
+            if conciliacao_tratado['CONTRATOS'].dtype != 'int64': # -> Onde vamos verificar se o contrato da conciliação está como string
+                tacs_tratado['CONTRATO'] = tacs_tratado['CONTRATO'].astype(str)
+                kobraki_tratado['CONTRATO'] = kobraki_tratado['CONTRATO'].astype(str)
+
             # Vamos criar uma coluna "KOBRAKI" na conciliação, e usar a coluna de "CONTRATOS" da conciliação 
             # para puxar os valores de "VALOR RECEBIDO" no kobraki puxando da coluna "CONTRATO"
-            if kobraki_tratado is not None:
+            if kobraki_tratado is not None and tacs_tratado is not None:
                 somase_kobraki = kobraki_tratado.groupby('CONTRATO')['VALOR RECEBIDO'].sum()
                 conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['CONTRATOS'].copy().map(somase_kobraki)
                 conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['KOBRAKI'].fillna(0)
 
+                somase_tacs = tacs_tratado.groupby('CONTRATO')['ATRIBUIÇÃO'].sum()
+                conciliacao_tratado['TACS'] = conciliacao_tratado['CONTRATOS'].copy().map(somase_tacs)
+                conciliacao_tratado['TACS'] = conciliacao_tratado['TACS'].fillna(0)
+
                 # Somar as colunas de KOBRAKI e RECEBIDO GERAL para criar a coluna "TOTAL RECEBIDO"
+                conciliacao_tratado['TOTAL RECEBIDO'] = conciliacao_tratado['KOBRAKI'] + conciliacao_tratado['TACS'] + conciliacao_tratado['RECEBIDO GERAL']
+            elif kobraki_tratado is not None and tacs_tratado is None:
+                somase_kobraki = kobraki_tratado.groupby('CONTRATO')['VALOR RECEBIDO'].sum()
+                conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['CONTRATOS'].copy().map(somase_kobraki)
+                conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['KOBRAKI'].fillna(0)
                 conciliacao_tratado['TOTAL RECEBIDO'] = conciliacao_tratado['KOBRAKI'] + conciliacao_tratado['RECEBIDO GERAL']
+            elif kobraki_tratado is None and tacs_tratado is not None:
+                
+                somase_tacs = tacs_tratado.groupby('CONTRATO')['ATRIBUIÇÃO'].sum()                
+                conciliacao_tratado['TACS'] = conciliacao_tratado['CONTRATOS'].copy().map(somase_tacs)
+                conciliacao_tratado['TACS'] = conciliacao_tratado['TACS'].fillna(0)
+                conciliacao_tratado['TOTAL RECEBIDO'] = conciliacao_tratado['TACS'] + conciliacao_tratado['RECEBIDO GERAL']
             else:
                  # Somar as colunas de KOBRAKI e RECEBIDO GERAL para criar a coluna "TOTAL RECEBIDO"
                 conciliacao_tratado['TOTAL RECEBIDO'] = conciliacao_tratado['RECEBIDO GERAL']
