@@ -9,6 +9,7 @@ from Acha_matriculas_SC import ACHA_MATRICULAS_SC
 import openpyxl
 import xlrd
 import numpy as np
+from decimal import Decimal, ROUND_DOWN
 from datetime import datetime
 import logging
 import re
@@ -318,12 +319,19 @@ class SIGRH:
 
         return averbado_mat
     
-    # Criamos uma função rápida para truncar (arredondar para baixo) com 2 casas decimais
     def truncar_duas_casas(self, valor):
-        if pd.isna(valor): 
-            return valor
-        # Multiplica por 100, joga o resto fora com floor(), e divide por 100 de volta
-        return math.floor(valor * 100) / 100
+        if pd.isna(valor) or valor == 0:
+            return 0.0
+        
+        # Força o formato com 4 casas em string para eliminar o lixo binário (.99999)
+        # Ex: 184.399999999996 vira "184.4000"
+        valor_str = f"{valor:.4f}"
+        
+        # Pega o número e corta estritamente após a segunda casa decimal
+        parte_inteira, parte_decimal = valor_str.split('.')
+        valor_truncado = float(f"{parte_inteira}.{parte_decimal[:2]}")
+        
+        return valor_truncado
     
     def truncar_duas_casas_round(self, valor):
         if pd.isna(valor): 
@@ -508,7 +516,7 @@ class SIGRH:
 
         # Aí tentaremos concatenar o orbital com o front trabalhado para puxar as matriculas
         # Primeiro vamos separar as colunas do front e renomeá-los
-        front_trabalhado_preparacao = front_consig_trabalhado[['Contrato', 'CPF', 'Prestacao']].copy()
+        front_trabalhado_preparacao = front_consig_trabalhado[['Contrato', 'CPF', 'Valor a lançar']].copy()
         front_trabalhado_preparacao.columns = ['Contrato', 'CPF', 'PARCELA BASE']
 
         # Depois, separar as colunas do orbital_tratado e renomeá-los
@@ -527,14 +535,14 @@ class SIGRH:
         averbado_preparacao_capital.columns = ['matrícula', 'CPF', 'parcela 100']
         averbado_preparacao_click.columns = ['matrícula', 'CPF', 'parcela 100']
         
-        averbado_preparacao_capital['parcela 100'] = averbado_preparacao_capital['parcela 100'].apply(self.truncar_duas_casas_round)
+        averbado_preparacao_capital['parcela 100'] = averbado_preparacao_capital['parcela 100']
         averbado_preparacao_capital['parcela 70'] = averbado_preparacao_capital['parcela 100'] * 0.7 # -> Criar as colunas de 70 e 30%
         averbado_preparacao_capital['parcela 30'] = averbado_preparacao_capital['parcela 100'] * 0.3
 
         averbado_preparacao_capital['parcela 70'] = averbado_preparacao_capital['parcela 70'].apply(self.truncar_duas_casas)
         averbado_preparacao_capital['parcela 30'] = averbado_preparacao_capital['parcela 30'].apply(self.truncar_duas_casas)
 
-        averbado_preparacao_capital['parcela 100'] = averbado_preparacao_capital['parcela 100'].apply(self.truncar_duas_casas_round)
+        averbado_preparacao_capital['parcela 100'] = averbado_preparacao_capital['parcela 100']
         averbado_preparacao_click['parcela 70'] = averbado_preparacao_click['parcela 100'] * 0.7 # -> Criar as colunas de 70 e 30%
         print(f'parcela 70 de 342.772.349-68: {averbado_preparacao_click.loc[averbado_preparacao_click['CPF'] == '342.772.349-68', 'parcela 70']}')
         averbado_preparacao_click['parcela 30'] = averbado_preparacao_click['parcela 100'] * 0.3
