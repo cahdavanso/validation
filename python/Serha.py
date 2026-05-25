@@ -10,7 +10,7 @@ import logging
 import re
 
 class SERHA:
-    def __init__(self, portal_file_list, convenio, front, conciliacao, trabalhado_anterior, rubrica, caminho, funcao=None, complementar=None, kobraki=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, conciliacao, trabalhado_anterior, rubrica, caminho, kobraki=None, tacs=None, funcao=None, complementar=None, orbital=None):
         # isso é apenas para caso seja um arquivo de averbação
         self.averbados = portal_file_list if portal_file_list is not None else None
         if self.averbados is not None:
@@ -27,9 +27,9 @@ class SERHA:
         self.convenio = convenio
 
         # kobraki
-        self.kobraki = kobraki if kobraki is not None else None
+        self.kobraki = kobraki
 
-        self.tacs = tacs if tacs is not None else None
+        self.tacs = tacs
 
         conciliacao_falso = pd.DataFrame(
             columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25', 'RECEBIDO GERAL'])
@@ -758,6 +758,11 @@ class SERHA:
             complemento['Contse lá'] = complemento['CPF Consignado'].map(contse_la_complementar)
 
             complemento_final = complemento.loc[complemento['Contse lá'].isna()]
+
+            if 'Contrato original' in complemento_final.columns:
+                complemento_final.rename(columns={'Contrato original': 'ContratoOriginal'}, inplace=True)
+            if 'Contrato original' in complemento.columns:
+                complemento.rename(columns={'Contrato original': 'ContratoOriginal'}, inplace=True)
 
             # CADÊ O AGUINALDO!!!
             try:

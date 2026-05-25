@@ -38,7 +38,7 @@ class ZETRA:
         conciliacao_falso['CONTRATOS'] = 123
         conciliacao_falso['CPF'] = '123.456'
         conciliacao_falso['PRESTAÇÃO'] = 10
-        conciliacao_falso['PRODUTO'] = 'Cartão de Crédito'
+        conciliacao_falso['PRODUTO'] = 'CARTAO DE CREDITO'
         conciliacao_falso['PRAZO'] = 96
         conciliacao_falso['D8 JUN 25'] = 10
         conciliacao_falso['ST JUL 25'] = 'DESCONTO TOTAL'
@@ -195,6 +195,7 @@ class ZETRA:
         funcao = self.funcao
 
         if funcao is None:
+            print('funcao is none')
             return front
 
         print(f"colunas de funcao: {funcao.columns}")
@@ -224,7 +225,6 @@ class ZETRA:
             'PARC': 'Prazo',
             'VLR_PARC': 'Prestacao',
             'PRODUTO': 'Tipo Operacao',
-            'ORIGEM_2': 'Consignataria',
             'ORIGEM_4': 'Convenio'
         }
 
@@ -241,18 +241,16 @@ class ZETRA:
         # Coloca SIM onde é orbital no função
         front_unif.loc[front_unif['Tipo Operacao'].isin(['CARTÃO PLÁSTICO', 'CARTÃO PLÁSTICO - RE']), 'Orbital'] = 'SIM'
 
-        # Preenche INSPFEM ONDE DEVE
-        front_unif.loc[front_unif['Convenio'].isin(['INSPFEM']), 'Consignataria'] = 'INSPFEM - CARD' 
-
         front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
         front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
+        front_unif['Consignataria'] = front_unif['Consignataria'].fillna(self.consignataria)
 
 
-        # print(front_unif.tail())
+        print('Front finalzin', front_unif.tail())
 
-        # front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
+        front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
 
         return front_unif
 
@@ -293,6 +291,7 @@ class ZETRA:
             return False
         
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
+        front_consig['Tipo Conciliação'] = front_consig['Tipo Conciliação'].astype(str)
 
         # Adiciona só as esteiras que podem ser lançadas
         front_consig_esteiras = front_consig[front_consig['Esteira'].isin(self.condicoes_1)].copy()
@@ -396,7 +395,7 @@ class ZETRA:
             print(f'Convenio está em PREF. BELO HORIZONTE? {self.convenio in ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']}')
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         else:
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
 
         # Marcar liquidados em StatusContrato
         front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
@@ -463,6 +462,8 @@ class ZETRA:
 
     def validacao_termino(self, front):
         print(f'validacao_termino acionado')
+        if self.conciliacao is None:
+            return front
         front_copy = front.copy()
         teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()

@@ -31,7 +31,7 @@ from python.Rf1 import RF1
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = False 
+MODO_DESENVOLVIMENTO = True 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -95,7 +95,8 @@ CONSIGLOG_CONVENIO = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DUQUE DE CAXIAS",
 
 ZETRA_CONVENIO = [
          "GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
-         "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL", "PREVIPALMAS"
+         "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL", "PREVIPALMAS",
+         "PREF. BARBACENA"
          ]
 
 RF1_CONVENIO = ["PREF. ANANINDEUA"]
@@ -155,7 +156,7 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
     for uploaded_file in file_list:
         try:
             filename = uploaded_file.filename.lower()
-            # print(f'nome do arquivo: {filename}')
+            print(f'nome do arquivo: {filename}')
             # 1. Pegar o cabeçalho Content-Disposition
             content_disposition = uploaded_file.headers.get("content-disposition", "")
             match = re.search('name="([^"]+)"', content_disposition)
@@ -226,7 +227,30 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
                 df = pd.read_excel(file_obj, header=3)
                 # print(f'Cabeçalho de orbital:\n{df.head(3)}')
             elif filename.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(file_obj) 
+                try:
+                    # 1. Tentativa padrão como Excel verdadeiro
+                    df = pd.read_excel(file_obj) 
+                except Exception as e:
+                    if "Excel file format cannot be determined" in str(e):
+                        try:
+                            df = pd.read_html(file_obj)[0]
+                            # 2. Define a linha 0 como o nome das colunas
+                            df.columns = df.iloc[0]
+
+                            # 3. Remove a linha 0 do corpo dos dados e reseta o índice
+                            df = df[1:].reset_index(drop=True)
+                            print(f"Sucesso ao ler HTML de: {filename}")
+                           
+                        except Exception as erro_html:
+                            print(f'Falhou no read_html também. Erro original: {erro_html}')
+                            print(f'Indo para o fluxo de segurança (CSV): {filename}')
+                            
+                            # Se tudo falhar, tenta resetar e ler como CSV
+                            if hasattr(file_obj, 'seek'): file_obj.seek(0)
+                            try:
+                                df = pd.read_csv(file_obj, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
+                            except Exception:
+                                df = pd.read_csv(file_obj, encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
             else:
                 print(f'Caiu no else')
                 try:
@@ -444,6 +468,7 @@ async def validar_planilhas(
             portal_file_path=averbados_df,
             convenio=convenio,
             front=front_df,
+            funcao=funcao_df,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
             tacs=tacs_df,

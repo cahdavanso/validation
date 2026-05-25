@@ -70,7 +70,7 @@ class TRATA_CONCILIACAO:
             inad_d8 = conciliacao_tratado.filter(like='INAD ').sum(axis=1)
             super_saldo = soma_d8 + inad_d8
 
-            if conciliacao_tratado['CONTRATOS'].dtype != 'int64': # -> Onde vamos verificar se o contrato da conciliação está como string
+            if conciliacao_tratado['CONTRATOS'].dtype != 'int64' and kobraki_tratado is not None and tacs_tratado is not None: # -> Onde vamos verificar se o contrato da conciliação está como string
                 tacs_tratado['CONTRATO'] = tacs_tratado['CONTRATO'].astype(str)
                 kobraki_tratado['CONTRATO'] = kobraki_tratado['CONTRATO'].astype(str)
 

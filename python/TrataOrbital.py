@@ -101,9 +101,12 @@ class TRATA_ORBITAL:
         front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace(',', '.', regex=False)
         front_so_orbital['VALOR DESCONTO'] = pd.to_numeric(front_so_orbital['VALOR DESCONTO'], errors='coerce')
 
+        orbital_preparado['Proposta'] = orbital_preparado['Proposta'].astype('int64')
+
         orbital_final = pd.concat([front_so_orbital, orbital_preparado])
 
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
+        orbital_final['PRAZO'] = orbital_final['Proposta'].map(front_para_separar.set_index('Contrato')['Prazo'])
 
         print(f"orbital_tratado: Salvando arquivo de orbital tratado teste com front")
         try:
