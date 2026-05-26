@@ -31,7 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                   "SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA", "PREV. PIRACICABA IPASP",
                                  ];
 
-    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_RF1, ...CONVENIOS_INFOCONSIG, ...CONVENIOS_CONSIGLOG].sort();
+    const CONVENIOS_SIGRH = ["GOV. SANTA CATARINA"];
+
+    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_RF1, ...CONVENIOS_INFOCONSIG, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_SIGRH].sort();
 
     const FIELDS_CONSIGFACIL = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_CODATA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "ANDAMENTO", "AVERBADOS", "ORBITAL"];
@@ -42,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const FIELDS_INFOCONSIG = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "AVERBADOS", "ORBITAL"];
     const FIELDS_TO_IGEPREV = ["FRONT", "FUNCAO", "AVERBADOS_TO", "AVERBADOS_IGEPREV", "D8_TO", "D8_IGEPREV", "CONCILIACAO", "KOBRAKI", "TACS"];
     const FIELDS_RF1 = ["FRONT", "FUNCAO", "AVERBADOS", "CONCILIACAO", "KOBRAKI", "TACS"];
+    const FIELDS_SIGRH = ["FRONT", "FUNCAO", "AVERBADOS_SC_CAPITAL", "AVERBADOS_SC_CLICK", "ANDAMENTO_SC_CAPITAL", "ANDAMENTO_SC_CLICK", "CONCILIACAO", "KOBRAKI", "TACS", "ORBITAL"];
 
     const fileDataMap = {}; 
     
@@ -243,6 +246,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (CONVENIOS_RF1.includes(convenio)){
             consignatariaArea.classList.remove('hidden');
             currentFields = FIELDS_RF1;
+        } else if (CONVENIOS_SIGRH.includes(convenio)){
+            consignatariaArea.classList.remove('hidden');
+            currentFields = FIELDS_SIGRH;
         }
 
         uploadForm.classList.remove('hidden');
@@ -260,12 +266,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const isZipField = field.toUpperCase() === "ZIPS";
             
             // Atributos: Se for ZIPS, aceita pastas e .zip. Se não, apenas planilhas.
+            // Adicionamos text/html e as strings vazias para o navegador não bloquear o HTML disfarçado
             const attrs = isZipField 
                 ? 'webkitdirectory directory accept=".zip"' 
-                : 'accept=".csv, .xlsx, .xls"';
+                : 'accept=".csv,.xlsx,.xls,text/html,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"';
                 
             const icon = isZipField ? 'lucide:folder-archive' : 'lucide:file-text';
-            const helpText = isZipField ? '.ZIP ou Selecionar Pasta' : '.CSV, .XLSX';
+            const helpText = isZipField ? '.ZIP ou Selecionar Pasta' : '.CSV,.XLSX,.XLS';
 
             const html = `
                 <div class="upload-group">
@@ -308,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
             info.classList.remove('error');
         } else {
             delete fileDataMap[fieldId];
-            info.textContent = '.CSV, .XLSX';
+            info.textContent = '.CSV,.XLSX,.XLS';
         }
         updateSubmitButtonState();
     };
@@ -333,6 +340,9 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (selectedConvenio && CONVENIOS_INFOCONSIG.includes(selectedConvenio)) {
             if (!selectedConsignataria) valid = false;
             if (!selectedRubrica) valid = false;
+        }
+        else if (selectedConvenio && CONVENIOS_SIGRH.includes(selectedConvenio)){
+            if (!selectedConsignataria) valid = false;
         }
         submitButton.disabled = !(hasFiles && valid);
     };
@@ -380,16 +390,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const sendFilesToBackend = async () => {
+        // --- PASSO 1: DEBUG DE CONFERÊNCIA ---
+        console.log("Estado atual do fileDataMap:", fileDataMap);
+
         const formData = new FormData();
         formData.append('convenio', selectedConvenio);
         if (selectedConsignataria) formData.append('consignataria', selectedConsignataria);
         if (selectedRubrica) formData.append('rubrica', selectedRubrica);
 
-        // Anexando arquivos conforme sua lógica [cite: 35, 36]
+        // Anexando arquivos
         for (const [fieldId, files] of Object.entries(fileDataMap)) {
             files.forEach(file => {
-                formData.append(fieldId, file, file.name);
-                logToConsole(`Anexando: ${file.name} (${(file.size/1024).toFixed(1)}KB) -> [${fieldId}]`, 'info');
+                // Normaliza o nome do arquivo para garantir que a extensão esteja em minúsculo (.xls)
+                const fileNameLower = file.name.toLowerCase();
+                
+                // --- PASSO 2: CORREÇÃO TÉCNICA PARA O .XLS (FORÇAR TIPO CORRETO) ---
+                let fileToSend = file;
+                if (fileNameLower.endsWith('.xls') && file.type !== 'application/vnd.ms-excel') {
+                    logToConsole(`Corrigindo MIME Type legado para: ${file.name}`, 'warning');
+                    // Recriamos o Blob forçando o cabeçalho correto que o FastAPI/Python espera
+                    fileToSend = new File([file], file.name, { type: 'application/vnd.ms-excel' });
+                }
+
+                // Enviamos o arquivo tratado (ou original se for csv/xlsx)
+                formData.append(fieldId, fileToSend, fileToSend.name);
+                logToConsole(`Anexando: ${fileToSend.name} (${(fileToSend.size/1024).toFixed(1)}KB) -> [${fieldId}]`, 'info');
             });
         }
 
@@ -401,10 +426,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: formData 
             });
 
-            const result = await response.json(); // Lemos o JSON apenas UMA vez aqui
+            const result = await response.json();
 
             if (response.ok) {
-                // --- BLOCO DE SUCESSO ---
                 logToConsole("------------------------------------------------", 'system');
                 logToConsole("PROCESSAMENTO CONCLUÍDO PELO SERVIDOR!", 'success');
                 logToConsole(`Mensagem: ${result.message}`, 'success');
@@ -413,23 +437,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (result.filename) {
                     logToConsole(`Baixando arquivo processado...`, 'success');
-                    // Usa a rota de download que você configurou no backend 
                     window.open(`/download/${result.filename}`, '_blank'); 
                 }
                 return result;
 
             } else {
-                // --- BLOCO DE ERRO TRATADO (GLOBAL EXCEPTION HANDLER) ---
                 const mensagemIA = result.mensagem_amigavel;
                 const erroTecnico = result.detail;
-
                 exibirAlertaUsuario(mensagemIA || "Ocorreu um erro inesperado.");
                 console.error("DEBUG TÉCNICO:", erroTecnico);
-                
             }
 
         } catch (error) {
-            // --- BLOCO DE ERRO DE REDE ---
             console.error("Erro de conexão:", error);
             exibirAlertaUsuario("Não foi possível conectar ao servidor.");
             logToConsole("Erro crítico de conexão com o servidor.", 'error');

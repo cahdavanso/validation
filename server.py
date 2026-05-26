@@ -9,6 +9,8 @@ from gemini_service import explicar_erro
 import shutil
 import gc
 import os
+import openpyxl
+import xlrd
 import pandas as pd
 import logging
 import io
@@ -28,10 +30,11 @@ from python.IgeprevGovTo_Preliminar import IGEPREV_GOVTO
 from python.Zetra import ZETRA
 from python.Infoconsig import INFOCONSIG
 from python.Rf1 import RF1
+from python.Sigrh import SIGRH
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = False 
+MODO_DESENVOLVIMENTO = True 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -107,6 +110,8 @@ INFOCONSIG_CONVENIO = ["PREF. ÁGUAS LINDAS DE GOIÁS", "PREF. PIRACICABA", "PRE
 
 TO_IGEPREV_CONVENIO = ["GOV. TOCANTINS e IGEPREV"]
 
+SIGRH_CONVENIO = ["GOV. SANTA CATARINA"]
+
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
     "GOV. MARANHÃO", "GOV. MATO GROSSO", "GOV. PIAUÍ", "GOV. PERNAMBUCO","PREF. BAYEUX", "PREF. CAJAMAR",
@@ -151,6 +156,7 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
 
     if not file_list:
         return None, []
+    print(file_list)
     lista_df = []
     erros = []
     for uploaded_file in file_list:
@@ -232,24 +238,29 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
                     df = pd.read_excel(file_obj) 
                 except Exception as e:
                     if "Excel file format cannot be determined" in str(e):
+                        print(f"Caiu no tratamento de HTML disfarçado para: {filename}")
                         try:
-                            df = pd.read_html(file_obj)[0]
-                            # 2. Define a linha 0 como o nome das colunas
-                            df.columns = df.iloc[0]
-
-                            # 3. Remove a linha 0 do corpo dos dados e reseta o índice
-                            df = df[1:].reset_index(drop=True)
+                            # CORREÇÃO 1: Reseta o ponteiro antes de tentar ler como HTML
+                            file_obj.seek(0)
+                            lista_tabelas_html = pd.read_html(file_obj)
+                            
+                            # CORREÇÃO 2: Pega o primeiro DataFrame da lista retornada
+                            if lista_tabelas_html:
+                                df = lista_tabelas_html[0]
+                            else:
+                                raise ValueError("Nenhuma tabela encontrada dentro do arquivo HTML.")
+                                
                             print(f"Sucesso ao ler HTML de: {filename}")
                            
                         except Exception as erro_html:
                             print(f'Falhou no read_html também. Erro original: {erro_html}')
                             print(f'Indo para o fluxo de segurança (CSV): {filename}')
                             
-                            # Se tudo falhar, tenta resetar e ler como CSV
                             if hasattr(file_obj, 'seek'): file_obj.seek(0)
                             try:
                                 df = pd.read_csv(file_obj, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
                             except Exception:
+                                file_obj.seek(0) # Garante o reset antes do fallback final do CSV
                                 df = pd.read_csv(file_obj, encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
             else:
                 print(f'Caiu no else')
@@ -313,6 +324,8 @@ async def validar_planilhas(
     # Todos os campos possíveis do sistema
     # NÃO PODE TER ESPAÇO NOS NOMES EM ALIAS, PRECISA COLOCAR ALGUM SEPARADOR COMO _ OU - OU TUDO JUNTO
     AVERBADOS: List[UploadFile] = File(None, alias="AVERBADOS"),
+    AVERBADOS_SC_CAPITAL: List[UploadFile] = File(None, alias="AVERBADOS_SC_CAPITAL"),
+    AVERBADOS_SC_CLICK: List[UploadFile] = File(None, alias="AVERBADOS_SC_CLICK"),
     AVERBADOS_TO: List[UploadFile] = File(None, alias="AVERBADOS_TO"),
     AVERBADOS_IGEPREV: List[UploadFile] = File(None, alias="AVERBADOS_IGEPREV"),
     ZIPS: List[UploadFile] = File(None, alias="ZIPS"),
@@ -328,6 +341,8 @@ async def validar_planilhas(
     FRONT: List[UploadFile] = File(None, alias="FRONT"),
     FUNCAO: List[UploadFile] = File(None, alias="FUNCAO"),
     ANDAMENTO: List[UploadFile] = File(None, alias="ANDAMENTO"),
+    ANDAMENTO_SC_CAPITAL: List[UploadFile] = File(None, alias="ANDAMENTO_SC_CAPITAL"),
+    ANDAMENTO_SC_CLICK: List[UploadFile] = File(None, alias="ANDAMENTO_SC_CLICK"),
     TRABALHADO_ANTERIOR: List[UploadFile] = File(None, alias="TRABALHADO_ANTERIOR"),
     ORBITAL: List[UploadFile] = File(None, alias="ORBITAL"),
     COMPLEMENTAR: List[UploadFile] = File(None, alias="COMPLEMENTAR"),
@@ -358,6 +373,8 @@ async def validar_planilhas(
     
     # 2. Leitura dos arquivos
     averbados_df, erros = await read_and_unify_files(AVERBADOS, convenio=convenio)
+    averbados_sc_capital_df, errors = await read_and_unify_files(AVERBADOS_SC_CAPITAL, convenio=convenio)
+    averbados_sc_click_df, errors = await read_and_unify_files(AVERBADOS_SC_CLICK, convenio=convenio)
     averbados_to_df, erros = await read_and_unify_files(AVERBADOS_TO, convenio=convenio)
     averbados_igeprev_df, erros = await read_and_unify_files(AVERBADOS_IGEPREV, convenio=convenio)
     conciliacao_df, erros = await read_and_unify_files(CONCILIACAO, convenio=convenio)
@@ -372,6 +389,8 @@ async def validar_planilhas(
     front_df, erros = await read_and_unify_files(FRONT, convenio=convenio)
     funcao_df, erros = await read_and_unify_files(FUNCAO, convenio=convenio)
     andamento_df, erros = await read_and_unify_files(ANDAMENTO, convenio=convenio)
+    and_sc_capital_df, erros = await read_and_unify_files(ANDAMENTO_SC_CAPITAL, convenio=convenio)
+    and_sc_click_df, erros = await read_and_unify_files(ANDAMENTO_SC_CLICK, convenio=convenio)
     trabalhado_anterior_df, erros = await read_and_unify_files(TRABALHADO_ANTERIOR, convenio=convenio)
     orbital_df, erros = await read_and_unify_files(ORBITAL, convenio=convenio)
     complementar_df, erros = await read_and_unify_files(COMPLEMENTAR, convenio=convenio)
@@ -415,6 +434,7 @@ async def validar_planilhas(
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
             tacs=tacs_df,
+            funcao=funcao_df,
             trabalhado_anterior=trabalhado_anterior_df,
             rubrica=rubrica,
             caminho=CAMINHO_SAIDA,
@@ -503,6 +523,21 @@ async def validar_planilhas(
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA
         )
+    elif convenio in SIGRH_CONVENIO:
+        logging.info("Usando o validador: SIGRH")
+        validador = SIGRH(front=front_df,
+                          averbado_capital=averbados_sc_capital_df,
+                          averbado_click=averbados_sc_click_df,
+                          andamento_capital=and_sc_capital_df,
+                          andamento_click=and_sc_click_df,
+                          convenio=convenio,
+                          consignataria=consignataria,
+                          caminho=CAMINHO_SAIDA,
+                          funcao=funcao_df,
+                          orbital=orbital_df,
+                          conciliacao=conciliacao_df,
+                          kobraki=kobraki_df,
+                          tacs=tacs_df)
     elif convenio in CONSIGFACIL_CONVENIOS:
         # Padrão para todos os outros (Consigfacil)
         logging.info("Usando validador: CONSIGFACIL")

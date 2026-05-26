@@ -1,15 +1,12 @@
 import pandas as pd
 from io import StringIO
-# from python.trata_conciliacao import TRATA_CONCILIACAO
-from trata_conciliacao import TRATA_CONCILIACAO
-from TrataOrbital import TRATA_ORBITAL
-# from python.ESTEIRAS import load_esteiras
-from ESTEIRAS import load_esteiras
-from Acha_matriculas_SC import ACHA_MATRICULAS_SC
+from python.trata_conciliacao import TRATA_CONCILIACAO
+from python.TrataOrbital import TRATA_ORBITAL
+from python.ESTEIRAS import load_esteiras
+from python.Acha_matriculas_SC import ACHA_MATRICULAS_SC
 import openpyxl
 import xlrd
 import numpy as np
-from decimal import Decimal, ROUND_DOWN
 from datetime import datetime
 import logging
 import re
@@ -18,126 +15,126 @@ import math
 import os
 
 # ARQUIVOS PARA TESTE
-front_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\FRONT GOV SC 05.2026.csv"
-averbado_capital_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\AVERBADOS CAPITAL GOV SC 05.2026.xls"
-averbado_click_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\AVERBADOS CLICK GOV SC 05.2026.xls"
-convenios = 'GOV. SANTA CATARINA'
-consig = 'CAPITAL CONSIG'
-caminho = r'P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\TRABALHADOS'
-funcao_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\FUNÇÃO GOV SC 05.2026.csv"
-conciliacao_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\Conciliação-Governo de Santa Catarina- 032026.xlsx"
-kobraki_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\RECEBIVEIS KOBRAKI - ABRIL 2026.xlsx"
-orbital_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\Orbital_Ativos cartão orbital - fechamento 04.26.xlsx"
-tacs_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\TACS MAIO 2026 - CONSOLIDADO.xlsx"
-andamento_capital_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\BASE DE CONSIGNAÇOES CAPITAL GOV SC 05.2026.xls"
-andamento_click_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\BASE DE CONSIGNACOES CLICK GOV SC 05.2026.xls"
+# front_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\FRONT GOV SC 05.2026.csv"
+# averbado_capital_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\AVERBADOS CAPITAL GOV SC 05.2026.xls"
+# averbado_click_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\AVERBADOS CLICK GOV SC 05.2026.xls"
+# convenios = 'GOV. SANTA CATARINA'
+# consig = 'CAPITAL CONSIG'
+# caminho = r'P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\TRABALHADOS'
+# funcao_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\FUNÇÃO GOV SC 05.2026.csv"
+# conciliacao_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\Conciliação-Governo de Santa Catarina- 032026.xlsx"
+# kobraki_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\RECEBIVEIS KOBRAKI - ABRIL 2026.xlsx"
+# orbital_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\Orbital_Ativos cartão orbital - fechamento 04.26.xlsx"
+# tacs_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\TACS MAIO 2026 - CONSOLIDADO.xlsx"
+# andamento_capital_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\BASE DE CONSIGNAÇOES CAPITAL GOV SC 05.2026.xls"
+# andamento_click_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\BASE DE CONSIGNACOES CLICK GOV SC 05.2026.xls"
 
-def read_and_unify_files(file_list: List, convenio: Optional[str] = None, filename_override: Optional[str] = None) -> Tuple[Optional[pd.DataFrame], list]:
-    if not file_list:
-        return None, []
+# def read_and_unify_files(file_list: List, convenio: Optional[str] = None, filename_override: Optional[str] = None) -> Tuple[Optional[pd.DataFrame], list]:
+#     if not file_list:
+#         return None, []
         
-    lista_df = []
-    erros = []
+#     lista_df = []
+#     erros = []
     
-    for uploaded_file in file_list:
-        try:
-            # 1. Identificar se é uma String (Caminho) ou Objeto de Upload
-            if isinstance(uploaded_file, str):
-                nome_real = os.path.basename(uploaded_file) # Pega só o fim: "TACS MAIO 2026 - CONSOLIDADO.xlsx"
-            else:
-                nome_real = getattr(uploaded_file, 'name', filename_override or '')
+#     for uploaded_file in file_list:
+#         try:
+#             # 1. Identificar se é uma String (Caminho) ou Objeto de Upload
+#             if isinstance(uploaded_file, str):
+#                 nome_real = os.path.basename(uploaded_file) # Pega só o fim: "TACS MAIO 2026 - CONSOLIDADO.xlsx"
+#             else:
+#                 nome_real = getattr(uploaded_file, 'name', filename_override or '')
             
-            nome_real_lower = nome_real.lower()
+#             nome_real_lower = nome_real.lower()
 
-            # 2. Se foi passado um override genérico (ex: 'tacs'), mas o arquivo real tem extensão,
-            # nós garantimos que a extensão seja preservada para os testes do endswith.
-            if filename_override and not nome_real_lower.endswith(('.xlsx', '.xls', '.csv', '.txt')):
-                # Se o arquivo real for string, a extensão já veio nele. Se for objeto, tentamos mapear.
-                extensao = os.path.splitext(getattr(uploaded_file, 'name', ''))[1]
-                nome_real_lower = f"{filename_override.lower()}{extensao}"
+#             # 2. Se foi passado um override genérico (ex: 'tacs'), mas o arquivo real tem extensão,
+#             # nós garantimos que a extensão seja preservada para os testes do endswith.
+#             if filename_override and not nome_real_lower.endswith(('.xlsx', '.xls', '.csv', '.txt')):
+#                 # Se o arquivo real for string, a extensão já veio nele. Se for objeto, tentamos mapear.
+#                 extensao = os.path.splitext(getattr(uploaded_file, 'name', ''))[1]
+#                 nome_real_lower = f"{filename_override.lower()}{extensao}"
 
-            # 3. Fluxos de Leitura Baseados no Nome e Extensão Verdadeiros
-            if "kobraki" in nome_real_lower and nome_real_lower.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(uploaded_file, sheet_name='CONSOLIDADO')
+#             # 3. Fluxos de Leitura Baseados no Nome e Extensão Verdadeiros
+#             if "kobraki" in nome_real_lower and nome_real_lower.endswith(('.xlsx', '.xls')):
+#                 df = pd.read_excel(uploaded_file, sheet_name='CONSOLIDADO')
                 
-            elif "orbital" in nome_real_lower:
-                df = pd.read_excel(uploaded_file, header=3)
+#             elif "orbital" in nome_real_lower:
+#                 df = pd.read_excel(uploaded_file, header=3)
                 
-            elif nome_real_lower.endswith(('.xlsx', '.xls')):
-                try:
-                    # 1. Tentativa padrão como Excel verdadeiro
-                    df = pd.read_excel(uploaded_file) 
-                except Exception as e:
-                    if "Excel file format cannot be determined" in str(e):
-                        print(f"Caiu no tratamento de HTML disfarçado para: {nome_real_lower}")
-                        try:
-                            df = pd.read_html(uploaded_file)[0]
-                            # 2. Define a linha 0 como o nome das colunas
-                            df.columns = df.iloc[0]
+#             elif nome_real_lower.endswith(('.xlsx', '.xls')):
+#                 try:
+#                     # 1. Tentativa padrão como Excel verdadeiro
+#                     df = pd.read_excel(uploaded_file) 
+#                 except Exception as e:
+#                     if "Excel file format cannot be determined" in str(e):
+#                         print(f"Caiu no tratamento de HTML disfarçado para: {nome_real_lower}")
+#                         try:
+#                             df = pd.read_html(uploaded_file)[0]
+#                             # 2. Define a linha 0 como o nome das colunas
+#                             df.columns = df.iloc[0]
 
-                            # 3. Remove a linha 0 do corpo dos dados e reseta o índice
-                            df = df[1:].reset_index(drop=True)
-                            print(f"Sucesso ao ler HTML de: {nome_real_lower}")
+#                             # 3. Remove a linha 0 do corpo dos dados e reseta o índice
+#                             df = df[1:].reset_index(drop=True)
+#                             print(f"Sucesso ao ler HTML de: {nome_real_lower}")
                            
-                        except Exception as erro_html:
-                            print(f'Falhou no read_html também. Erro original: {erro_html}')
-                            print(f'Indo para o fluxo de segurança (CSV): {nome_real_lower}')
+#                         except Exception as erro_html:
+#                             print(f'Falhou no read_html também. Erro original: {erro_html}')
+#                             print(f'Indo para o fluxo de segurança (CSV): {nome_real_lower}')
                             
-                            # Se tudo falhar, tenta resetar e ler como CSV
-                            if hasattr(uploaded_file, 'seek'): uploaded_file.seek(0)
-                            try:
-                                df = pd.read_csv(uploaded_file, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
-                            except Exception:
-                                df = pd.read_csv(uploaded_file, encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
-                    else:
-                        raise e
-            else:
-                # Fluxo robusto para arquivos de texto / CSV
-                try:
-                    df = pd.read_csv(uploaded_file, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
-                except Exception:
-                    try:
-                        df = pd.read_csv(uploaded_file, encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
-                    except Exception:
-                        df = pd.read_csv(uploaded_file, encoding="latin1", sep=",", on_bad_lines="skip", low_memory=False)
+#                             # Se tudo falhar, tenta resetar e ler como CSV
+#                             if hasattr(uploaded_file, 'seek'): uploaded_file.seek(0)
+#                             try:
+#                                 df = pd.read_csv(uploaded_file, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
+#                             except Exception:
+#                                 df = pd.read_csv(uploaded_file, encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
+#                     else:
+#                         raise e
+#             else:
+#                 # Fluxo robusto para arquivos de texto / CSV
+#                 try:
+#                     df = pd.read_csv(uploaded_file, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
+#                 except Exception:
+#                     try:
+#                         df = pd.read_csv(uploaded_file, encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
+#                     except Exception:
+#                         df = pd.read_csv(uploaded_file, encoding="latin1", sep=",", on_bad_lines="skip", low_memory=False)
             
-            lista_df.append(df)
+#             lista_df.append(df)
             
-        except Exception as e:
-            logging.exception(f"Erro ao ler o arquivo {uploaded_file} {e}")
-            erros.append(f"Erro no arquivo {uploaded_file}: {str(e)}")
+#         except Exception as e:
+#             logging.exception(f"Erro ao ler o arquivo {uploaded_file} {e}")
+#             erros.append(f"Erro no arquivo {uploaded_file}: {str(e)}")
     
-    if not lista_df:
-        return None, erros
+#     if not lista_df:
+#         return None, erros
         
-    return pd.concat(lista_df, ignore_index=True), erros
+#     return pd.concat(lista_df, ignore_index=True), erros
 
-# =========================================================================
-# FORMA CORRETA DE CHAMAR AS FUNÇÕES (Sem usar 'List[...]' na execução)
-# =========================================================================
+# # =========================================================================
+# # FORMA CORRETA DE CHAMAR AS FUNÇÕES (Sem usar 'List[...]' na execução)
+# # =========================================================================
 
-# Se as variáveis abaixo forem os arquivos em si (ex: vindos de st.file_uploader)
-front_df, _ = read_and_unify_files([front_bruto], filename_override='front')
+# # Se as variáveis abaixo forem os arquivos em si (ex: vindos de st.file_uploader)
+# front_df, _ = read_and_unify_files([front_bruto], filename_override='front')
 
-averbado_capital_df, _ = read_and_unify_files([averbado_capital_bruto], filename_override='averbados')
+# averbado_capital_df, _ = read_and_unify_files([averbado_capital_bruto], filename_override='averbados')
 
-averbado_click_df, _ = read_and_unify_files([averbado_click_bruto], filename_override='averbados')
+# averbado_click_df, _ = read_and_unify_files([averbado_click_bruto], filename_override='averbados')
 
-funcao_df, _ = read_and_unify_files([funcao_bruto], filename_override='funcao')
+# funcao_df, _ = read_and_unify_files([funcao_bruto], filename_override='funcao')
 
-conciliacao_df, _ = read_and_unify_files([conciliacao_bruto])
+# conciliacao_df, _ = read_and_unify_files([conciliacao_bruto])
 
-kobraki_df, _ = read_and_unify_files([kobraki_bruto], filename_override='kobraki')
+# kobraki_df, _ = read_and_unify_files([kobraki_bruto], filename_override='kobraki')
 
-orbital_df, _ = read_and_unify_files([orbital_bruto], filename_override='orbital')
+# orbital_df, _ = read_and_unify_files([orbital_bruto], filename_override='orbital')
 
-tacs_df, _ = read_and_unify_files([tacs_bruto], filename_override='tacs')
+# tacs_df, _ = read_and_unify_files([tacs_bruto], filename_override='tacs')
 
-andamento_capital_df, _ = read_and_unify_files([andamento_capital_bruto], filename_override='andamento')
+# andamento_capital_df, _ = read_and_unify_files([andamento_capital_bruto], filename_override='andamento')
 
-andamento_click_df, _ = read_and_unify_files([andamento_click_bruto], filename_override='andamento')
+# andamento_click_df, _ = read_and_unify_files([andamento_click_bruto], filename_override='andamento')
 
-print(f'TACS_DF:\n{tacs_df}')
+# print(f'TACS_DF:\n{tacs_df}')
 
 class SIGRH:
     def __init__(self, front, averbado_capital, averbado_click, andamento_capital, andamento_click, convenio, consignataria, caminho, funcao=None, orbital=None, conciliacao=None, kobraki=None, tacs=None):
@@ -219,6 +216,8 @@ class SIGRH:
         # self.front_trabalhado = self.tratamento_front()
         # self.averbados_func()
 
+        self.layout_final()
+
     
     # =========================================================================
     # DAQUI PARA BAIXO É A LÓGICA ORIGINAL INTACTA (Copy-Paste do seu arquivo)
@@ -243,7 +242,7 @@ class SIGRH:
             front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
 
             # Tira os contratos do Front que já existem no Função
-            funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
+            funcao = funcao[~funcao['NR_PROP'].isin(contrato_front)].copy()
 
             # Tira os contratos CCB do Front que também existem no Função
             funcao_tratado = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
@@ -791,15 +790,123 @@ class SIGRH:
             averbacoes_colunas_corretas['PRAZO'] = averbacoes_colunas_corretas['PRAZO'].fillna(prazos_mapeados)
         else:
             print('trata_averbacao - CONSIGNATARIA SELECIONADA ERRADA!')
-
         
+        averbacoes_colunas_corretas.to_excel(os.path.join(self.caminho, f"AVERBAÇÕES TRABALHADAS DE GOV. SANTA CATARINA {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
+        return averbacoes_colunas_corretas
 
-        averbacoes_colunas_corretas.to_excel(os.path.join(self.caminho, f'AVERBACOES TESTE {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx'), index=False)
-    
-sigrh_obj = SIGRH(averbado_capital=averbado_capital_df, averbado_click=averbado_click_df, front=front_df, convenio='GOV. SANTA CATARINA', 
-                  consignataria='CAPITAL CONSIG', caminho=caminho, funcao=funcao_df, conciliacao=conciliacao_df, kobraki=kobraki_df, tacs=tacs_df, 
-                  orbital=orbital_df, andamento_capital=andamento_capital_df, andamento_click=andamento_capital_df)
+    def layout_final(self):
+        averbacoes= self.trata_averbacao()
 
-validacao = sigrh_obj.trata_averbacao()
+        nome_layout_dict = {'CAPITAL CONSIG': 'CAPITAL',
+                            'CLICKBANK': 'CLICK',}
+        
+        consignataria_layout = nome_layout_dict[self.consignataria]
+
+        def processar_layout(layout_para_txt, consig, produto, tipo='LANCAMENTO'):
+            layout_tratamento = layout_para_txt
+            mes = str(datetime.now().month).zfill(2)
+            ano = datetime.now().year
+            try:   
+                linhas_formatadas = []
+
+                for _, row in layout_tratamento.iterrows():
+                    # CPF: Remove pontos/traços e preenche com zeros à esquerda (11 dígitos)
+                    cpf_limpo = re.sub(r'\D', '', str(row['CPF']))
+                    cpf = cpf_limpo.zfill(11)
+
+                    # MATRICULA: Já lida como string, preenche com zeros à esquerda (15 dígitos)
+                    matricula = str(row['MATRICULA']).zfill(15)
+
+                    # PRAZO (Nº Parcelas): Preenche com zeros à esquerda (3 dígitos)
+                    # Caso realmente não queira usar o prazo da planilha, troque por "000"
+                    prazo = str(row['PRAZO']).zfill(3)
+
+                    # VALOR: Remove vírgula/ponto e preenche com zeros à esquerda (16 dígitos)
+                    # Multiplicamos por 100 para remover a vírgula mantendo os centavos
+                    valor_num = float(row['VALOR'])
+                    valor_formatado = str(int(round(valor_num * 100))).zfill(16)
+
+                    # CONTRATO: Preenche com zeros à esquerda (20 dígitos) conforme exemplo
+                    contrato = "0".zfill(20)
+
+                    # Montagem da linha seguindo as posições da imagem
+                    # Pos: 1(MM), 3(AAAA), 7(CPF), 18(Esp), 22(Matr), 37(Esp), 41(Parc), 44(Val), 60(Op), 61(Tipo), 63(Cont), 83(Esp), 133(ZZZ)
+                    linha = (
+                        f"{mes}"                # 1-2   (2)
+                        f"{ano}"                # 3-6   (4)
+                        f"{cpf}"                # 7-17  (11)
+                        f"{' ' * 4}"            # 18-21 (4)
+                        f"{matricula}"          # 22-36 (15)
+                        f"{' ' * 4}"            # 37-40 (4)
+                        f"{prazo}"              # 41-43 (3)
+                        f"{valor_formatado}"    # 44-59 (16)
+                        f"I"                    # 60    (1) - Operação: Inclusão
+                        f"VL"                   # 61-62 (2) - Tipo: Valor Fixo
+                        f"{contrato}"           # 63-82 (20)
+                        f"{' ' * 50}"           # 83-132(50)
+                        f"ZZZ"                  # 133-135(3)
+                    )
+                    linhas_formatadas.append(linha)
+
+                # 4. Salvar arquivo TXT
+                # Usamos o os.path.join para juntar as pastas de forma segura, sem se preocupar com barras individuais ou duplas
+                nome_arquivo = f"{tipo} {consig} {produto} GOV SC {datetime.now().strftime('%m-%Y')}.txt"
+                nome_txt = os.path.join(self.caminho, nome_arquivo)
+
+                with open(nome_txt, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(linhas_formatadas))
+
+                print(f"\nSucesso! Arquivo gerado: {os.path.basename(nome_txt)}")
+
+            except Exception as e:
+                print(f"Ocorreu um erro ao processar: {e}")
+
+        # --- Função auxiliar para evitar a repetição de código ---
+        def gerar_e_salvar_layout(df_filtrado, coluna_valor, tipo_layout, produto_layout):
+            if df_filtrado.empty:
+                return
+            
+            # 1. Seleciona e padroniza as colunas (Garante que a coluna de valor vire sempre 'VALOR_FORMATADO')
+            colunas_finais = ['CPF', 'MATRICULA TRATADA', 'PRAZO', coluna_valor]
+            layout = df_filtrado[colunas_finais].copy()
+            
+            # 2. Trata o teto do Prazo
+            if produto_layout == 'SAQUE':
+                layout['PRAZO'] = layout['PRAZO'].astype('int64')
+                layout.loc[layout['PRAZO'] > 80, 'PRAZO'] = 80
+            else:
+                layout['PRAZO'] = 1
+            
+            # 3. Formata o valor com duas casas e troca ponto por vírgula (Padrão Excel/TXT)
+            layout[coluna_valor] = layout[coluna_valor].map('{:.2f}'.format) # .str.replace(".", ",", regex=False)
+            
+            # 4. Processa o arquivo TXT (Envia o tipo apenas se for COMPLEMENTO)
+            kwargs = {'tipo': tipo_layout} if tipo_layout else {}
+            layout.rename(columns={coluna_valor: "VALOR", 'MATRICULA TRATADA': "MATRICULA"}, inplace=True)
+            processar_layout(layout_para_txt=layout, consig=consignataria_layout, produto=produto_layout, **kwargs)
+            
+            # 5. Salva o Excel de conferência
+            sufixo_tipo = f"{tipo_layout} " if tipo_layout else ""
+            nome_excel = f"TESTE LAYOUT {sufixo_tipo}{produto_layout} {self.convenio} {self.consignataria} {datetime.now().strftime('%m-%Y')}.xlsx"
+            layout.to_excel(os.path.join(self.caminho, nome_excel), index=False)
+
+        # 1. COMPLEMENTO SAQUE
+        filtro_comp_saque = averbacoes.loc[(averbacoes['LANÇAR 70'] >= 8.9) & (averbacoes['JÁ LANÇADO'] > 0)]
+        gerar_e_salvar_layout(filtro_comp_saque, 'LANÇAR 70', tipo_layout='COMPLEMENTO', produto_layout='SAQUE')
+
+        # 2. LANÇAMENTO SAQUE
+        filtro_lanc_saque = averbacoes.loc[(averbacoes['LANÇAR 70'] >= 8.9) & (averbacoes['JÁ LANÇADO'] == 0)]
+        gerar_e_salvar_layout(filtro_lanc_saque, 'LANÇAR 70', tipo_layout='LANCAMENTO', produto_layout='SAQUE')
+
+        # 3. LANÇAMENTO COMPRA
+        filtro_lanc_compra = averbacoes.loc[averbacoes['LANÇAR 30'] >= 8.9]
+        gerar_e_salvar_layout(filtro_lanc_compra, 'LANÇAR 30', tipo_layout='LANCAMENTO', produto_layout='COMPRA')
+
+                
+# sigrh_obj = SIGRH(averbado_capital=averbado_capital_df, averbado_click=averbado_click_df, front=front_df, convenio='GOV. SANTA CATARINA', 
+#                   consignataria='CAPITAL CONSIG', caminho=caminho, funcao=funcao_df, conciliacao=conciliacao_df, kobraki=kobraki_df, tacs=tacs_df, 
+#                   orbital=orbital_df, andamento_capital=andamento_capital_df, andamento_click=andamento_capital_df)
+
+# validacao = sigrh_obj.layout_final()
 
 

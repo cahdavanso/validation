@@ -66,32 +66,104 @@ class SERHA:
 
         self.main()
 
-    def tratamento_front_preliminar(self):
-        front_consig = self.front_unificados.copy()
+    def unifica_front_funcao(self):
+        front = self.front_unificados
+        funcao = self.funcao
 
+        if funcao is None:
+            print('\nFunção está vazio\n')
+            return front
+
+        print(f"colunas de funcao: {funcao.columns}")
+
+        contrato_front = front['Contrato']
+        ccb_tratado = front['CCB'].astype(str).str.slice(0, 9)
+        ccb_tratado = ccb_tratado.astype('int64')
+
+        # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
+        contrato_funcao = funcao['NR_PROP']
+        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
+
+        # Tira os contratos do Front que já existem no Função
+        funcao = funcao[~funcao['NR_PROP'].isin(contrato_front)].copy()
+
+        # Tira os contratos CCB do Front que também existem no Função
+        funcao_tratado = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
+
+
+        # Juntar Funcao com Front
+        # 1. Defina o mapeamento de nomes (De: Para)
+        mapeamento = {
+            'NR_PROP': 'Contrato',
+            'CPF': 'CPF',
+            'MATRICULA': 'Matricula',
+            'CLIENTE': 'Nome',
+            'PARC': 'Prazo',
+            'VLR_PARC': 'Prestacao',
+            'PRODUTO': 'Tipo Operacao',
+            'ORIGEM_4': 'Convenio'
+        }
+
+        # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
+        # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
+        funcao_ajustado = funcao_tratado[list(mapeamento.keys())].rename(columns=mapeamento)
+
+        # 3. Use o concat para unir os dois DataFrames
+        # O ignore_index=True serve para gerar um novo índice sequencial no DF final
+        front_unif = pd.concat([front, funcao_ajustado], ignore_index=True)
+
+        # Coloca Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
+        front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
+        # Coloca SIM onde é orbital no função
+        front_unif.loc[front_unif['Tipo Operacao'].str.contains('CARTÃO PLÁSTICO|CARTÃO PLÁSTICO - RE|CARTAO SEGURO - A VISTA| CARTAO - SEG PARC'), 'Orbital'] = 'SIM'
+
+        # Altera para cartão
+        front_unif['Tipo Operacao'] = front_unif['Tipo Operacao'].fillna('') # -> Só para ter certeza que ele vai preencher corretamente nos vazios
+        if self.rubrica == 'CARTÃO':
+            front_unif.loc[front_unif['Tipo Operacao'].str.contains('GOVERNOS AKRK|CARTÃO CONSIGNADO|GOVERNOS|CARTAO CONSIGNADO', na=False) & (front_unif['Tipo Operacao'] == ''), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
+        else:
+            front_unif.loc[front_unif['Tipo Operacao'].str.contains('BENEFÍCIO|BENEFICIO', na=False) & (front_unif['Tipo Operacao'] == ''), 'Tipo Operacao'] = 'CARTAO BENEFICIO'
+            
+
+        front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
+        front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
+        front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
+        front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
+        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG")
+        
+
+
+        print(f'FRONT UNIFICADO FINALZIN: {front_unif.tail()}')
+
+        front_unif.to_excel(rf"{self.caminho}\Teste_front {self.convenio} {"CAPITAL CONSIG"} {datetime.now().strftime("%m-%Y")}.xlsx", index=False)
+
+        return front_unif
+
+    def tratamento_front_preliminar(self):
+        front_consig = self.unifica_front_funcao()
         conciliacao = self.conciliacao.copy()
 
         orbital = self.orbital.copy() if self.orbital is not None else None
 
         # Insere as colunas vazias necessárias
-        front_consig.insert(21, 'Saldo', '', True)
-        front_consig.insert(22, 'Valor a lançar', '', True)
-        front_consig.insert(23, 'PRAZO', '', True)
-        front_consig.insert(24, 'OBS', '', True)
+        if 'Saldo' not in front_consig.columns:
+            front_consig.insert(21, 'Saldo', '')
 
+        if 'Valor a lançar' not in front_consig.columns:
+            front_consig.insert(22, 'Valor a lançar', '')
+
+        if 'PRAZO' not in front_consig.columns:
+            front_consig.insert(23, 'PRAZO', '')
+
+        if 'OBS' not in front_consig.columns:
+            front_consig.insert(24, 'OBS', '')
         front_consig.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
 
-        # 1. Converte para string, remove espaços e trata valores nulos
-        col = front_consig['Prestacao'].astype(str).str.strip()
-
-        # 2. Remove o ponto de milhar (ex: 1.200,50 -> 1200,50)
-        col = col.str.replace('.', '', regex=False)
-
-        # 3. Troca a vírgula decimal por ponto (ex: 1200,50 -> 1200.50)
-        col = col.str.replace(',', '.', regex=False)
-
         # 4. Converte para numérico
-        front_consig['Prestacao'] = pd.to_numeric(col, errors='coerce')
+        if front_consig['Prestacao'].dtype != 'float64':
+            front_consig['Prestacao'] = front_consig['Prestacao'].astype(str).str.replace(".", "")
+            front_consig['Prestacao'] = front_consig['Prestacao'].astype(str).str.replace(",", ".")
+            front_consig['Prestacao'] = pd.to_numeric(front_consig['Prestacao'], errors='coerce')
 
         # Mudar o tipo da coluna Tipo Operacao no Front se o Contrato existir em alguma das colunas de Contrato arquivo trabalhado de beneficio do mes anterior
         if self.rubrica == 'BENEFÍCIO':
