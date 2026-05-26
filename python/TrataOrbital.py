@@ -2,13 +2,40 @@ import pandas as pd
 import os
 
 class TRATA_ORBITAL:
-    def __init__(self, orbital, front, convenio, caminho):
+    def __init__(self, orbital, front, convenio, caminho, averbado_final=None, rubrica=None):
         self.orbital = orbital
         self.front = front
         self.convenio = convenio
         self.caminho = caminho
+        self.averbado_final = averbado_final if averbado_final is not None else None
+        self.rubrica = rubrica if rubrica is not None else None
+
+    def salvar_com_layout_original(self, df, caminho_arquivo):
+        # 1. Criar o ExcelWriter
+        writer = pd.ExcelWriter(caminho_arquivo, engine='xlsxwriter')
+        
+        # 2. Converter o DF para Excel, mas começando da linha 4 (índice 3)
+        # index=False remove os números das linhas
+        df.to_excel(writer, sheet_name='Sheet1', startrow=3, index=False)
+        
+        # 3. Acessar o objeto da planilha para escrever no topo
+        workbook  = writer.book
+        worksheet = writer.sheets['Sheet1']
+        
+        # 4. Escrever as linhas de metadados manualmente
+        worksheet.write(0, 0, "CAPITAL CONSIG - SCD") # Linha 1, Coluna A
+        worksheet.write(1, 0, "AVERBAÇÃO - CONTAS")  # Linha 2, Coluna A
+        # A linha 3 (índice 2) fica em branco automaticamente
+        
+        # 5. Salvar
+        writer.close()
+        print(f"Arquivo salvo com sucesso em: {caminho_arquivo}")
 
     def orbital_tratado(self):
+
+        # Nesse caso, estaremos usando o arquivo ORBITAL_RESTANTE, que não requer tratamento algum
+        if self.rubrica == 'BENEFÍCIO' and "GOV. MINAS GERAIS" in self.convenio:
+            return self.orbital
 
         empregador_dict = {'PREF. PIRACICABA': 'PREF PIRACICABA', 
                            'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA': 'PM PIRA SEMAE',
@@ -89,9 +116,14 @@ class TRATA_ORBITAL:
 
         orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
-        front_so_orbital = front_para_separar.loc[
-            front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
+        if self.convenio == "INSS":
+            front_so_orbital = front_para_separar.loc[
+            front_para_separar['Análise'].isin(['NÃO LANÇAR - ORBITAL', 'NÃO LANÇAR - TELESAQUE']),
             ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
+        else:
+            front_so_orbital = front_para_separar.loc[
+                front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
+                ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
         
         front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
@@ -114,5 +146,19 @@ class TRATA_ORBITAL:
             print(f"orbital_tratado: ORBITAL TRABALHADO {self.convenio} salvo com sucesso!")
         except Exception as e:
             print(f"orbital_tratado: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
+
+        # Vamos tentar deixar somente os CPF que exclusivamente estão na rubrica de benefício
+        if self.rubrica == 'CARTÃO' and "GOV. MINAS GERAIS" in self.convenio:
+            averbado = self.averbado_final
+            # Vamos separar os CPFs de front cartao e averbado beneficio
+            cpf_averbado = averbado['CPF Ponto e Traço'].unique()
+
+            orbital_restante = orbital_final[~orbital_final['CPF/CNPJ'].isin(cpf_averbado)]
+
+            print(f'Teste de orbital que restou para a rubrica de beneficio\n{orbital_restante}')
+            
+            print(f"orbital_tratado: Salvando arquivo de orbital restante para beneficio")
+            caminho_salvar = fr'{self.caminho}\ORBITAL RESTANTE PARA BENEFICIO.xlsx'
+            self.salvar_com_layout_original(orbital_restante, caminho_salvar)
 
         return orbital_final

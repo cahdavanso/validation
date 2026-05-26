@@ -4,6 +4,7 @@ import openpyxl
 import numpy as np
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
+from python.TrataOrbital import TRATA_ORBITAL
 from datetime import datetime
 import os
 import logging
@@ -78,6 +79,7 @@ class SERHA:
 
         contrato_front = front['Contrato']
         ccb_tratado = front['CCB'].astype(str).str.slice(0, 9)
+        ccb_tratado = ccb_tratado.astype(str).str.replace(".0", "")
         ccb_tratado = ccb_tratado.astype('int64')
 
         # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
@@ -679,9 +681,6 @@ class SERHA:
         return df_codigos_tratados
     
 
-
-    import pandas as pd
-
     def salvar_com_layout_original(self, df, caminho_arquivo):
         # 1. Criar o ExcelWriter
         writer = pd.ExcelWriter(caminho_arquivo, engine='xlsxwriter')
@@ -1177,8 +1176,11 @@ class SERHA:
                 print(f"Aviso: A coluna '{col}' não segue o padrão 'Contrato [número]'."),
 
         # Orbitall
-        orbital = self.trata_orbital(front, trabalhado_mes_atual_tratado, self.orbital)
-        if orbital is not None:
+
+        if self.orbital is not None:
+            # prepara_orbital = self.trata_orbital(front, trabalhado_mes_atual_tratado, self.orbital)
+            prepara_orbital = TRATA_ORBITAL(orbital=self.orbital, front=front, convenio=self.convenio, caminho=self.caminho, averbado_final=trabalhado_mes_atual_tratado, rubrica=self.rubrica)
+            orbital = prepara_orbital.orbital_tratado()
             # Vou tentar fazer somase de orbital
             somase_orbital = orbital.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum().to_dict()
 

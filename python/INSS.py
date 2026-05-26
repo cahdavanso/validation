@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from python.TrataOrbital import TRATA_ORBITAL
+from python.trata_conciliacao import TRATA_CONCILIACAO
 import warnings
 import os
 
@@ -8,7 +10,7 @@ import os
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 class INSS:
-    def __init__(self, portal_file_list, front, conciliacao, kobraki, caminho, casos_capital=None):
+    def __init__(self, portal_file_list, front, conciliacao, caminho, funcao=None, kobraki=None, tacs=None, casos_capital=None, orbital=None):
         
         # --- ADAPTAÇÃO: Recebendo DataFrames do server.py ---
         
@@ -25,6 +27,14 @@ class INSS:
         self.conciliacao = conciliacao if conciliacao is not None else pd.DataFrame()
         
         self.caminho = caminho
+
+        self.funcao = funcao
+
+        self.kobraki = kobraki
+
+        self.tacs = tacs
+        
+        self.orbital = orbital
 
         self.trata_front_final()
 
@@ -65,6 +75,80 @@ class INSS:
         conciliacao_tratado['Saldo'] = conciliacao_tratado['Pago'] + conciliacao_tratado['RECEBIDO GERAL']
 
         return conciliacao_tratado
+    
+    def unifica_front_funcao(self):
+        front = self.front
+        funcao = self.funcao
+
+        if funcao is None:
+            print('\nFunção está vazio\n')
+            return front
+
+        print(f"colunas de funcao: {funcao.columns}")
+
+        contrato_front = front['Contrato']
+        ccb_tratado = front['CCB'].astype(str).str.slice(0, 9)
+        ccb_tratado = ccb_tratado.astype('int64')
+
+        # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
+        contrato_funcao = funcao['NR_PROP']
+        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
+
+        # Tira os contratos do Front que já existem no Função
+        funcao = funcao[~funcao['NR_PROP'].isin(contrato_front)].copy()
+
+        # Tira os contratos CCB do Front que também existem no Função
+        funcao_tratado = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
+
+
+        # Juntar Funcao com Front
+        # 1. Defina o mapeamento de nomes (De: Para)
+        mapeamento = {
+            'NR_PROP': 'Contrato',
+            'CPF': 'CPF',
+            'MATRICULA': 'Matricula',
+            'CLIENTE': 'Nome',
+            'PARC': 'Prazo',
+            'VLR_PARC': 'Prestacao',
+            'PRODUTO': 'Tipo Operacao',
+            'ORIGEM_4': 'Convenio'
+        }
+
+        # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
+        # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
+        funcao_ajustado = funcao_tratado[list(mapeamento.keys())].rename(columns=mapeamento)
+
+        # 3. Use o concat para unir os dois DataFrames
+        # O ignore_index=True serve para gerar um novo índice sequencial no DF final
+        front_unif = pd.concat([front, funcao_ajustado], ignore_index=True)
+
+        # Coloca Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
+        front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
+        # Coloca SIM onde é orbital no função
+        front_unif.loc[front_unif['Tipo Operacao'].str.contains('CARTÃO PLÁSTICO|CARTÃO PLÁSTICO - RE|CARTAO SEGURO - A VISTA|CARTAO - SEG PARC|' \
+                                                                '000061 - CARTÃ\x83O PLÃ\x81STICO|CARTÃ\x83O PLÃ\x81STICO - RE'), 'Orbital'] = 'SIM'
+        
+        front_unif.loc[front_unif['Tipo Operacao'].str.contains('000012 - DIG INSS REP LEGAL|000015 - DIG INSS|000106 - CARTÃO TS|' \
+                                                                'CARTÃ\x83O TS|000098 - DIG INSS 30%'), 'Tipo Operacao'] = 'CARTAO TS'
+
+
+        # Altera para cartão
+        front_unif['Tipo Operacao'] = front_unif['Tipo Operacao'].fillna('') # -> Só para ter certeza que ele vai preencher corretamente nos vazios
+        front_unif.loc[~front_unif['Tipo Operacao'].str.contains('', na=False) & (front_unif['Tipo Operacao'] == ''), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
+
+        front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
+        front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
+        front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
+        front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
+        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG")
+        
+
+
+        print(f'FRONT UNIFICADO FINALZIN: {front_unif.tail()}')
+
+        front_unif.to_excel(rf"{self.caminho}\Teste_front {self.convenio} {"CAPITAL CONSIG"} {datetime.now().strftime("%m-%Y")}.xlsx", index=False)
+
+        return front_unif
     
     def tratamento_front_preliminar(self):
         front_consig = self.front.copy()
@@ -115,9 +199,6 @@ class INSS:
 
         # Adiciona a coluna de tipo da Conciliação
         print(f'colunas de front consig: {front_consig.columns}')
-        tipo_conci = front_consig['Contrato'].map(conciliacao.set_index('CONTRATOS')['PRODUTO'].to_dict())
-        front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
-
         # Adiciona só as esteiras que podem ser lançadas
         # front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
 
@@ -148,9 +229,11 @@ class INSS:
         front_consig['Análise'] = front_consig.apply(obs_situacao, axis=1)
 
         # Marca saldo positivo
-        conciliacao_tatado = self.trata_conciliacao()
-        conciliacao_tatado['CONTRATOS'] = conciliacao_tatado['CONTRATOS'].astype('Int64')
-        front_consig['Saldo'] = front_consig['Contrato'].map(conciliacao_tatado.set_index('CONTRATOS')['Saldo'].to_dict())
+        # conciliacao_tatado = self.trata_conciliacao()
+        prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        conciliacao_tratado = prepara_conciliacao.trata_conciliacao()
+        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
+        front_consig['Saldo'] = front_consig['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo'].to_dict())
         front_consig_validado_termino = front_consig.copy()
         front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > -0.01, 'Análise'] = 'NÃO LANÇAR - SALDO POSITIVO'
         # Valor que vai ser lançado
@@ -188,7 +271,7 @@ class INSS:
         # front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Operacao'].str.contains('EMPRÉSTIMO|EMPRESTIMO', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - EMPRÉSTIMO'
 
         # Marca tudo que é Telesaque
-        front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Conciliação'].str.contains('CARTÃO TS|CARTAO TS', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - TELESAQUE'
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Operacao'].str.contains('CARTÃO TS|CARTAO TS', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - TELESAQUE'
     
         # Marca "NÃO LANÇAR - COMPLEMENTAR" nas células vazias da coluna Análise onde veio vazio na coluna de SITUAÇÃO
         front_consig_validado_termino.loc[(front_consig_validado_termino['Análise'] == '') & (front_consig_validado_termino['SITUAÇÃO'].isna()), 'Análise'] = 'NÃO LANÇAR - COMPLEMENTAR'
@@ -215,7 +298,9 @@ class INSS:
         )
 
         # Cria arquivo de complementares + telesaque + orbital
-        complementar_orbital_df = front_trabalhado[front_trabalhado['Análise'].str.contains('NÃO LANÇAR - COMPLEMENTAR|NÃO LANÇAR - TELESAQUE|NÃO LANÇAR - ORBITAL', na=False)].copy()
+        prepara_complementar_orbital = TRATA_ORBITAL(self.orbital, front_trabalhado, "INSS", self.caminho)
+        # complementar_orbital_df = front_trabalhado[front_trabalhado['Análise'].str.contains('NÃO LANÇAR - COMPLEMENTAR|NÃO LANÇAR - TELESAQUE|NÃO LANÇAR - ORBITAL', na=False)].copy()
+        complementar_orbital_df = prepara_complementar_orbital.orbital_tratado()
         complementar_orbital_df.to_excel(
             fr'{self.caminho}\FRONT COMPLEMENTARES TELESAQUE ORBITAL INSS.xlsx',
             index=False, 
@@ -240,7 +325,7 @@ class INSS:
         front_trabalhado_lancar.insert(9, "VALOR A LANÇAR", '', True)
 
         # Soma dos valores de Complementar e Orbital
-        soma_complementar = complementar_orbital_df.groupby('CPF')['VLR_PARC'].sum().reset_index(name="SOMA_COMPLEMENTAR_ORBITAL")
+        soma_complementar = complementar_orbital_df.groupby('CPF')['Prestacao'].sum().reset_index(name="SOMA_COMPLEMENTAR_ORBITAL")
 
         # Junta os dados com a planilha principal
         front_final = front_trabalhado_lancar.merge(soma_complementar, on="CPF", how="left")
@@ -364,7 +449,7 @@ class INSS:
                           'MATRICULA/BENEFÍCIO', 'PRAZO']
         inclusao_desconto = inclusao_desconto[colunas_finais]
 
-        timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+        timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M")
         caminho_arquivo = os.path.join(self.caminho, f'INSS_INCLUIR_DESCONTO_CARTÃO_{timestamp}.xlsx')
 
         inclusao_desconto.to_excel(caminho_arquivo, index=False)
