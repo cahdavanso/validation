@@ -347,6 +347,7 @@ async def validar_planilhas(
     ORBITAL: List[UploadFile] = File(None, alias="ORBITAL"),
     COMPLEMENTAR: List[UploadFile] = File(None, alias="COMPLEMENTAR"),
     CASOS_CAPITAL: List[UploadFile] = File(None, alias="CASOS_CAPITAL"),
+    D8: List[UploadFile] = File(None, alias="D8"),
 ):
     logging.info(f"\n--- INICIANDO VALIDAÇÃO: {convenio} ---")
     
@@ -395,6 +396,7 @@ async def validar_planilhas(
     orbital_df, erros = await read_and_unify_files(ORBITAL, convenio=convenio)
     complementar_df, erros = await read_and_unify_files(COMPLEMENTAR, convenio=convenio)
     casoscapital_df, erros = await read_and_unify_files(CASOS_CAPITAL, convenio=convenio)
+    d8_df, erros = await read_and_unify_files(D8, convenio=convenio)
 
     # 3. SELEÇÃO DO VALIDADOR (SEM A VARIÁVEL PROBLEMÁTICA)
     
@@ -425,7 +427,8 @@ async def validar_planilhas(
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             casos_capital=casoscapital_df,
-            orbital=orbital_df
+            orbital=orbital_df,
+            d8=d8_df
         )
     elif convenio in SERHA_CONVENIO:
         logging.info("Usando validador: SERHA")
@@ -452,6 +455,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            funcao=funcao_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             orbital=orbital_df

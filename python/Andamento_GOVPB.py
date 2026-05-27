@@ -56,22 +56,25 @@ class ANDAMENTO:
         funcao = self.funcao
 
         if funcao is None:
-            print('\nDEBUG class ANDAMENTO -> funcao unifica_fron_funcao -> Arquivo "Função" é nulo, retornando "front" sem tratamento\n')
+            print('\nFunção está vazio\n')
             return front
-        # tipos dos contratos de cada dataframe
-        '''print('Tipo da coluna Contrato do Front', front['Contrato'].dtype)
-        print('Tipo da coluna NR_PROP do Funcao', funcao['NR_PROP'].dtype)'''
+
+        print(f"colunas de funcao: {funcao.columns}")
 
         contrato_front = front['Contrato']
-        ccb_tratado = front['CCB'].astype(str).str.slice(0, 9).fillna(0).astype('float64')
-
+        ccb_tratado = front['CCB'].astype(str).str.slice(0, 9)
         ccb_tratado = ccb_tratado.astype('int64')
 
+        # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
+        contrato_funcao = funcao['NR_PROP']
+        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
+
         # Tira os contratos do Front que já existem no Função
-        funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
+        funcao = funcao[~funcao['NR_PROP'].isin(contrato_front)].copy()
 
         # Tira os contratos CCB do Front que também existem no Função
-        funcao = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
+        funcao_tratado = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
+
 
         # Juntar Funcao com Front
         # 1. Defina o mapeamento de nomes (De: Para)
@@ -88,23 +91,32 @@ class ANDAMENTO:
 
         # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
         # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
-        funcao_ajustado = funcao[list(mapeamento.keys())].rename(columns=mapeamento)
+        funcao_ajustado = funcao_tratado[list(mapeamento.keys())].rename(columns=mapeamento)
 
         # 3. Use o concat para unir os dois DataFrames
         # O ignore_index=True serve para gerar um novo índice sequencial no DF final
         front_unif = pd.concat([front, funcao_ajustado], ignore_index=True)
 
-        # Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
+        # Coloca Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
         front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
+        # Coloca SIM onde é orbital no função
+        front_unif.loc[front_unif['Tipo Operacao'].str.contains('CARTÃO PLÁSTICO|CARTÃO PLÁSTICO - RE|CARTAO SEGURO - A VISTA| CARTAO - SEG PARC'), 'Orbital'] = 'SIM'
+
+        # Altera para cartão
+        front_unif['Tipo Operacao'] = front_unif['Tipo Operacao'].fillna('') # -> Só para ter certeza que ele vai preencher corretamente nos vazios
+        front_unif.loc[~front_unif['Tipo Operacao'].str.contains('EMPR|BENS', na=False) & (front_unif['Operação'] == ''), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
+
         front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
-        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG ")
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
         front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
+        front_unif['Consignataria'] = front_unif['Consignataria'].fillna(self.consignataria)
+        
 
-        # print('front unif finalzin:\n', front_unif.tail())
 
-        # front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
+        print(f'FRONT UNIFICADO FINALZIN: {front_unif.tail()}')
+
+        front_unif.to_excel(rf"{self.caminho}\Teste_front {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx", index=False)
 
         return front_unif
     

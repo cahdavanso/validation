@@ -139,7 +139,7 @@ class CONSIGFACIL:
         # Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
         front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
         front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
-        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG ")
+        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG")
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
         front_unif['Obito'] = front_unif['Obito'].fillna("NAO")

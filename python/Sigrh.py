@@ -276,7 +276,7 @@ class SIGRH:
 
             # Altera para cartão
             front_unif['Tipo Operacao'] = front_unif['Tipo Operacao'].fillna('') # -> Só para ter certeza que ele vai preencher corretamente nos vazios
-            front_unif.loc[~front_unif['Tipo Operacao'].str.contains('EMPRESTIMO', na=False) & (front_unif['Tipo Operacao'] == ''), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
+            front_unif.loc[~front_unif['Tipo Operacao'].str.contains('EMPRESTIMO', na=False) & (front_unif['Operação'] == ''), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
 
             front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
             front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")

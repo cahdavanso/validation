@@ -98,7 +98,7 @@ class CODATA:
         front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
 
         # Tira os contratos do Front que já existem no Função
-        funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
+        funcao = funcao[~funcao['NR_PROP'].isin(contrato_front)].copy()
 
         # Tira os contratos CCB do Front que também existem no Função
         funcao_tratado = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
@@ -138,6 +138,7 @@ class CODATA:
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
         front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
+        front_unif['Consignataria'] = front_unif['Consignataria'].fillna(self.consignataria)
 
 
         # print(front_unif.tail())

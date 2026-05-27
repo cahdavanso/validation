@@ -71,7 +71,7 @@ class CONSIGLOG:
             front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
 
             # Tira os contratos do Front que já existem no Função
-            funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
+            funcao = funcao[~funcao['NR_PROP'].isin(contrato_front)].copy()
 
             # Tira os contratos CCB do Front que também existem no Função
             funcao_tratado = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
@@ -101,12 +101,11 @@ class CONSIGLOG:
             # Coloca Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
             front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
             # Coloca SIM onde é orbital no função
-            front_unif.loc[front_unif['Tipo Operacao'].str.contains('CARTÃO PLÁSTICO|CARTÃO PLÁSTICO - RE'), 'Orbital'] = 'SIM'
+            front_unif.loc[front_unif['Tipo Operacao'].str.contains('CARTÃO PLÁSTICO|CARTÃO PLÁSTICO - RE|CARTAO SEGURO - A VISTA| CARTAO - SEG PARC'), 'Orbital'] = 'SIM'
 
             # Altera para cartão
-            front_unif.loc[front_unif['Tipo Operacao'].str.contains('PREFEITURA|CARTAO CONSIGNADO', na=False), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
-            # Preenche INSPFEM ONDE DEVE
-            front_unif.loc[front_unif['Convenio'].isin(['INSPFEM']), 'Consignataria'] = 'INSPFEM - CARD' 
+            front_unif['Tipo Operacao'] = front_unif['Tipo Operacao'].fillna('') # -> Só para ter certeza que ele vai preencher corretamente nos vazios
+            front_unif.loc[~front_unif['Tipo Operacao'].str.contains('EMPRESTIMO', na=False) & (front_unif['Operação'] == ''), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
 
             front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
             front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
@@ -118,7 +117,7 @@ class CONSIGLOG:
 
             print(f'FRONT UNIFICADO FINALZIN: {front_unif.tail()}')
 
-            front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
+            front_unif.to_excel(rf"{self.caminho}\Teste_front {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx", index=False)
 
             return front_unif
 
@@ -280,7 +279,7 @@ class CONSIGLOG:
         if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS']:
             print(f'Convenio é {self.convenio}')
             print(f'Convenio está em PREF GOIÂNIA ou PREF. DUQUE DE CAXIAS? {self.convenio in ["PREF. GOIÂNIA", "PREF. DUQUE DE CAXIAS"]}')
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Operacao'].str.contains('EMPRESTIMO|EMPRÉSTIMO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         else:
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
 
@@ -312,7 +311,7 @@ class CONSIGLOG:
         if self.convenio == 'PREF. GOIÂNIA':
             front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
         elif self.convenio == 'PREF. DUQUE DE CAXIAS':
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)].copy()
+            front_consig_cartao_conciliacao = front_consig[~front_consig['Tipo Operacao'].str.contains('EMPRESTIMO|EMPRÉSTIMO', na=False)].copy()
         else:
             front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
 
