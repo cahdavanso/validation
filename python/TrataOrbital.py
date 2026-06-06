@@ -37,75 +37,56 @@ class TRATA_ORBITAL:
         if self.rubrica == 'BENEFÍCIO' and "GOV. MINAS GERAIS" in self.convenio:
             return self.orbital
 
-        empregador_dict = {'PREF. PIRACICABA': 'PREF PIRACICABA', 
-                           'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA': 'PM PIRA SEMAE',
-                           'PREV. PIRACICABA IPASP': 'PREF PIRA IPASP',
-                           'INSS': 'INSS RMC',
-                           'GOV. PARAÍBA': 'GOV PB INSPFEM',
-                           'GOV. ALAGOAS': 'GOV AL CC',
-                           'GOV. ALAGOAS': 'GOV AL CB',
-                           'INSS': 'INSS BENEFICIO',
-                           'PREF. CAJAMAR': 'PREF CAJAMAR CC',
-                           'INSS': 'INSS BENEF CPL',
-                           'INSS': 'INSS RMC CPL',
-                           'INSS': 'INSS BENEF SEG',
-                           'INSS': 'INSS RMC SEG',
-                           'GOV. GOIÁS': 'GOV GO CPL',
-                           'PREF. PICOS': 'PREF PICOS',
-                           'PREF. GUARULHOS': 'PREF GRU CB',
-                           'GOV. PIAUÍ': 'GOV PIAUÍ CC',
-                           'GOV. MATO GROSSO': 'GOV MT CB',
-                           'GOV. RIO DE JANEIRO': 'GOV RJ DG',
-                           'GOV. RIO DE JANEIRO': 'GOV RJ',
-                           'GOV. MINAS GERAIS - PMMG': 'GOV MG - PMMG',
-                           'GOV. SANTA CATARINA': 'GOV S. CATARINA',
-                           'PREF. NATAL': 'PM NATAL CB DG',
-                           'GOV. MINAS GERAIS - SEPLAG': 'MG SEPLAG',
-                           'GOV. GOIÁS': 'GOV GOIAS',
-                           'GOV. PIAUÍ': 'GOV PIAUÍ CB',
-                           'GOV. CEARÁ': 'GOV CEARA DG',
-                           'GOV. MINAS GERAIS - PMMG': 'MG PMMG CB DG',
-                           'INSS': 'INSS BEN S FL',
-                           'GOV. MINAS GERAIS - CBMMG': 'MG CBMMG',
-                           'PREF. GOIÂNIA': 'PM GOIANIA SEG',
-                           'GOV. MINAS GERAIS - PMMG': 'MG - PMMG CC DG',
-                           'GOV. PERNAMBUCO': 'GOV PE CC',
-                           'GOV. CEARÁ': 'GOV CEARÁ',
-                           'GOV. MINAS GERAIS - SEPLAG': 'MG SEPLAG CC DG',
-                           'GOV. PERNAMBUCO': 'GOV PE CB',
-                           'PREF. GOIÂNIA': 'PREF GOIÂNIA',
-                           'GOV. MINAS GERAIS - SEPLAG': 'MG SEPLAG CB DG',
-                           'GOV. SÃO PAULO': 'GOV SÃO PAULO',
-                           'INSS': 'INSS RMC S FL',
-                           'GOV. PERNAMBUCO': 'GOV PE CC DG',
-                           'GOV. MINAS GERAIS - CBMMG': 'MG CBMMG CB DG',
-                           'GOV. PARAÍBA': 'INSPFEM S FL',
-                           'PREF. PICOS': 'PREF PICOS DG',
-                           'GOV. MG - IPSEMG': 'GOV MG - IPSEMG',
-                           'GOV. PARANÁ': 'GOV PARANA',
-                           'GOV. RIO DE JANEIRO': 'GOV RJ SEG',
-                           'GOV. MATO GROSSO': 'GOV MT PL CAPIT',
-                           'GOV. SANTA CATARINA': 'GOV SC SEG',
-                           'GOV. ESPÍRITO SANTO': 'GOV ES CB',
-                           'GOV. PIAUÍ': 'GOV PIAUÍ CB DG',
-                           'GOV. ESPÍRITO SANTO': 'GOV ES CB DG',
-                           'GOV. MATO GROSSO': 'GOVMT CARTOS CB',
-                           'GOV. MINAS GERAIS - SEPLAG': 'SEPL CC DG SEG',
-                           'GOV. SÃO PAULO - SPPREV': 'GOV SPPREV',
-
-                            }
+        empregador_dict = {
+                            'PREF. PIRACICABA': ['PREF PIRACICABA'], 
+                            'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA': ['PM PIRA SEMAE'],
+                            'PREV. PIRACICABA IPASP': ['PREF PIRA IPASP'],
+                            'GOV. PARAÍBA': ['GOV PB INSPFEM', 'INSPFEM S FL'],
+                            'GOV. ALAGOAS': ['GOV AL CC', 'GOV AL CB'],
+                            'PREF. CAJAMAR': ['PREF CAJAMAR CC'],
+                            'GOV. GOIÁS': ['GOV GO CPL', 'GOV GOIAS'],
+                            'PREF. PICOS': ['PREF PICOS', 'PREF PICOS DG'],
+                            'PREF. GUARULHOS': ['PREF GRU CB'],
+                            'GOV. PIAUÍ': ['GOV PIAUÍ CC', 'GOV PIAUÍ CB', 'GOV PIAUÍ CB DG'],
+                            'GOV. MATO GROSSO': ['GOV MT CB', 'GOV MT PL CAPIT', 'GOVMT CARTOS CB'],
+                            'GOV. RIO DE JANEIRO': ['GOV RJ DG', 'GOV RJ', 'GOV RJ SEG'],
+                            'GOV. MINAS GERAIS - PMMG': ['GOV MG - PMMG', 'MG PMMG CB DG', 'MG - PMMG CC DG'],
+                            'GOV. SANTA CATARINA': ['GOV S. CATARINA', 'GOV SC SEG'],
+                            'PREF. NATAL': ['PM NATAL CB DG'],
+                            'GOV. MINAS GERAIS - SEPLAG': ['MG SEPLAG', 'MG SEPLAG CC DG', 'MG SEPLAG CB DG', 'SEPL CC DG SEG'],
+                            'GOV. CEARÁ': ['GOV CEARA DG', 'GOV CEARÁ'],
+                            'GOV. MINAS GERAIS - CBMMG': ['MG CBMMG', 'MG CBMMG CB DG'],
+                            'PREF. GOIÂNIA': ['PM GOIANIA SEG', 'PREF GOIÂNIA'],
+                            'GOV. PERNAMBUCO': ['GOV PE CC', 'GOV PE CB', 'GOV PE CC DG'],
+                            'GOV. SÃO PAULO': ['GOV SÃO PAULO'],
+                            'INSS': [
+                                'INSS BENEFICIO', 'INSS BEN S FL', 'INSS BENEF CPL', 
+                                'INSS BENEF SEG', 'INSS RMC', 'INSS RMC S FL', 
+                                'INSS RMC CPL', 'INSS RMC SEG'
+                            ],
+                            'GOV. MG - IPSEMG': ['GOV MG - IPSEMG'],
+                            'GOV. PARANÁ': ['GOV PARANA'],
+                            'GOV. ESPÍRITO SANTO': ['GOV ES CB', 'GOV ES CB DG'],
+                            'GOV. SÃO PAULO - SPPREV': ['GOV SPPREV']
+                        }
         orbital = self.orbital
 
         convenio = self.convenio
 
-        empregador = empregador_dict.get(convenio)
+        # Agora isso retorna uma lista de empregadores
+        lista_empregadores = empregador_dict.get(convenio)
 
         front_para_separar = self.front
 
-        if empregador:
+        if lista_empregadores:
+            # Junta a lista em um único texto separado por "|" (Pipe)
+            # Resultado: 'INSS BENEFICIO|INSS BEN S FL|INSS BENEF CPL...'
+            padrao_busca = '|'.join(lista_empregadores)
+
             # Filtro dinâmico
             orbital_preparado = orbital.loc[
-                orbital['DESCRIÇÃO DO EMPREG'].str.contains(empregador, case=False, na=False),
+                # Passamos o padrao_busca e garantimos que regex=True
+                orbital['DESCRIÇÃO DO EMPREG'].str.contains(padrao_busca, case=False, na=False, regex=True),
                 ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
             ].copy()
         else:
@@ -116,13 +97,14 @@ class TRATA_ORBITAL:
 
         orbital_preparado.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 
+
         if self.convenio == "INSS":
             front_so_orbital = front_para_separar.loc[
-            front_para_separar['Análise'].isin(['NÃO LANÇAR - ORBITAL', 'NÃO LANÇAR - TELESAQUE']),
-            ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
+            (front_para_separar['Análise'].isin(['NÃO LANÇAR - ORBITAL', 'NÃO LANÇAR - TELESAQUE', 'NÃO LANÇAR - COMPLEMENTAR'])) & (~front_para_separar['Status'].isin(["EM ANDAMENTO"])),
+            ['NR_OPER_EDITADO', 'CLIENTE', 'CPF', 'VLR_PARC']].copy()
         else:
             front_so_orbital = front_para_separar.loc[
-                front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL',
+                (front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL') & (~front_para_separar['Status'].isin(["EM ANDAMENTO"])),
                 ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
         
         front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
@@ -133,12 +115,21 @@ class TRATA_ORBITAL:
         front_so_orbital['VALOR DESCONTO'] = front_so_orbital['VALOR DESCONTO'].astype(str).str.replace(',', '.', regex=False)
         front_so_orbital['VALOR DESCONTO'] = pd.to_numeric(front_so_orbital['VALOR DESCONTO'], errors='coerce')
 
-        orbital_preparado['Proposta'] = orbital_preparado['Proposta'].astype('int64')
+        orbital_preparado.to_excel(os.path.join(self.caminho, f"ORBITAL PURO {self.convenio}.xlsx"), index=False)
 
+
+        # Criar uma coluna temporária para remover os contratos liquidados, cancelados, ou com saldo positivo
+        orbital_preparado['OBS'] = orbital_preparado['Proposta'].map(front_para_separar.set_index('NR_OPER_EDITADO')['Análise'])
+        orbital_preparado = orbital_preparado[~orbital_preparado['OBS'].isin(['NÃO LANÇAR - SALDO POSITIVO', 'NÃO LANÇAR - AÇÃO JUDICIAL', 'NÃO LANÇAR - LIQUIDADO', 'NÃO LANÇAR - CASOS PATRICK'])].copy()
+        
+        orbital_preparado['Proposta'] = orbital_preparado['Proposta'].astype('int64')
         orbital_final = pd.concat([front_so_orbital, orbital_preparado])
 
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
-        orbital_final['PRAZO'] = orbital_final['Proposta'].map(front_para_separar.set_index('Contrato')['Prazo'])
+        if self.convenio == "INSS":
+            orbital_final['PRAZO'] = orbital_final['Proposta'].map(front_para_separar.set_index('NR_OPER_EDITADO')['Prazo'])
+        else:
+            orbital_final['PRAZO'] = orbital_final['Proposta'].map(front_para_separar.set_index('Contrato')['Prazo'])
 
         print(f"orbital_tratado: Salvando arquivo de orbital tratado teste com front")
         try:

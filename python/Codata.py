@@ -114,7 +114,6 @@ class CODATA:
             'PARC': 'Prazo',
             'VLR_PARC': 'Prestacao',
             'PRODUTO': 'Tipo Operacao',
-            'ORIGEM_2': 'Consignataria',
             'ORIGEM_4': 'Convenio'
         }
 
@@ -132,7 +131,7 @@ class CODATA:
         front_unif.loc[front_unif['Tipo Operacao'].isin(['CARTÃO PLÁSTICO', 'CARTÃO PLÁSTICO - RE']), 'Orbital'] = 'SIM'
 
         # Preenche INSPFEM ONDE DEVE
-        front_unif.loc[front_unif['Convenio'].isin(['INSPFEM']), 'Consignataria'] = 'INSPFEM - CARD' 
+        front_unif.loc[front_unif['Convenio'].str.contains('INSPFEM'), 'Consignataria'] = 'INSPFEM - CARD' 
 
         front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
@@ -143,7 +142,7 @@ class CODATA:
 
         # print(front_unif.tail())
 
-        # front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
+        front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
 
         return front_unif
 
@@ -235,7 +234,7 @@ class CODATA:
             valores_encontrados_str = valores_encontrados # .astype(str)
             front_consig.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
 
-        front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+        # front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
 
 
         # ------------------------------------ ESTEIRAS REMOVIDAS ------------------------------------- #
@@ -286,7 +285,7 @@ class CODATA:
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         if self.consignataria == 'CAPITAL CONSIG':
-            objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
+            objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.consignataria, self.andamento, self.funcao)
             front_com_prazo = objeto_andamento.andamento_func_front()
             front_com_prazo.drop_duplicates(subset=['Contrato'], keep='first', inplace=True)
 

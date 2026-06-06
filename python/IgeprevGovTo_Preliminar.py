@@ -186,7 +186,7 @@ class IGEPREV_GOVTO:
         # Casos que não lançamos de esteira
         front_esteiras_erradas = front_consig[~front_consig['Esteira'].isin(self.condicoes_1)].copy()
 
-        front_esteiras_erradas.to_excel(fr'{self.caminho}\Esteiras Erradas do Front.xlsx', index=False)
+        front_esteiras_erradas.to_excel(fr'{self.caminho}\Esteiras Erradas do Front {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # Tentar transformar em string com virgula
         front_consig_esteiras.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
@@ -262,7 +262,7 @@ class IGEPREV_GOVTO:
 
         print('DEBUG: Colunas da conciliação tratada')
         try:
-            conciliacao_tratado.to_excel(os.path.join(self.caminho, f"Conciliacao_TESTE.xlsx"), index=False)
+            conciliacao_tratado.to_excel(os.path.join(self.caminho, f"Conciliacao_TESTE {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx"), index=False)
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR Conciliacao_TESTE.xlsx: {e}")
 
@@ -371,7 +371,7 @@ class IGEPREV_GOVTO:
         d8_govto_sem_peculios_errados = self.remove_peculios_indesejados(d8_gov_to_unificado, self.front_tratado)
 
 
-        d8_govto_sem_peculios_errados.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO.xlsx', index=False)
+        d8_govto_sem_peculios_errados.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         return d8_govto_sem_peculios_errados
 
@@ -400,7 +400,7 @@ class IGEPREV_GOVTO:
         d8_igeprev_sem_peculios_errados = self.remove_peculios_indesejados(d8_igeprev_unificado, self.front_tratado)
 
         # Transforma  em excel
-        d8_igeprev_sem_peculios_errados.to_excel(fr'{self.caminho}\D8 UNIFICADO DE IGEPREV.xlsx', index=False)
+        d8_igeprev_sem_peculios_errados.to_excel(fr'{self.caminho}\D8 UNIFICADO DE IGEPREV {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         return d8_igeprev_sem_peculios_errados
  
@@ -413,14 +413,48 @@ class IGEPREV_GOVTO:
 
         # Separar prazo de d8 igeprev
         d8_igeprev_prazo = d8_unificado_igeprev[~d8_unificado_igeprev['PRZ.'].isin([1, '1','Indeter.'])]
-        d8_igeprev_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE IGEPREV COM PRAZO.xlsx', index=False)
-        d8_govto_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO COM PRAZO.xlsx', index=False)
+        d8_igeprev_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE IGEPREV COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        d8_govto_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
-        return d8_govto_prazo, d8_igeprev_prazo
+        # return d8_govto_prazo, d8_igeprev_prazo
+        return d8_igeprev_prazo
+    
+    def averbados_com_prazo(self):
+        averbados_gov_to = self.averbados_to
+
+        cpf_tratado = averbados_gov_to['CPF'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
+        averbados_gov_to['CPF'] = cpf_tratado
+
+
+        # Separar apenas os prazos de gov_to
+        if averbados_gov_to['VALOR_PARCELA'].dtype != "float64":
+            averbados_gov_to['VALOR_PARCELA'] = averbados_gov_to['VALOR_PARCELA'].astype(str).str.replace(".", "")
+            averbados_gov_to['VALOR_PARCELA'] = averbados_gov_to['VALOR_PARCELA'].astype(str).str.replace(",", ".")
+            averbados_gov_to['VALOR_PARCELA'] = pd.to_numeric(averbados_gov_to['VALOR_PARCELA'], errors='coerce')
+
+        # Status ADF
+        averbados_gov_to = averbados_gov_to[averbados_gov_to['STATUS_ADF'].isin(['CONSOLIDADO', 'INSERIDO'])]
+
+        # PRAZO
+        averbados_gov_to = averbados_gov_to[~averbados_gov_to['PRAZO'].isin(['INDETERMINADO'])]
+
+        # RUBRICA_DESCRICAO
+        averbados_gov_to = averbados_gov_to[~averbados_gov_to['RUBRICA_DESCRICAO'].str.contains('Mensalidade')]
+
+        # Separar prazo de averbados gov to
+        try:
+            averbados_gov_to.to_excel(fr'{self.caminho}\AVERBADOS DE GOV TO COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+            print(f'AVERBADOS DE GOV TO COM PRAZO salvo com sucesso!')
+        except Exception as e:
+            print(f'Não deu para salvar AVERBADOS DE GOV TO COM PRAZO')
+
+        return averbados_gov_to
 
     def front_com_d8(self):
         front_tratado = self.front_tratado
-        d8_govto_prazo, d8_igeprev_prazo = self.d8_com_prazo()
+        # d8_govto_prazo, d8_igeprev_prazo = self.d8_com_prazo()
+        d8_igeprev_prazo = self.d8_com_prazo()
+        govto_prazo = self.averbados_com_prazo()
 
         # Criar colunas no front
         front_tratado['SOMASE D8 GOV TO'] = ''
@@ -433,8 +467,8 @@ class IGEPREV_GOVTO:
         front_tratado = front_tratado.sort_values(by=['Consignataria'], ascending=False)
 
         # Somase de d8 gov to
-        somase_d8_govto = d8_govto_prazo.groupby('CPF')['R$ PARCELA'].sum()
-        front_tratado['SOMASE D8 GOV TO'] = front_tratado['CPF'].map(somase_d8_govto).fillna(0)
+        somase_govto_averbado = govto_prazo.groupby('CPF')['VALOR_PARCELA'].sum()
+        front_tratado['SOMASE D8 GOV TO'] = front_tratado['CPF'].map(somase_govto_averbado).fillna(0)
         
 
         # Somase de d8 igeprev
@@ -463,13 +497,13 @@ class IGEPREV_GOVTO:
         # Contse seq no front para pegar só os primeiros
         front_tratado['Contse seq'] = front_tratado.groupby(['CPF', 'Lançar']).cumcount() + 1
 
-        front_tratado.to_excel(fr'{self.caminho}\FRONT MEIO TRATADO.xlsx', index=False)
+        front_tratado.to_excel(fr'{self.caminho}\FRONT MEIO TRATADO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
 
         # Vamos salvar e retornar somente o que é maior que 0
         front_trabalhado = front_tratado[(front_tratado['Lançar'] > 0) & (front_tratado['Contse seq'] == 1)]
         
-        front_trabalhado.to_excel(fr'{self.caminho}\FRONT TOTALMENTE TRABALHADO.xlsx', index=False)
+        front_trabalhado.to_excel(fr'{self.caminho}\FRONT TOTALMENTE TRABALHADO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         return front_trabalhado # [front_trabalhado['Contse seq'] == 1]
     
@@ -499,7 +533,7 @@ class IGEPREV_GOVTO:
         gov_to_averbado_unificado = gov_to_averbado_unificado[gov_to_averbado_unificado['PRAZO'].isin(['INDETERMINADO'])]
 
         # Vamos gerar o arquivo para averiguar melhor
-        gov_to_averbado_unificado.to_excel(fr'{self.caminho}\AVERBADOS DE GOV TO UNIFICADOS.xlsx', index=False)
+        gov_to_averbado_unificado.to_excel(fr'{self.caminho}\AVERBADOS DE GOV TO UNIFICADOS {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # 1. Resolver os casos de valores iguais (remover duplicados exatos)
         # Isso remove as linhas onde MATRICULA, Consignataria e VALOR_PARCELA são idênticos,
@@ -602,7 +636,7 @@ class IGEPREV_GOVTO:
         # Divide a coluna de SERVIDOR que vem matricula e o nome dos clientes, em duas colunas distintas
         igeprev_averbado_unificado[["MATRICULA", "SERVIDOR"]] = igeprev_averbado_unificado['SERVIDOR + MATRICULA'].str.split(" - ", n=1, expand=True)
 
-        igeprev_averbado_unificado.to_excel(fr'{self.caminho}\IGEPREV AVERBADO TESTE.xlsx', index=False)
+        igeprev_averbado_unificado.to_excel(fr'{self.caminho}\IGEPREV AVERBADO TESTE {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # Renomeia as colunas de GOV TO
         igeprev_averbado_unificado.rename(columns={'SERVIDOR': 'NOME', 'ÓRGÃO': 'Convenio', 'SERVIÇO': 'RUBRICA_DESCRICAO', 'VLR RESERV.': 'VALOR_PARCELA'}, inplace=True)

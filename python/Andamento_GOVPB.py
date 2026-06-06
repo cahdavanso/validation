@@ -3,6 +3,7 @@ import re
 from thefuzz import fuzz
 import os
 from python.ESTEIRAS import load_esteiras
+from datetime import datetime
 
 '''front_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\relatorio_2026-05-06_11-45-47_parte_1.csv"
 andamento_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\Consignacao UNIFICADA GOV PB.xlsx"
@@ -43,13 +44,14 @@ andamento = andamento.sort_values(by='Situação')'''
 
 
 class ANDAMENTO:
-    def __init__(self, front, convenio, caminho, andamento=None, funcao=None):
+    def __init__(self, front, convenio, caminho, consignataria, andamento=None, funcao=None):
         self.front = front
         self.andamento = andamento
         self.convenio = convenio
         self.caminho = caminho
         self.esteiras = load_esteiras()
         self.funcao = funcao
+        self.consignataria = consignataria
 
     def unifica_front_funcao(self):
         front = self.front
@@ -152,6 +154,7 @@ class ANDAMENTO:
         # Remoção de cartão de crédito com prazo 0 ou 1
         print(f'cabeçalhos de andamento de paraíba: {self.andamento.columns}')
         self.andamento = self.andamento[~((self.andamento['Situação'].isin(['Quitada', 'Baixada'])) | (self.andamento['Prazo'].isin(["1/1"])))].copy()
+        
         
         if 'Contrato de Andamento' not in self.andamento.columns:
             self.andamento.insert(8, 'Contrato de Andamento', self.andamento['Contrato'])

@@ -26,6 +26,7 @@ from python.Codata import CODATA
 from python.INSS import INSS
 from python.Serha import SERHA
 from python.Consiglog import CONSIGLOG
+from python.ConsigiKonexia import CONSIGI_KONEXIA
 from python.IgeprevGovTo_Preliminar import IGEPREV_GOVTO
 from python.Zetra import ZETRA
 from python.Infoconsig import INFOCONSIG
@@ -34,7 +35,7 @@ from python.Sigrh import SIGRH
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = False 
+MODO_DESENVOLVIMENTO = True 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -111,6 +112,8 @@ INFOCONSIG_CONVENIO = ["PREF. ÁGUAS LINDAS DE GOIÁS", "PREF. PIRACICABA", "PRE
 TO_IGEPREV_CONVENIO = ["GOV. TOCANTINS e IGEPREV"]
 
 SIGRH_CONVENIO = ["GOV. SANTA CATARINA"]
+
+CONSIGI_KONEXIA_CONVENIO = ["PREF. CONTAGEM", "PREF. PLANALTINA"]
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
@@ -191,6 +194,9 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
 
 
                 df = pd.concat([df_d8_linhas, df_d8_parciais_completo], ignore_index=True)
+            elif "d8" in name and convenio == 'INSS':
+                df = pd.read_excel(file_obj, "Refinado")
+
             elif "averbados_to" in name:
                 df_preliminar = pd.read_excel(file_obj)
                 linha_identificacao = str(df_preliminar.iloc[5].values)
@@ -460,9 +466,9 @@ async def validar_planilhas(
             caminho=CAMINHO_SAIDA,
             orbital=orbital_df
         )
-    elif convenio in CONSIGLOG_CONVENIO:
-        logging.info("Usando validador: CONSIGLOG")
-        validador = CONSIGLOG(
+    elif convenio in CONSIGI_KONEXIA_CONVENIO:
+        logging.info("Usando validador: CONSIGI_KONEXIA")
+        validador = CONSIGI_KONEXIA(
             portal_file_list=averbados_df, 
             convenio=convenio,
             front=front_df,
@@ -471,6 +477,7 @@ async def validar_planilhas(
             kobraki=kobraki_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
+            funcao=funcao_df,
             orbital=orbital_df
         )
     elif convenio in INFOCONSIG_CONVENIO:

@@ -3,6 +3,7 @@ import numpy as np
 from datetime import datetime
 from python.TrataOrbital import TRATA_ORBITAL
 from python.trata_conciliacao import TRATA_CONCILIACAO
+from python.ESTEIRAS import load_esteiras
 import warnings
 import os
 
@@ -10,7 +11,7 @@ import os
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 class INSS:
-    def __init__(self, portal_file_list, front, conciliacao, caminho, funcao=None, kobraki=None, tacs=None, casos_capital=None, orbital=None):
+    def __init__(self, portal_file_list, front, conciliacao, caminho, funcao=None, kobraki=None, tacs=None, casos_capital=None, orbital=None, d8=None):
         
         # --- ADAPTAÇÃO: Recebendo DataFrames do server.py ---
         
@@ -35,6 +36,8 @@ class INSS:
         self.tacs = tacs
         
         self.orbital = orbital
+
+        self.d8 = d8
 
         self.trata_front_final()
 
@@ -133,8 +136,8 @@ class INSS:
 
 
         # Altera para cartão
-        front_unif['Tipo Operacao'] = front_unif['Tipo Operacao'].fillna('') # -> Só para ter certeza que ele vai preencher corretamente nos vazios
-        front_unif.loc[~front_unif['Tipo Operacao'].str.contains('', na=False) & (front_unif['Tipo Operacao'] == ''), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
+        # front_unif['Tipo Operacao'] = front_unif['Tipo Operacao'].fillna('') # -> Só para ter certeza que ele vai preencher corretamente nos vazios
+        # front_unif.loc[~front_unif['Tipo Operacao'].str.contains('', na=False) & (front_unif['Operação'] == ''), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
 
         front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
@@ -144,14 +147,15 @@ class INSS:
         
 
 
-        print(f'FRONT UNIFICADO FINALZIN: {front_unif.tail()}')
+        print(f'FRONT UNIFICADO FINALZIN:\n{front_unif.tail()}')
 
-        front_unif.to_excel(rf"{self.caminho}\Teste_front {self.convenio} {"CAPITAL CONSIG"} {datetime.now().strftime("%m-%Y")}.xlsx", index=False)
+        front_unif.to_excel(rf"{self.caminho}\Teste_front INSS {"CAPITAL CONSIG"} {datetime.now().strftime("%m-%Y")}.xlsx", index=False)
 
         return front_unif
     
     def tratamento_front_preliminar(self):
-        front_consig = self.front.copy()
+        front_consig = self.unifica_front_funcao()
+        orbital = self.orbital
 
         # Trasnforma Prestacao em numérico
         # front_consig['Prestacao'] = front_consig['Prestacao'].astype(str).str.replace('.', '', regex=False)
@@ -181,12 +185,14 @@ class INSS:
         print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
 
         # Esteiras
-        esteiras_permitidas = ['11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
+        '''esteiras_permitidas = ['11 FORMALIZACAO', '09.0 PAGO', 'RISCO DA OPERACAO - OBITO', '14.0 RISCO DA OPERACAO - OBITO',
                                'RISCO DA OPERACAO-DEMAIS SITUACOES', '11.PROBLEMAS DE AVERBACAO', '10.7.0 INGRESSAR COM PROCESSO OU ACAO JURIDICO',
                                '07.1 \x96 QUITACAO \x96 PAGAMENTO AO CLIENTE', '10.7 CONTRATO NAO AVERBADO - AGUARDANDO RESOLUCAO', '11.2  DETERMINACAO JUDICIAL',
                                "15.0\tRISCO DA OPERACAO-DEMAIS SITUACOES", "11.1 CONTRATO FISICO ENVIADO AO BANCO", "07.0 QUITACAO \x96 ENVIO DE CESSAO",
                                "99 CARTAO UTILIZADO", "15.0 RISCO DA OPERACAO-DEMAIS SITUACOES"
-                              ]
+                              ]'''
+        
+        esteiras_permitidas = load_esteiras()
         
         # Vamos renomear a primeira coluna da conciliação
         conciliacao.rename(columns={conciliacao.columns[0]: 'CONTRATOS'}, inplace=True)
@@ -201,6 +207,49 @@ class INSS:
         print(f'colunas de front consig: {front_consig.columns}')
         # Adiciona só as esteiras que podem ser lançadas
         # front_consig_esteiras = front_consig[front_consig['dsEsteira'].isin(esteiras_permitidas)].copy()
+
+        # Substituir contratos que tem menos de 9 dígitos por contratos CCB pegando os primeiros 9 dígitos
+        front_consig['Contrato'] = front_consig['Contrato'].astype(str)
+        front_consig.loc[front_consig['Contrato'].str.len() < 9, 'Contrato'] = front_consig['CCB'].astype(str).str.slice(0, 9)
+
+        # --------------------------------------------- ORBITAL --------------------------------------------- #
+        # --- ETAPA 1: Garantir que as chaves são do mesmo tipo (Texto) ---
+        # Isso evita o erro clássico onde um lado é número e o outro é texto
+        if orbital is not None:
+            front_consig['Contrato'] = front_consig['Contrato'].astype(str).str.strip()
+            # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
+
+            if orbital['VALID DESCONTO FINAL'].dtype != "float64":
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
+                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+
+            for col in orbital.columns:
+                if "contrato" in col or "Contrato" in col:
+                    orbital.rename(columns={col:"CONTRATO"}, inplace=True)
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
+
+            # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
+            # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
+            mapa_orbital = orbital.set_index('CONTRATO')['VALID DESCONTO FINAL']
+            # --- ETAPA 3: Definir quem vai ser alterado ---
+            filtro_esteira = front_consig['Esteira'] == '99 CARTAO UTILIZADO'
+
+            # --- ETAPA 4: Fazer a mágica (Buscar valores) ---
+            # .loc[filtro, coluna] -> Seleciona só as linhas da esteira certa
+            # .map(mapa_orbital)   -> Faz o "PROCV" buscando no dicionário criado
+            valores_encontrados = front_consig.loc[filtro_esteira, 'Contrato'].map(mapa_orbital)
+
+            # --- ETAPA 5: Tratar quem não foi achado ---
+            # Se o contrato não existe na Orbital, o map devolve NaN.
+            # Usamos fillna(0) para trocar NaN por 0, conforme você pediu.
+            valores_encontrados = valores_encontrados.fillna(0)
+
+            # --- ETAPA 6: Gravar no DataFrame original ---
+            valores_encontrados_str = valores_encontrados # .astype(str)
+            front_consig.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
+
+        front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
 
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
@@ -232,7 +281,7 @@ class INSS:
         # conciliacao_tatado = self.trata_conciliacao()
         prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = prepara_conciliacao.trata_conciliacao()
-        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
+        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'] # .astype('Int64')
         front_consig['Saldo'] = front_consig['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo'].to_dict())
         front_consig_validado_termino = front_consig.copy()
         front_consig_validado_termino.loc[front_consig_validado_termino['Saldo'] > -0.01, 'Análise'] = 'NÃO LANÇAR - SALDO POSITIVO'
@@ -245,7 +294,12 @@ class INSS:
         # Marca o que é Ação Judicial
         # No caso de Ação Judicial estiver estiver SIM e NÃO ao invés de 1 e 0
         front_consig_validado_termino['Acao Judicial'] = front_consig_validado_termino['Acao Judicial'].replace({'SIM': 1, 'NAO': 0})
-        front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'Análise'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
+        # front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'Análise'] = "NÃO LANÇAR - AÇÃO JUDICIAL"
+        liminares = front_consig_validado_termino[front_consig_validado_termino['Acao Judicial'] == 1]
+        mask_liminar = front_consig_validado_termino['CPF'].isin(liminares['CPF'])
+        front_consig_validado_termino['LIMINAR'] = front_consig_validado_termino['CPF'].map(liminares.set_index("CPF")["Contrato"].to_dict())
+        front_consig_validado_termino.loc[mask_liminar, 'Análise'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
+
 
         # Marca o que é Obito
         # No caso de óbito estiver estiver SIM e NÃO ao invés de 1 e 0
@@ -325,7 +379,10 @@ class INSS:
         front_trabalhado_lancar.insert(9, "VALOR A LANÇAR", '', True)
 
         # Soma dos valores de Complementar e Orbital
-        soma_complementar = complementar_orbital_df.groupby('CPF')['Prestacao'].sum().reset_index(name="SOMA_COMPLEMENTAR_ORBITAL")
+        soma_complementar = complementar_orbital_df.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum().reset_index(name="SOMA_COMPLEMENTAR_ORBITAL")
+
+        # Renomeia para ficar igual ao front_trabalhado_lancar
+        soma_complementar.rename(columns={'CPF/CNPJ': 'CPF'}, inplace=True)
 
         # Junta os dados com a planilha principal
         front_final = front_trabalhado_lancar.merge(soma_complementar, on="CPF", how="left")
@@ -389,41 +446,68 @@ class INSS:
 
         self.arquivo_lancamento(front_trabalhado_lancar)
 
-    def arquivo_lancamento(self, funcao_tratado):
-        print('Preparando arquivo de lançamento...')
-        
-        if self.averbados.empty:
-            print("Aviso: Arquivo Averbados vazio. Pulando geração de lançamento final.")
-            return
+    def trata_prazo_averb(self, averb_arrumar_prazo):
+        d8_bruto = self.d8
+        averbacao = averb_arrumar_prazo.copy()
 
-        funcao = funcao_tratado.copy()
-        averbados = self.averbados.copy()
+        averbacao['NR_OPER_EDITADO'] = averbacao['NR_OPER_EDITADO'].astype(str)
 
-        # Prepara chaves
-        if 'NR_OPER' in funcao.columns:
-            funcao['NR_OPER_CURTO'] = funcao['NR_OPER'].astype(str).str.slice(0, 9)
-        else:
-            funcao['NR_OPER_CURTO'] = ''
-            
-        if 'NR_OPER_EDITADO' in averbados.columns:
-            averbados['NR_OPER_EDITADO'] = averbados['NR_OPER_EDITADO'].astype(str)
+        print(f'\nTipo da Averbacao: {averbacao['NR_OPER_EDITADO'].dtype}')
+        print(f'Tipo do d8_bruto: {d8_bruto['NÚMERO DE CONTRATO TRATADO'].dtype}')
 
-        # Verifica colunas necessárias no averbados
-        cols_averbados = ['NR_OPER_EDITADO']
-        if 'EMPREGADOR' in averbados.columns: cols_averbados.append('EMPREGADOR')
-        else: averbados['EMPREGADOR'] = ''
-        
-        if 'MATRÍCULA' in averbados.columns: cols_averbados.append('MATRÍCULA')
-        else: averbados['MATRÍCULA'] = ''
+        # averbacao['NR_OPER_EDITADO'] = averbacao['NR_OPER_EDITADO'].astype(int)
+        averbacao['PRAZO ÚLT. D8'] = averbacao['NR_OPER_EDITADO'].map(
+            d8_bruto.set_index('NÚMERO DE CONTRATO TRATADO')['PRAZO MAIS ATUAL'])
 
-        df_final = pd.merge(
-            left=funcao,
-            right=averbados[cols_averbados],
-            left_on='NR_OPER_CURTO',
-            right_on='NR_OPER_EDITADO',
-            how='left'
+        # Garante que as colunas são numéricas
+        averbacao.loc[
+            averbacao['PRAZO ATUAL'].isin(['NÃO TEM PRAZO', '']),
+            'PRAZO ATUAL'
+        ] = 0
+
+        # Converte para numérico
+        averbacao['PRAZO ATUAL'] = pd.to_numeric(
+            averbacao['PRAZO ATUAL'], errors='coerce'
         )
 
+        averbacao['PRAZO ÚLT. D8'] = pd.to_numeric(
+            averbacao['PRAZO ÚLT. D8'], errors='coerce'
+        )
+
+        # Substitui PRAZO por ÚLT. PRAZO + 1 apenas onde ÚLT. PRAZO não é NaN
+        averbacao.loc[averbacao['PRAZO ÚLT. D8'].notna(), 'PRAZO ATUAL'] = averbacao.loc[averbacao[
+            'PRAZO ÚLT. D8'].notna(), 'PRAZO ÚLT. D8'] + 1
+
+        averbacao.to_excel(fr'{self.caminho}\AVERBAÇÃO TESTE PRAZO D8.xlsx', index=False)
+
+        return averbacao
+
+    def arquivo_lancamento(self, funcao_tratado):
+        """
+            Versão refatorada da função, utilizando pd.merge para mais eficiência e legibilidade.
+            """
+        print('Preparando arquivo de lançamento...')
+
+        # 1. Prepara os DataFrames para a junção (merge)
+        funcao = funcao_tratado.copy()
+        averbados = self.trata_prazo_averb(self.averbados)
+
+        # Garante que as chaves de junção sejam do mesmo tipo (string)
+        funcao['NR_OPER_CURTO'] = funcao['NR_OPER'].astype(str).str.slice(0, 9)
+        averbados['NR_OPER_EDITADO'] = averbados['NR_OPER_EDITADO'].astype(str)
+
+        # 2. Usa pd.merge para buscar 'EMPREGADOR' e 'MATRÍCULA' de uma só vez
+        # Isso substitui todo o processo de .map()
+        df_final = pd.merge(
+            left=funcao,
+            right=averbados[['NR_OPER_EDITADO', 'EMPREGADOR', 'MATRÍCULA', 'PRAZO ATUAL']],
+            left_on='NR_OPER_CURTO',
+            right_on='NR_OPER_EDITADO',
+            how='left'  # 'left' garante que nenhuma linha de 'funcao' seja perdida
+        )
+
+        # 3. Cria o DataFrame de lançamento com os nomes de coluna corretos
+        # Selecionando e renomeando as colunas necessárias em um único passo
         inclusao_desconto = df_final.rename(columns={
             'NR_OPER': 'NR. OPER.',
             'CPF': 'CPF',
@@ -431,26 +515,21 @@ class INSS:
             'VALOR A LANÇAR': 'VLR.PARC',
             'EMPREGADOR': 'EMPREGADOR',
             'NR_OPER_CURTO': 'PROPOSTA',
-            'MATRÍCULA': 'MATRICULA/BENEFÍCIO'
+            'MATRÍCULA': 'MATRICULA/BENEFÍCIO',
+            'PRAZO ATUAL': 'PRAZO'
         })
 
-        # Garante colunas finais
-        for col in ['NR. OPER.', 'CPF', 'CLIENTE', 'VLR.PARC', 'EMPREGADOR', 'PROPOSTA', 'MATRICULA/BENEFÍCIO']:
-            if col not in inclusao_desconto.columns:
-                inclusao_desconto[col] = ''
+        # 4. Ajusta os tipos de dados e valores finais
+        inclusao_desconto['VLR.PARC'] = inclusao_desconto['VLR.PARC'].astype(str).str.replace(',', '.').astype(float)
 
-        inclusao_desconto['VLR.PARC'] = inclusao_desconto['VLR.PARC'].astype(str).str.replace(',', '.', regex=False)
-        # Converte para float seguro
-        inclusao_desconto['VLR.PARC'] = pd.to_numeric(inclusao_desconto['VLR.PARC'], errors='coerce')
-        
-        inclusao_desconto['PRAZO'] = ''
-
+        # 5. Seleciona apenas as colunas na ordem desejada
         colunas_finais = ['NR. OPER.', 'CPF', 'CLIENTE', 'VLR.PARC', 'EMPREGADOR', 'PROPOSTA',
                           'MATRICULA/BENEFÍCIO', 'PRAZO']
         inclusao_desconto = inclusao_desconto[colunas_finais]
 
+        # 6. Gera o nome do arquivo com data e hora para evitar sobreposição
         timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M")
-        caminho_arquivo = os.path.join(self.caminho, f'INSS_INCLUIR_DESCONTO_CARTÃO_{timestamp}.xlsx')
+        caminho_arquivo = fr'{self.caminho}\INSS_INCLUIR_DESCONTO_CARTÃO_{timestamp}.xlsx'
 
         inclusao_desconto.to_excel(caminho_arquivo, index=False)
         print(f'Arquivo de lançamento salvo em: {caminho_arquivo}')

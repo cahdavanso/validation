@@ -33,7 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CONVENIOS_SIGRH = ["GOV. SANTA CATARINA"];
 
-    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_RF1, ...CONVENIOS_INFOCONSIG, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_SIGRH].sort();
+    const CONVENIOS_CONSIGI_KONEXIA = ["PREF. CONTAGEM", "PREF. PLANALTINA"]
+
+    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_RF1, ...CONVENIOS_INFOCONSIG, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_SIGRH, ...CONVENIOS_CONSIGI_KONEXIA].sort();
 
     const FIELDS_CONSIGFACIL = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_CODATA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "ANDAMENTO", "AVERBADOS", "ORBITAL"];
@@ -45,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const FIELDS_TO_IGEPREV = ["FRONT", "FUNCAO", "AVERBADOS_TO", "AVERBADOS_IGEPREV", "D8_TO", "D8_IGEPREV", "CONCILIACAO", "KOBRAKI", "TACS"];
     const FIELDS_RF1 = ["FRONT", "FUNCAO", "AVERBADOS", "CONCILIACAO", "KOBRAKI", "TACS"];
     const FIELDS_SIGRH = ["FRONT", "FUNCAO", "AVERBADOS_SC_CAPITAL", "AVERBADOS_SC_CLICK", "ANDAMENTO_SC_CAPITAL", "ANDAMENTO_SC_CLICK", "CONCILIACAO", "KOBRAKI", "TACS", "ORBITAL"];
+    const FIELDS_CONSIG_KONEXIA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "AVERBADOS", "ORBITAL"];
 
     const fileDataMap = {}; 
     
@@ -249,6 +252,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (CONVENIOS_SIGRH.includes(convenio)){
             consignatariaArea.classList.remove('hidden');
             currentFields = FIELDS_SIGRH;
+        }else if (CONVENIOS_CONSIGI_KONEXIA.includes(convenio)) {
+            consignatariaArea.classList.remove('hidden');
+            currentFields = FIELDS_CONSIG_KONEXIA;
         }
 
         uploadForm.classList.remove('hidden');
@@ -342,6 +348,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!selectedRubrica) valid = false;
         }
         else if (selectedConvenio && CONVENIOS_SIGRH.includes(selectedConvenio)){
+            if (!selectedConsignataria) valid = false;
+        }
+        else if (selectedConvenio && CONVENIOS_CONSIGI_KONEXIA.includes(selectedConvenio)){
             if (!selectedConsignataria) valid = false;
         }
         submitButton.disabled = !(hasFiles && valid);
