@@ -108,6 +108,15 @@ class TRATA_CONCILIACAO:
             conciliacao_tratado = conciliacao_tratado.loc[:, ~conciliacao_tratado.columns.duplicated()]
 
             # Agora a conta vai funcionar porque só existe uma coluna 'PRESTAÇÃO' e uma 'PRAZO'
+            print(f'PRESTAÇÃO TIPO {conciliacao_tratado['PRESTAÇÃO'].dtype}')
+            print(f'PRAZO TIPO {conciliacao_tratado['PRAZO'].dtype}')
+            print(f'AMOSTRA DE PRESTAÇÃO TIPO {conciliacao_tratado['PRESTAÇÃO'].head()}')
+            print(f'AMOSTRA DE PRAZO TIPO {conciliacao_tratado['PRAZO'].head()}')
+
+            if conciliacao_tratado['PRAZO'].dtype != 'int64':
+                conciliacao_tratado.loc[(conciliacao_tratado['PRAZO'] == '') | (conciliacao_tratado['PRAZO'].isna()), 'PRAZO'] = 96
+                conciliacao_tratado['PRAZO'] = pd.to_numeric(conciliacao_tratado['PRAZO'], errors='coerce').astype('int64')
+
             conciliacao_tratado['TOTAL'] = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']
             prestacao_vezes_prazo = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']
 

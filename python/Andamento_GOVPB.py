@@ -152,8 +152,17 @@ class ANDAMENTO:
         # self.andamento = self.andamento[self.andamento['Prazo Total'] != 1].copy()
 
         # Remoção de cartão de crédito com prazo 0 ou 1
+        # lista_prazos = [f"0/{i}" for i in range(10)]
         print(f'cabeçalhos de andamento de paraíba: {self.andamento.columns}')
-        self.andamento = self.andamento[~((self.andamento['Situação'].isin(['Quitada', 'Baixada'])) | (self.andamento['Prazo'].isin(["1/1"])))].copy()
+        self.andamento = self.andamento[
+            ~(
+                self.andamento['Situação'].isin(['Quitada', 'Baixada'])
+                |
+                self.andamento['Prazo'].str.match(r'^0/\d+$')
+                |
+                (self.andamento['Prazo'] == '1/1')
+            )
+        ].copy()
         
         
         if 'Contrato de Andamento' not in self.andamento.columns:

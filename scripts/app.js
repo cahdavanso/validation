@@ -31,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                   "SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA", "PREV. PIRACICABA IPASP",
                                  ];
 
+    const CONVENIOS_CIP = ["PREF. SÃO PAULO", "GOV. SÃO PAULO"];
+
     const CONVENIOS_SIGRH = ["GOV. SANTA CATARINA"];
 
     const CONVENIOS_CONSIGI_KONEXIA = ["PREF. CONTAGEM", "PREF. PLANALTINA"]
@@ -46,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const FIELDS_INFOCONSIG = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "AVERBADOS", "ORBITAL"];
     const FIELDS_TO_IGEPREV = ["FRONT", "FUNCAO", "AVERBADOS_TO", "AVERBADOS_IGEPREV", "D8_TO", "D8_IGEPREV", "CONCILIACAO", "KOBRAKI", "TACS"];
     const FIELDS_RF1 = ["FRONT", "FUNCAO", "AVERBADOS", "CONCILIACAO", "KOBRAKI", "TACS"];
+    const FIELDS_CIP = ["FRONT", "FUNCAO", "AVERBADOS", "CONCILIACAO", "KOBRAKI", "TACS"];
     const FIELDS_SIGRH = ["FRONT", "FUNCAO", "AVERBADOS_SC_CAPITAL", "AVERBADOS_SC_CLICK", "ANDAMENTO_SC_CAPITAL", "ANDAMENTO_SC_CLICK", "CONCILIACAO", "KOBRAKI", "TACS", "ORBITAL"];
     const FIELDS_CONSIG_KONEXIA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "AVERBADOS", "ORBITAL"];
 
@@ -249,6 +252,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (CONVENIOS_RF1.includes(convenio)){
             consignatariaArea.classList.remove('hidden');
             currentFields = FIELDS_RF1;
+        } else if (CONVENIOS_CIP) {
+            currentFields = FIELDS_CIP;
         } else if (CONVENIOS_SIGRH.includes(convenio)){
             consignatariaArea.classList.remove('hidden');
             currentFields = FIELDS_SIGRH;

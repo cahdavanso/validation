@@ -115,6 +115,8 @@ SIGRH_CONVENIO = ["GOV. SANTA CATARINA"]
 
 CONSIGI_KONEXIA_CONVENIO = ["PREF. CONTAGEM", "PREF. PLANALTINA"]
 
+CIP_CONVENIO = ["PREF. SÃO PAULO", "GOV. SÃO PAULO"]
+
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
     "GOV. MARANHÃO", "GOV. MATO GROSSO", "GOV. PIAUÍ", "GOV. PERNAMBUCO","PREF. BAYEUX", "PREF. CAJAMAR",
@@ -136,6 +138,7 @@ def abas(excel_file):
     # E buscamos por 'desc. Parciais'
     aba_linhas = None
     aba_parciais = None
+    aba_recusas = None
 
     for nome in todas_as_abas:
         # Lógica para a aba de Linhas
@@ -147,8 +150,11 @@ def abas(excel_file):
         if "Desc. Parciais" in nome:
             aba_parciais = nome
 
-        if  aba_linhas is not None and aba_parciais is not None:
-            return aba_linhas, aba_parciais
+        if "Recusas" in nome:
+            aba_recusas = nome
+
+        if  aba_linhas is not None and aba_parciais is not None and aba_recusas is not None:
+            return aba_linhas, aba_parciais, aba_recusas
         else:
             continue
 
@@ -182,10 +188,14 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
                 df = pd.read_excel(file_obj, sheet_name='CONSOLIDADO')
             elif "d8_to" in name:
                 d8_gov_to_amostra = pd.ExcelFile(file_obj)
-                planilha_linhas, planilha_parciais = abas(d8_gov_to_amostra)
+                planilha_linhas, planilha_parciais, planilha_recusas = abas(d8_gov_to_amostra)
                 df_d8_linhas = pd.read_excel(file_obj, header=7, sheet_name=planilha_linhas)
 
                 print(f'HEAD de d8_to: {df_d8_linhas.head()}')
+
+                # DataFrame criado para a ideia de remover as parcelas de d8 que não estão sendo descontadas da aba recusados, e
+                # usar os valores que sobraram dos descontos que foram descontados parcialmente 
+                df_d8_recusas = pd.read_excel(file_obj, header=7, sheet_name=planilha_recusas)
 
                 df_d8_parciais = pd.read_excel(file_obj, header=7, sheet_name=planilha_parciais)
                 df_d8_parciais.rename(columns={'R$ PARCELA DESCONTADA': 'R$ PARCELA'}, inplace=True)
@@ -193,7 +203,9 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
                 df_d8_parciais_completo = df_d8_parciais[mapeamento_d8]
 
 
-                df = pd.concat([df_d8_linhas, df_d8_parciais_completo], ignore_index=True)
+                # df = pd.concat([df_d8_linhas, df_d8_parciais_completo], ignore_index=True)
+                print(f'Colunas de df_d8_recusas: {df_d8_recusas.columns}')
+                df = df_d8_recusas
             elif "d8" in name and convenio == 'INSS':
                 df = pd.read_excel(file_obj, "Refinado")
 
@@ -513,6 +525,18 @@ async def validar_planilhas(
     elif convenio in RF1_CONVENIO:
         logging.info("Usando o validador: RF1")
         validador = RF1(
+            front=front_df,
+            portal_file_list=averbados_df,
+            convenio=convenio,
+            caminho=CAMINHO_SAIDA,
+            funcao=funcao_df,
+            conciliacao=conciliacao_df,
+            tacs=tacs_df,
+            kobraki=kobraki_df
+        )
+    elif convenio in CIP_CONVENIO:
+        logging.info("Usando o validador: CIP")
+        validador = CIP(
             front=front_df,
             portal_file_list=averbados_df,
             convenio=convenio,

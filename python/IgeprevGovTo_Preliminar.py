@@ -151,6 +151,7 @@ class IGEPREV_GOVTO:
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
         front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
+        front_unif['Consignataria'] = front_unif['Consignataria'].fillna('HOJE PREVIDÊNCIA PRIVADA')
 
         # print(front_unif.tail())
 
@@ -288,59 +289,82 @@ class IGEPREV_GOVTO:
         return front_copy
     
     def remove_peculios_indesejados(self, d8_unificado, front):
-        # Separa só os valores de peculio do d8
-        try:
-            # 1. Criar o 'CONTSE SEQ' e o 'CONCAT' de uma vez só
-            # Usamos o cumcount direto no agrupamento de CPF e Parcela
-            d8_unificado['CONTSE SEQ'] = d8_unificado.groupby(['CPF', 'R$ PARCELA']).cumcount() + 1
+        # Declaramos a lista de valores logo no início
+        valores_peculio = [20, 40, 60, 80, 100, 120]
 
-            # 2. Gerar a chave final concatenada
-            d8_unificado['CONCAT CPF PARCELA'] = (
-                d8_unificado['CPF'].astype(str) + 
-                d8_unificado['R$ PARCELA'].astype(str) + 
-                d8_unificado['CONTSE SEQ'].astype(str)
+        try:
+            # 1. Cria a máscara para filtrar apenas as linhas desejadas
+            mask = d8_unificado['VALOR_PARCELA'].isin(valores_peculio)
+
+            # Inicializa as colunas com vazio para evitar que o Pandas preencha com NaN
+            d8_unificado['CONTSE SEQ'] = ""
+            d8_unificado['CONCAT CPF PARCELA'] = ""
+
+            # 2. Aplica o agrupamento e a contagem APENAS nas linhas filtradas
+            d8_unificado.loc[mask, 'CONTSE SEQ'] = (
+            d8_unificado[mask].groupby(['CPF', 'VALOR_PARCELA']).cumcount() + 1
+            ).astype(str)
+
+            # 3. Gera a chave concatenada APENAS nas linhas filtradas
+            d8_unificado.loc[mask, 'CONCAT CPF PARCELA'] = (
+                d8_unificado.loc[mask, 'CPF'].astype(str) + 
+                d8_unificado.loc[mask, 'VALOR_PARCELA'].astype(str) + 
+                d8_unificado.loc[mask, 'CONTSE SEQ'].astype(str)
             )
-            # 3. Correção do .isin (precisa de uma lista [])
-            # valores_peculio = [20, 40, 60, 80, 100, 120]
-            valores_peculio = [20]
-            d8_peculios = d8_unificado[d8_unificado['R$ PARCELA'].isin(valores_peculio)].copy()
+
+            # 4. Cria o DataFrame isolado de pecúlios copiando apenas a máscara
+            d8_peculios = d8_unificado[mask].copy()
             convenio = 'GOV. TO'
             
-        except Exception as e:
+        except KeyError: # Usar KeyError aqui é mais preciso para "coluna não encontrada"
             try:
-                # 1. Criar o 'CONTSE SEQ' e o 'CONCAT' de uma vez só
-                # Usamos o cumcount direto no agrupamento de CPF e Parcela
-                d8_unificado['CONTSE SEQ'] = d8_unificado.groupby(['CPF', 'VLR.  ADE']).cumcount() + 1
+                # 1. Cria a máscara para a outra coluna
+                mask = d8_unificado['VLR.  ADE'].isin(valores_peculio)
 
-                # 2. Gerar a chave final concatenada
-                d8_unificado['CONCAT CPF PARCELA'] = (
-                    d8_unificado['CPF'].astype(str) + 
-                    d8_unificado['VLR.  ADE'].astype(str) + 
-                    d8_unificado['CONTSE SEQ'].astype(str)
+                # Inicializa as colunas
+                d8_unificado['CONTSE SEQ'] = ""
+                d8_unificado['CONCAT CPF PARCELA'] = ""
+
+                # 2. Agrupamento e contagem
+                d8_unificado.loc[mask, 'CONTSE SEQ'] = (
+                d8_unificado[mask].groupby(['CPF', 'VLR.  ADE']).cumcount() + 1
+                ).astype(str)
+
+                # 3. Concatenação
+                d8_unificado.loc[mask, 'CONCAT CPF PARCELA'] = (
+                    d8_unificado.loc[mask, 'CPF'].astype(str) + 
+                    d8_unificado.loc[mask, 'VLR.  ADE'].astype(str) + 
+                    d8_unificado.loc[mask, 'CONTSE SEQ'].astype(str)
                 )
-                # 3. Correção do .isin (precisa de uma lista [])
-                # valores_peculio = [20, 40, 60, 80, 100, 120]
-                valores_peculio = [20]
-                d8_peculios = d8_unificado[d8_unificado['VLR.  ADE'].isin(valores_peculio)].copy()
 
+                d8_peculios = d8_unificado[mask].copy()
                 convenio = 'IGEPREV'
                 
             except Exception as e:
-                print(f'Erro ao separar 20', e)
+                print(f'Erro ao separar 20: {e}')
 
-        # CONTSE SEQ
-        front['CONTSE SEQ'] = front.groupby(['CPF', 'Prestacao']).cumcount() + 1
-        # CONCAT FRONT
-        front['CONCAT CPF PARCELA'] = (
-            front['CPF'].astype(str) +
-            front['Prestacao'].astype(str) +
-            front['CONTSE SEQ'].astype(str)
-            )
-        
-        # Separa os valores de 20 no front
-        # front_peculios = front[front['Prestacao'].isin([20, 40, 60, 80, 100, 120])]
-        front_peculios = front[front['Prestacao'].isin([20])]
-        
+        # 1. Define a lista de valores e cria a máscara
+        valores_peculio = [20, 40, 60, 80, 100, 120]
+        mask = front['Prestacao'].isin(valores_peculio)
+
+        # 2. Inicializa as colunas com vazio para evitar NaN nas outras linhas
+        front['CONTSE SEQ'] = ""
+        front['CONCAT CPF PARCELA'] = ""
+
+        # 3. Calcula o sequencial APENAS nas linhas da máscara
+        front.loc[mask, 'CONTSE SEQ'] = (
+        front[mask].groupby(['CPF', 'Prestacao']).cumcount() + 1
+        ).astype(str)
+
+        # 4. Concatena os valores APENAS nas linhas da máscara
+        front.loc[mask, 'CONCAT CPF PARCELA'] = (
+            front.loc[mask, 'CPF'].astype(str) +
+            front.loc[mask, 'Prestacao'].astype(str) +
+            front.loc[mask, 'CONTSE SEQ'].astype(str)
+        )
+
+        # 5. Isola o DataFrame de pecúlios copiando apenas as linhas da máscara
+        front_peculios = front[mask].copy()        
         # 1. Pegamos a lista de chaves (CONCAT) que EXISTEM no front
         chaves_no_front = front_peculios['CONCAT CPF PARCELA'].unique()
 
@@ -368,12 +392,13 @@ class IGEPREV_GOVTO:
             d8_gov_to_unificado['R$ PARCELA'] = pd.to_numeric(d8_gov_to_unificado['R$ PARCELA'], errors='coerce')
 
         # Testa d8 sem peculios errados
-        d8_govto_sem_peculios_errados = self.remove_peculios_indesejados(d8_gov_to_unificado, self.front_tratado)
+        # d8_govto_sem_peculios_errados = self.remove_peculios_indesejados(d8_gov_to_unificado, self.front_tratado)
 
 
-        d8_govto_sem_peculios_errados.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        # d8_govto_sem_peculios_errados.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        d8_gov_to_unificado.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
-        return d8_govto_sem_peculios_errados
+        return d8_gov_to_unificado
 
     def unifica_d8_igeprev(self):
         d8_igeprev_unificado = self.d8_igeprev
@@ -405,26 +430,27 @@ class IGEPREV_GOVTO:
         return d8_igeprev_sem_peculios_errados
  
     def d8_com_prazo(self):
-        d8_unificado_govt_to = self.unifica_d8_gov_to()
+        # d8_unificado_govt_to = self.unifica_d8_gov_to()
         d8_unificado_igeprev = self.unifica_d8_igeprev()
 
         # Separar prazo de d8 gov to
-        d8_govto_prazo = d8_unificado_govt_to[(d8_unificado_govt_to['PARCELA'].str.contains('/')) & (~d8_unificado_govt_to['RUBRICA'].isin(['3620_2023', '3620_2024', '3620_2025']))]
+        # d8_govto_prazo = d8_unificado_govt_to[(d8_unificado_govt_to['PARCELA'].str.contains('/')) & (~d8_unificado_govt_to['RUBRICA'].isin(['3620_2023', '3620_2024', '3620_2025']))]
 
         # Separar prazo de d8 igeprev
         d8_igeprev_prazo = d8_unificado_igeprev[~d8_unificado_igeprev['PRZ.'].isin([1, '1','Indeter.'])]
         d8_igeprev_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE IGEPREV COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
-        d8_govto_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        # d8_govto_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # return d8_govto_prazo, d8_igeprev_prazo
         return d8_igeprev_prazo
     
     def averbados_com_prazo(self):
         averbados_gov_to = self.averbados_to
+        d8_unificado_govt_to = self.unifica_d8_gov_to()
 
+        # Adiciona ponto e traço nos CPFs do arquivo de averbado
         cpf_tratado = averbados_gov_to['CPF'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
         averbados_gov_to['CPF'] = cpf_tratado
-
 
         # Separar apenas os prazos de gov_to
         if averbados_gov_to['VALOR_PARCELA'].dtype != "float64":
@@ -432,14 +458,57 @@ class IGEPREV_GOVTO:
             averbados_gov_to['VALOR_PARCELA'] = averbados_gov_to['VALOR_PARCELA'].astype(str).str.replace(",", ".")
             averbados_gov_to['VALOR_PARCELA'] = pd.to_numeric(averbados_gov_to['VALOR_PARCELA'], errors='coerce')
 
+        averbados_gov_to = averbados_gov_to[averbados_gov_to['VALOR_PARCELA'] >= 20]
+
+        # --------------------------------------------- TESTE DA ABA DE RECUSADOS ---------------------------------------------
+        # ADFs para remover do arquivo de averbado
+        d8_unificado_remocoes = d8_unificado_govt_to[~d8_unificado_govt_to['MOTIVO'].str.contains('CORTE PARCIAL')].copy()
+        # Vamos criar uma coluna gêmea, porque por algum motivo usar a mesma coluna no .set_index('ADF')['ADF'] não retorna a coluna indicada
+        d8_unificado_remocoes['ADF_PARA_REMOVER'] = d8_unificado_remocoes['ADF']
+        # Filtra mantendo apenas os CODIGOADF que NÃO estão na coluna 'ADF' do d8_unificado_remocoes
+        averbados_gov_to_teste_removidos = averbados_gov_to[~averbados_gov_to['CODIGOADF'].isin(d8_unificado_remocoes['ADF'])].copy()
+        # Substituímos os valores integrais pelos parciais
+        d8_recusados_parcialmente = d8_unificado_govt_to[d8_unificado_govt_to['MOTIVO'].str.contains('CORTE PARCIAL', na=False)]
+        padrao_regex = r'Valor\s*Corte\s*:\s*([\d.,]+)'
+        # Criamos a nova coluna extraindo o padrão da coluna MOTIVO
+        d8_recusados_parcialmente['VALOR_DO_CORTE'] = d8_recusados_parcialmente['MOTIVO'].str.extract(padrao_regex)
+        if d8_recusados_parcialmente['VALOR_DO_CORTE'].dtype != 'float64':
+            d8_recusados_parcialmente['VALOR_DO_CORTE'] = d8_recusados_parcialmente['VALOR_DO_CORTE'].astype(str).str.replace(".", "").str.replace(",", ".")
+            d8_recusados_parcialmente['VALOR_DO_CORTE'] = pd.to_numeric(d8_recusados_parcialmente['VALOR_DO_CORTE'], errors='coerce')
+        # Aplica os valores parciais de volta no averbados sem as parcelas removidas
+        # 1. Criamos o dicionário de mapeamento direto (ADF -> VALOR_DO_CORTE)
+        # Tiramos duplicados do set_index para garantir que o mapeamento seja único e limpo
+        mapa_cortes = d8_recusados_parcialmente.drop_duplicates(subset=['ADF']).set_index('ADF')['VALOR_DO_CORTE']
+
+        # 2. Criamos uma máscara booleana para identificar quais linhas do averbado precisam sofrer alteração
+        linhas_para_atualizar = averbados_gov_to_teste_removidos['CODIGOADF'].isin(mapa_cortes.index)
+
+        # 3. Atualizamos exclusivamente essas linhas usando o .map() apenas nelas
+        averbados_gov_to_teste_removidos.loc[linhas_para_atualizar, 'VALOR_PARCELA'] = (
+            averbados_gov_to_teste_removidos.loc[linhas_para_atualizar, 'CODIGOADF'].map(mapa_cortes)
+        )
+
+        averbados_gov_to_teste_removidos.to_excel(f'{self.caminho}\TESTE AVERBADO COM PRAZO SEM OS CASOS REMOVIDOS E COM AS PARCELAS PARCIAIS.xlsx', index=False)
+
+        # CASO A IDEIA DE USAR VALORES PARCIAIS NÃO VÁ PARA FRENTE, É SÓ EU COMENTAR ESSA LINHA ABAIXO
+        averbados_gov_to = averbados_gov_to_teste_removidos.copy()
+
         # Status ADF
-        averbados_gov_to = averbados_gov_to[averbados_gov_to['STATUS_ADF'].isin(['CONSOLIDADO', 'INSERIDO'])]
+        averbados_gov_to = averbados_gov_to[averbados_gov_to['STATUS_ADF'].isin(['CONSOLIDADO', 'INSERIDO', 'AGUARDANDO PORTABILIDADE', 'REFINANCIADO', 'COMPRADO', 'PRÉ REFINANCIADO'])]
 
         # PRAZO
         averbados_gov_to = averbados_gov_to[~averbados_gov_to['PRAZO'].isin(['INDETERMINADO'])]
 
+        # SEM PECULIOS
+        averbados_gov_to_sem_peculios = self.remove_peculios_indesejados(averbados_gov_to, self.front_tratado)
+        averbados_gov_to = averbados_gov_to_sem_peculios.copy()
+
+        
         # RUBRICA_DESCRICAO
         averbados_gov_to = averbados_gov_to[~averbados_gov_to['RUBRICA_DESCRICAO'].str.contains('Mensalidade')]
+
+        # RUBRICA_CODIGO
+        averbados_gov_to = averbados_gov_to[~averbados_gov_to['RUBRICA_CODIGO'].str.contains('3620')]
 
         # Separar prazo de averbados gov to
         try:
@@ -478,8 +547,6 @@ class IGEPREV_GOVTO:
         # Soma dos d8
         front_tratado['SOMAS DE D8'] = front_tratado['SOMASE D8 GOV TO'] + front_tratado['SOMASE IGEPREV']
 
-        # Adiciona mais 20 em cada cpf de hp
-        front_tratado.loc[front_tratado['Consignataria'] == 'HOJE PREVIDÊNCIA PRIVADA', 'Valor a lançar'] += 20
 
         # SOMASE LOCAL
         front_tratado['SOMASE LOCAL'] = front_tratado.groupby("CPF")['Valor a lançar'].transform('sum')
@@ -490,12 +557,14 @@ class IGEPREV_GOVTO:
 
         # Coluna Gêmea de Diff para não alterar os valores originais
         front_tratado['Lançar'] = front_tratado['DIFF D8'].copy()
+        # Adiciona mais 20 em cada cpf de hp
+        front_tratado.loc[(front_tratado['Consignataria'] == 'HOJE PREVIDÊNCIA PRIVADA') & (front_tratado['DIFF D8'] > 0), 'Lançar'] += 20
 
         # Transforma valores negativos em 0
         front_tratado.loc[front_tratado['DIFF D8'] < 0, 'Lançar'] = 0
         
         # Contse seq no front para pegar só os primeiros
-        front_tratado['Contse seq'] = front_tratado.groupby(['CPF', 'Lançar']).cumcount() + 1
+        front_tratado['Contse seq'] = front_tratado.groupby('CPF').cumcount() + 1
 
         front_tratado.to_excel(fr'{self.caminho}\FRONT MEIO TRATADO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
@@ -651,6 +720,8 @@ class IGEPREV_GOVTO:
             igeprev_remapeado['VALOR_PARCELA'] = igeprev_remapeado['VALOR_PARCELA'].str.replace(".", '')
             igeprev_remapeado['VALOR_PARCELA'] = igeprev_remapeado['VALOR_PARCELA'].str.replace(",", '.')
             igeprev_remapeado['VALOR_PARCELA'] = pd.to_numeric(igeprev_remapeado['VALOR_PARCELA'], errors='coerce')
+
+        igeprev_remapeado = igeprev_remapeado[igeprev_remapeado['VALOR_PARCELA'] >= 20]
         
         # print(f'COLUNAS DE GOV TO REMAPEADO {gov_to_remapeado.columns}\n')
         # print(f'COLUNAS DE IGEPREV REMAPEADO {igeprev_remapeado.columns}')

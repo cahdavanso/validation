@@ -119,7 +119,10 @@ class TRATA_ORBITAL:
 
 
         # Criar uma coluna temporária para remover os contratos liquidados, cancelados, ou com saldo positivo
-        orbital_preparado['OBS'] = orbital_preparado['Proposta'].map(front_para_separar.set_index('NR_OPER_EDITADO')['Análise'])
+        if self.convenio == 'INSS':
+            orbital_preparado['OBS'] = orbital_preparado['Proposta'].map(front_para_separar.set_index('NR_OPER_EDITADO')['Análise'])
+        else:
+            orbital_preparado['OBS'] = orbital_preparado['Proposta'].map(front_para_separar.set_index('Contrato')['OBS'])
         orbital_preparado = orbital_preparado[~orbital_preparado['OBS'].isin(['NÃO LANÇAR - SALDO POSITIVO', 'NÃO LANÇAR - AÇÃO JUDICIAL', 'NÃO LANÇAR - LIQUIDADO', 'NÃO LANÇAR - CASOS PATRICK'])].copy()
         
         orbital_preparado['Proposta'] = orbital_preparado['Proposta'].astype('int64')

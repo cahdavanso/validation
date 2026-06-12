@@ -481,7 +481,9 @@ class SIGRH:
         # Usamos o ~ dentro do .loc para inverter a máscara
         '''if self.convenio not in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE', 'PREF. PORTO VELHO']:
             front_consig_validado_termino.loc[~mask_vazio_prazo, 'Novo Tipo Operacao'] = "CARTAO BENEFICIO"''' # Ou o nome que desejar
-
+        # --------------------------------------------------------------------------------------------- #
+        # REMOVER CPF's QUE O JOMAR PEDIU
+        front_consig_validado_termino = front_consig_validado_termino[~front_consig_validado_termino['CPF'].isin(['057.368.179-63', '448.570.209-04', '030.431.289-40', '023.526.239-01', '006.303.680-07'])]
 
         # Salva com os NÃO LANÇAR
         # Dentro do seu validador (ex: python/Consigfacil.py)
@@ -492,7 +494,9 @@ class SIGRH:
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR: {e}")
 
-        # --------------------------------------------------------------------------------------------- #
+
+
+
         return front_consig_validado_termino
         
     def tratamento_front(self):
@@ -566,6 +570,18 @@ class SIGRH:
         front_consig_trabalhado['MATRICULA_CLICK_ENC'] = front_consig_trabalhado['Contrato'].map(
             matriculas_encontradas.set_index('Contrato')['MATRÍCULA CLICK']
         )
+        
+        # 1. Filtra o DataFrame para mostrar apenas as linhas onde a coluna 'Contrato' se repete
+        # O keep=False é crucial aqui para mostrar tanto o original quanto as cópias
+        contratos_duplicados = matriculas_encontradas[matriculas_encontradas.duplicated(subset=['Contrato'], keep=False)]
+
+        # 2. Ordena pela coluna 'Contrato' para que os repetidos fiquem agrupados juntos no terminal
+        contratos_duplicados = contratos_duplicados.sort_values(by='Contrato')
+
+        # 3. Exibe o resultado (mostrando apenas o Contrato e a Matrícula para o print não ficar poluído)
+        print(f"Total de linhas com contratos duplicados: {len(contratos_duplicados)}")
+        print(contratos_duplicados[['Contrato', 'MATRÍCULA CAPITAL']])
+        print('---------------------------------------------------------')
 
         # 2. Cria a coluna final priorizando a Capital e usando a Click como segunda opção
         # Substitui strings vazias ou com espaços por NaN real do NumPy

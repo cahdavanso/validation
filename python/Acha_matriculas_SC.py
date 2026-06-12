@@ -32,6 +32,19 @@ class ACHA_MATRICULAS_SC:
         arq_matricula_capital = self.averbado_capital.copy()
         arq_matricula_click = self.averbado_click.copy()
 
+        arq_matricula_base.to_excel(os.path.join(self.caminho, f'arq_matricula_base - {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx'))
+
+        # arq_matricula_base = arq_matricula_base.drop_duplicates(subset=['Contrato'])
+
+        contratos_duplicados_base = arq_matricula_base[arq_matricula_base.duplicated(subset=['Contrato'], keep=False)]
+
+        # 2. Ordena pela coluna 'Contrato' para que os repetidos fiquem agrupados juntos no terminal
+        contratos_duplicados_base = contratos_duplicados_base.sort_values(by='Contrato')
+
+        # 3. Exibe o resultado (mostrando apenas o Contrato e a Matrícula para o print não ficar poluído)
+        print(f"Total de linhas com contratos duplicados na base: {len(contratos_duplicados_base)}")
+        print(contratos_duplicados_base[['Contrato']])
+
         # 1. Crie a máscara na base
         mask_capital = (arq_matricula_base['CONT.SE CAPITAL'] == 1) & (arq_matricula_base['CONT.SE CLICK'] == 0)
 
