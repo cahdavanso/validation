@@ -64,7 +64,7 @@ class TRATA_ORBITAL:
                                 'INSS BENEF SEG', 'INSS RMC', 'INSS RMC S FL', 
                                 'INSS RMC CPL', 'INSS RMC SEG'
                             ],
-                            'GOV. MG - IPSEMG': ['GOV MG - IPSEMG'],
+                            'GOV. MINAS GERAIS - IPSEMG': ['GOV MG - IPSEMG'],
                             'GOV. PARANÁ': ['GOV PARANA'],
                             'GOV. ESPÍRITO SANTO': ['GOV ES CB', 'GOV ES CB DG'],
                             'GOV. SÃO PAULO - SPPREV': ['GOV SPPREV']
@@ -82,7 +82,10 @@ class TRATA_ORBITAL:
             # Junta a lista em um único texto separado por "|" (Pipe)
             # Resultado: 'INSS BENEFICIO|INSS BEN S FL|INSS BENEF CPL...'
             padrao_busca = '|'.join(lista_empregadores)
-
+            for col in orbital.columns:
+                if "contrato" in col or "Contrato" in col:
+                    orbital.rename(columns={col:"CONTRATO"}, inplace=True)
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
             # Filtro dinâmico
             orbital_preparado = orbital.loc[
                 # Passamos o padrao_busca e garantimos que regex=True
@@ -103,9 +106,8 @@ class TRATA_ORBITAL:
             (front_para_separar['Análise'].isin(['NÃO LANÇAR - ORBITAL', 'NÃO LANÇAR - TELESAQUE', 'NÃO LANÇAR - COMPLEMENTAR'])) & (~front_para_separar['Status'].isin(["EM ANDAMENTO"])),
             ['NR_OPER_EDITADO', 'CLIENTE', 'CPF', 'VLR_PARC']].copy()
         else:
-            front_so_orbital = front_para_separar.loc[
-                (front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL') & (~front_para_separar['Status'].isin(["EM ANDAMENTO"])),
-                ['Contrato', 'Nome', 'CPF', 'Prestacao']].copy()
+            front_so_orbital = front_para_separar.loc[(front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL') & (~front_para_separar['Status'].isin(["EM ANDAMENTO"])),['Contrato', 'Nome', 'CPF', 'Valor a lançar']].copy()
+            front_so_orbital = front_para_separar.loc[(front_para_separar['OBS'] == 'NÃO LANÇAR - ORBITAL') & (~front_para_separar['Status'].isin(["EM ANDAMENTO"])),['Contrato', 'Nome', 'CPF', 'Valor a lançar']].copy()
         
         front_so_orbital.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
 

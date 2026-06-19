@@ -329,8 +329,6 @@ class ANDAMENTO_PROVISORIO:
         df_front_final = df_front_dispo[~df_front_dispo['Contrato'].isin(contratos_usados)]
         return df_andamento, df_front_final
     
-    import re
-
     def extrair_contratos_simples(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
         print("Iniciando o processo de extração e unificação de contratos...")
         

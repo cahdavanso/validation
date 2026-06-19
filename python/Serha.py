@@ -124,7 +124,8 @@ class SERHA:
         if self.rubrica == 'CARTÃO':
             front_unif.loc[front_unif['Tipo Operacao'].str.contains('GOVERNOS AKRK|CARTÃO CONSIGNADO|GOVERNOS|CARTAO CONSIGNADO', na=False) & (front_unif['Tipo Operacao'] == ''), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
         else:
-            front_unif.loc[front_unif['Tipo Operacao'].str.contains('BENEFÍCIO|BENEFICIO', na=False) & (front_unif['Tipo Operacao'] == ''), 'Tipo Operacao'] = 'CARTAO BENEFICIO'
+            front_unif['Operação'] = front_unif['Operação'].fillna('')
+            front_unif.loc[front_unif['Tipo Operacao'].str.contains('BENEFÍCIO|BENEFICIO', na=False) & (front_unif['Operação'] == ''), 'Tipo Operacao'] = 'CARTAO BENEFICIO'
             
 
         front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
@@ -250,10 +251,18 @@ class SERHA:
             front_consig['Contrato'] = front_consig['Contrato'].astype(str).str.strip()
             # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
 
+            if "VALOR DESCONTO" in orbital.columns:
+                orbital.rename(columns={"Proposta": "CONTRATO"}, inplace=True)
+                orbital.rename(columns={"Cliente": "nome_mutuario"}, inplace=True)
+                orbital.rename(columns={"CPF/CNPJ": "num_cpf_mutuario"}, inplace=True)
+                orbital.rename(columns={"VALOR DESCONTO": "VALID DESCONTO FINAL"}, inplace=True)
+
+
             if orbital['VALID DESCONTO FINAL'].dtype != "float64":
                 orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
                 orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
                 orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+
 
             for col in orbital.columns:
                 if "contrato" in col or "Contrato" in col:
@@ -355,6 +364,7 @@ class SERHA:
         # front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'OBS'] = 'NÃO LANÇAR - ÓBITO'
  
         # Marca tudo que é orbital
+        front_consig_validado_termino['OBS'] = front_consig_validado_termino['OBS'].fillna('')
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão Conciliação

@@ -32,6 +32,7 @@ from python.Zetra import ZETRA
 from python.Infoconsig import INFOCONSIG
 from python.Rf1 import RF1
 from python.Sigrh import SIGRH
+from python.Cip import CIP
 
 app = FastAPI()
 # Mude para False quando subir para produção
@@ -209,6 +210,8 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
             elif "d8" in name and convenio == 'INSS':
                 df = pd.read_excel(file_obj, "Refinado")
 
+            elif "averbados" in name and convenio in ['PREF. SÃO PAULO', 'GOV. SÃO PAULO']:
+                df = pd.read_excel(file_obj, header=3)
             elif "averbados_to" in name:
                 df_preliminar = pd.read_excel(file_obj)
                 linha_identificacao = str(df_preliminar.iloc[5].values)
@@ -544,7 +547,8 @@ async def validar_planilhas(
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             tacs=tacs_df,
-            kobraki=kobraki_df
+            kobraki=kobraki_df,
+            orbital=orbital_df
         )
     elif convenio in TO_IGEPREV_CONVENIO:
         logging.info("Usando o validador: GOV TO e IGEPREV")
