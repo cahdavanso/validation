@@ -26,6 +26,7 @@ from python.Codata import CODATA
 from python.INSS import INSS
 from python.Serha import SERHA
 from python.Consiglog import CONSIGLOG
+from python.Neoconsig import NEOCONSIG
 from python.ConsigiKonexia import CONSIGI_KONEXIA
 from python.IgeprevGovTo_Preliminar import IGEPREV_GOVTO
 from python.Zetra import ZETRA
@@ -36,7 +37,7 @@ from python.Cip import CIP
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = True 
+MODO_DESENVOLVIMENTO = False 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -117,6 +118,8 @@ SIGRH_CONVENIO = ["GOV. SANTA CATARINA"]
 CONSIGI_KONEXIA_CONVENIO = ["PREF. CONTAGEM", "PREF. PLANALTINA"]
 
 CIP_CONVENIO = ["PREF. SÃO PAULO", "GOV. SÃO PAULO"]
+
+NEOCONSIG_CONVENIO = ["GOV. GOIÁS", "PREF. SÃO GONÇALO", "PREF. SÃO LUÍS", "PREF. SOROCABA"]
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
@@ -579,6 +582,21 @@ async def validar_planilhas(
                           conciliacao=conciliacao_df,
                           kobraki=kobraki_df,
                           tacs=tacs_df)
+        
+    elif convenio in NEOCONSIG_CONVENIO:
+        logging.info("Usando validador: NEOCONSIG")
+        validador = NEOCONSIG(
+            portal_file_list=averbados_df, 
+            convenio=convenio,
+            front=front_df,
+            consignataria=consignataria,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            funcao=funcao_df,
+            tacs=tacs_df,
+            caminho=CAMINHO_SAIDA,
+            orbital=orbital_df
+        )
     elif convenio in CONSIGFACIL_CONVENIOS:
         # Padrão para todos os outros (Consigfacil)
         logging.info("Usando validador: CONSIGFACIL")

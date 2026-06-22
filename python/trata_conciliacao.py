@@ -68,7 +68,11 @@ class TRATA_CONCILIACAO:
 
             soma_d8 = conciliacao_tratado.filter(regex=r'^(?!.*PRODUTO)D8').sum(axis=1)
             inad_d8 = conciliacao_tratado.filter(like='INAD ').sum(axis=1)
-            super_saldo = soma_d8 + inad_d8
+            # O .filter() busca as colunas. Se não achar nada, o .sum(axis=1) garante que o retorno seja 0 por linha.
+            redistribuicao_d8 = conciliacao_tratado.filter(like='REDISTRIBUIÇÃO').sum(axis=1)
+
+            # Agora a soma do super_saldo nunca vai quebrar e nunca vai virar NaN por causa dessa variável
+            super_saldo = soma_d8 + inad_d8 + redistribuicao_d8
 
             if conciliacao_tratado['CONTRATOS'].dtype != 'int64' and kobraki_tratado is not None and tacs_tratado is not None: # -> Onde vamos verificar se o contrato da conciliação está como string
                 tacs_tratado['CONTRATO'] = tacs_tratado['CONTRATO'].astype(str)
