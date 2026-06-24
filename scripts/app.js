@@ -39,7 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CONVENIOS_NEOCONSIG = ["GOV. GOIÁS", "PREF. SÃO GONÇALO", "PREF. SÃO LUÍS", "PREF. SOROCABA"];
 
-    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_RF1, ...CONVENIOS_INFOCONSIG, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_SIGRH, ...CONVENIOS_CONSIGI_KONEXIA, ...CONVENIOS_CIP, ...CONVENIOS_NEOCONSIG].sort();
+    const CONVENIOS_QUANTUM = ["PREF. SÃO JOSE DO RIO PRETO", "PREVIDÊNCIA SÃO JOSE DO RIO PRETO", "CÂMARA MUNICIPAL DE TERESÓPOLIS"];
+
+    const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_RF1, 
+        ...CONVENIOS_INFOCONSIG, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_SIGRH, ...CONVENIOS_CONSIGI_KONEXIA, ...CONVENIOS_CIP, ...CONVENIOS_NEOCONSIG, ...CONVENIOS_QUANTUM].sort();
 
     const FIELDS_CONSIGFACIL = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "ANDAMENTO", "AVERBADOS"];
     const FIELDS_CODATA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "ANDAMENTO", "AVERBADOS", "ORBITAL"];
@@ -266,6 +269,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (CONVENIOS_NEOCONSIG.includes(convenio)) {
             consignatariaArea.classList.remove('hidden');
             currentFields = FIELDS_NEOCONSIG;
+        } else if (CONVENIOS_QUANTUM.includes(convenio)) {
+            consignatariaArea.classList.remove('hidden');
+            currentFields = FIELDS_NEOCONSIG;
         }
 
         uploadForm.classList.remove('hidden');
@@ -365,6 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!selectedConsignataria) valid = false;
         }
         else if (selectedConvenio && CONVENIOS_NEOCONSIG.includes(selectedConvenio)){
+            if (!selectedConsignataria) valid = false;
+        }
+        else if (selectedConvenio && CONVENIOS_QUANTUM.includes(selectedConvenio)){
             if (!selectedConsignataria) valid = false;
         }
         submitButton.disabled = !(hasFiles && valid);

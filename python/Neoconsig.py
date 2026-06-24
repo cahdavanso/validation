@@ -276,12 +276,7 @@ class NEOCONSIG:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão Conciliação
-        if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS']:
-            print(f'Convenio é {self.convenio}')
-            print(f'Convenio está em PREF GOIÂNIA ou PREF. DUQUE DE CAXIAS? {self.convenio in ["PREF. GOIÂNIA", "PREF. DUQUE DE CAXIAS"]}')
-            front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Operacao'].str.contains('EMPRESTIMO|EMPRÉSTIMO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
-        else:
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
 
         # Marcar liquidados em StatusContrato
         front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
@@ -308,12 +303,7 @@ class NEOCONSIG:
             return False
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        if self.convenio == 'PREF. GOIÂNIA':
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
-        elif self.convenio == 'PREF. DUQUE DE CAXIAS':
-            front_consig_cartao_conciliacao = front_consig[~front_consig['Tipo Operacao'].str.contains('EMPRESTIMO|EMPRÉSTIMO', na=False)].copy()
-        else:
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
+        front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)].copy()
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -745,6 +735,7 @@ class NEOCONSIG:
                 mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
                 data_averbados_bruto['ORBITAL'] = ''
                 data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF_Formatado'].map(mask_orbital)
+                data_averbados_bruto['ORBITAL'] = data_averbados_bruto['ORBITAL'].fillna(0)
 
                 print(f"trata_averbacao: Salvando arquivo de averbacao teste com orbital")
                 try:
@@ -863,15 +854,17 @@ class NEOCONSIG:
 
             # 4. Criação da coluna SOMASES pelo benefício saque 70
             # 1. Criamos um "filtro temporário" apenas com as linhas do produto desejado
-            filtro_produto = data_averbados[data_averbados['PRODUTO'] == 'BENEFÍCIO SAQUE 70']
+            filtro_produto = data_averbados[data_averbados['PRODUTO'].isin(['BENEFÍCIO SAQUE 70', 'CARTÃO BENEFÍCIO SAQUE'])]
 
             # 2. Agrupamos esse filtro por CPF e somamos o valor da parcela
             # Isso cria um dicionário/série onde o índice é o CPF e o valor é a soma
-            somas_por_cpf = filtro_produto.groupby('CPF')['VALOR PARCELA'].sum()
+            somas_por_cpf = filtro_produto.groupby('CPF_Formatado')['VALOR PARCELA'].sum()
+            print(f'Tipo de Valor da Parcela: {data_averbados['VALOR PARCELA'].dtype}\n')
+            print(f'somas_por_cpf:\n{somas_por_cpf}')
 
             # 3. Mapeamos esse resultado de volta para o DataFrame original
             # O .fillna(0) garante que CPFs que não têm esse produto fiquem com 0 em vez de vazio (NaN)
-            data_averbados['SOMASES'] = data_averbados['CPF'].map(somas_por_cpf).fillna(0)
+            data_averbados['SOMASES'] = data_averbados['CPF_Formatado'].map(somas_por_cpf).fillna(0)
 
             # 4. Diferença entre o Valor_Unif ou seja "soma" menos o "SOMASES" pra saber se tudo do front já está sendo descontado com prazo
             data_averbados['DIFF Soma E SOMASES'] =  data_averbados['Soma'] - data_averbados['SOMASES']
@@ -883,9 +876,14 @@ class NEOCONSIG:
             data_averbados['Lançar'] = np.minimum(data_averbados['DIFF MAIS ORBITAL'], data_averbados['VALOR PARCELA'])
             data_averbados.loc[condicao_liminar, 'Lançar'] = 0
 
-            data_averbados_lancar = data_averbados[data_averbados['PRODUTO'] == 'BENEFÍCIO COMPRAS 30']
+            data_averbados_lancar = data_averbados[data_averbados['PRODUTO'].isin(['BENEFÍCIO COMPRAS 30', 'CARTÃO BENEFÍCIO COMPRAS'])]
 
-            return data_averbados_lancar['Lançar'] > 0
+            print(f'averbado trabalhado PREF. SÃO GONÇALO:\n{data_averbados}')
+
+            data_averbados.to_excel(os.path.join(self.caminho, f'AVERBADO QUASE TRABALHADO {self.convenio}.xlsx'), index=False)
+
+
+            return data_averbados_lancar[data_averbados_lancar['Lançar'] > 0]
 
         # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
         colunas = ['N OPERACAO', 'NOME SERVIDOR', 'MATRICULA', 'CREDENCIADO', 'CPF SERVIDOR', 'VALOR PARCELA', 'PRODUTO', 'N OPERACAO', 
@@ -1136,7 +1134,7 @@ class NEOCONSIG:
         front_trabalhado['DIFF'] = front_trabalhado['SOMASE FRONT'] - front_trabalhado['SOMASE AVERB']
     
         # Cria o arquivo Averbações Trabalhadas
-        if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
+        if self.convenio in ['PREF. SÃO GONÇALO', 'GOV. GOIÁS']:
             if datetime.now().month == 12:
                 if datetime.now().day > 10:
                     file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'
@@ -1158,7 +1156,7 @@ class NEOCONSIG:
             print(f"arquivo_lancamento: ERRO AO SALVAR TRABALHADO CARTÃO {self.convenio}: {e}")
     
         # Cria o arquivo Averbações a Lançar
-        if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
+        if self.convenio in ['PREF. SÃO GONÇALO', 'GOV. GOIÁS']:
             if datetime.now().month == 12:
                 if datetime.now().day > 10:
                     file_lancar = f'LANCAMENTO CARTAO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'

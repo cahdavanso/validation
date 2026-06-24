@@ -279,6 +279,7 @@ class ANDAMENTO_PROVISORIO:
         
         contratos_usados = set()
 
+
         # 3. Busca por Grupo (Backtracking por CPF)
         # Processamos primeiro os grupos para resolver somas de parcelas
         vazios = df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")]
@@ -535,6 +536,7 @@ class ANDAMENTO_PROVISORIO:
 
         # --- Passo 3: Aplicação e Expansão de Colunas ---
         df_sujo['Contrato de Andamento'] = df_sujo['Contrato de Andamento'].astype(str).replace('nan', '')
+        
         
         # Processa a busca
         res_raw = df_sujo.apply(encontrar_contratos_na_linha, axis=1)

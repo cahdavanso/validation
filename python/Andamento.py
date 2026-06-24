@@ -3,6 +3,7 @@ import re
 from thefuzz import fuzz
 import os
 from python.ESTEIRAS import load_esteiras
+import itertools
 
 # front_bruto = r"F:\Dados\NOVA ESTRUTURA\LANÇAMENTO CARTÕES\TRABALHANDO\2026\05 - Maio\GUIDO ROBOTO\PAIUI\relatorio_2026-04-16_13-19-47_parte_1.csv"
 # andamento_bruto = r"F:\Dados\NOVA ESTRUTURA\LANÇAMENTO CARTÕES\TRABALHANDO\2026\05 - Maio\GUIDO ROBOTO\PAIUI\ANDAMENTO UNIFICADO GOV PI.csv"
@@ -140,7 +141,9 @@ class ANDAMENTO:
         
 
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
-        andam_file, front_base = self.processar_contratos_otimizado(andam_referencia_prazos, front_para_processar)
+        andam_file = self.processar_contrato_simples(andam_referencia_prazos, front_para_processar)
+        andam_file = self.associar_por_soma_andamento(andam_file, front_para_processar)
+        andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
         andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar, 'Contrato de Andamento')
         print(f'Andamento depois de extrair_contratos\n{andam_file.columns}')
 
@@ -188,6 +191,185 @@ class ANDAMENTO:
         front_final.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
 
         return front_final
+    
+    def processar_contrato_simples(self, df_andamento, df_front):
+        # 1. Limpeza e Padronização
+        df_andamento = df_andamento.drop_duplicates(subset=['Código']).copy()
+        
+        for df in [df_andamento, df_front]:
+            df['CPF'] = df['CPF'].astype(str).str.strip()
+
+        # Tratamento de valores numéricos (Andamento)
+        if df_andamento['Valor da Parcela'].dtype != 'float64':
+            df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(str).str.replace(".", "").str.replace(",", ".")
+            df_andamento['Valor da Parcela'] = pd.to_numeric(df_andamento['Valor da Parcela'], errors='coerce')
+        df_andamento['Valor da Parcela'] = df_andamento['Valor da Parcela'].astype(float).round(2)
+
+        # Tratamento de valores numéricos (Front)
+        if df_front['Prestacao'].dtype != 'float64':
+            df_front['Prestacao'] = df_front['Prestacao'].astype(str).str.replace(".", "").str.replace(",", ".")
+            df_front['Prestacao'] = pd.to_numeric(df_front['Prestacao'], errors='coerce')
+        df_front['Prestacao'] = df_front['Prestacao'].astype(float).round(2)
+
+        # 2. Configuração de colunas de destino
+        if 'Contrato de Andamento' not in df_andamento.columns:
+            df_andamento.insert(2, 'Contrato de Andamento', df_andamento['Código na instituição'])
+
+        col_destino = 'Contrato Editado 1' if 'Contrato Editado 1' in df_andamento.columns else 'Contrato de Andamento'
+        
+        # 3. Filtrar Front disponível
+        ocupados = df_andamento['Código na instituição'].dropna().unique()
+        df_front_dispo = df_front[~df_front['Contrato'].astype(str).isin(map(str, ocupados))].copy()
+
+        # 4. Criar dicionário indexado por CPF
+        # O valor será uma lista de tuplas: [(contrato, valor_prestacao), ...]
+        dict_front = {}
+        for _, row in df_front_dispo.iterrows():
+            cpf = row['CPF']
+            if cpf not in dict_front:
+                dict_front[cpf] = []
+            dict_front[cpf].append((row['Contrato'], row['Prestacao']))
+
+        # 5. Busca com Tolerância (0.10)
+        vazios = df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")].copy()
+        tolerancia = 0.10
+
+        for idx, row in vazios.iterrows():
+            cpf_busca = row['CPF']
+            valor_alvo = float(row['Valor da Parcela'])
+            
+            if cpf_busca in dict_front:
+                lista_opcoes = dict_front[cpf_busca]
+
+                '''if cpf_busca == '037.685.094-94':
+                    print(f'Valor da Parcela\n{valor_alvo}\n')
+                    print(f'Prestacao\n{dict_front.loc[dict_front['CPF'] == cpf_busca, 'Prestacao']}')'''
+                
+                # Procurar na lista de contratos deste CPF um que esteja na margem
+                for i, (contrato_front, valor_front) in enumerate(lista_opcoes):
+                    if abs(valor_alvo - valor_front) <= tolerancia:
+                        # Match encontrado dentro da tolerância!
+                        # Force a conversão para string no momento da atribuição
+                        df_andamento.at[idx, col_destino] = str(contrato_front)
+                        
+                        # Remove esse contrato da lista para não ser usado de novo
+                        lista_opcoes.pop(i)
+                        break 
+
+        sobraram = df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")].shape[0]
+        print(f'Quantos vazios sobraram após busca com tolerância? {sobraram}')
+
+        return df_andamento.fillna('')
+    
+    # Cole esta função dentro da sua classe, junto com as outras
+    def associar_por_soma_andamento(self, df_andamento: pd.DataFrame, df_front: pd.DataFrame, tolerancia: float = 1.00, max_linhas_somadas: int = 5) -> pd.DataFrame:
+        """
+        Busca no Front os contratos que podem ser formados pela SOMA de múltiplas linhas 
+        no df_andamento para o mesmo CPF.
+        """
+        print("\nIniciando busca por soma de parcelas (Subset Sum)...")
+
+        # Ordena por prioridade o Tipo Operacao
+        # Criar ordem de prioridade
+        ordem = {
+            'CARTAO BENEFICIO': 1,
+            'EMPRESTIMO': 2
+        }
+
+        df_front['prioridade'] = df_front['Tipo Operacao'].map(ordem).fillna(3)
+
+        df_front = df_front.sort_values(
+            by=['prioridade', 'Esteira'],
+            ascending=[True, True]
+        )
+
+        df_front = df_front.drop(columns='prioridade')
+        
+        # Garante que as colunas alvo existem e preenche os vazios do Andamento
+        col_destino = 'Contrato de Andamento'
+        if col_destino not in df_andamento.columns:
+            df_andamento[col_destino] = None
+            
+        # Converter para float para garantir cálculos precisos
+        col_v_andamento = 'Valor da Parcela'
+        col_v_front = 'Prestacao'
+        
+        # Otimização: Lista de contratos do Front que já foram usados no Andamento
+        # para não tentar alocá-los novamente.
+        contratos_ja_usados = set(df_andamento[col_destino].dropna().astype(str).unique())
+        
+        # Agrupar os cpfs que ainda têm linhas vazias no Andamento
+        vazios_andamento = df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")]
+        cpfs_com_pendencia = vazios_andamento['CPF'].unique()
+
+        # Joga só o que está nas esteiras corretas
+        df_front = df_front[df_front['Esteira'].isin(self.esteiras)].copy()
+
+        match_count = 0
+
+        for cpf in cpfs_com_pendencia:
+            # 1. Pega os contratos do Front disponíveis para este CPF
+            front_cpf = df_front[
+                (df_front['CPF'] == cpf) & 
+                (~df_front['Contrato'].astype(str).isin(contratos_ja_usados))
+            ]
+            
+            if front_cpf.empty:
+                continue
+                
+            # 2. Iterar sobre cada contrato disponível no Front para este CPF
+            for _, row_front in front_cpf.iterrows():
+                contrato_alvo = str(row_front['Contrato']).strip()
+                valor_alvo = float(row_front[col_v_front])
+                
+                # 3. Pega os índices e valores das linhas do Andamento que AINDA estão vazias
+                # Atualizamos isso a cada iteração, pois um contrato anterior pode ter preenchido linhas
+                linhas_disponiveis = df_andamento[
+                    (df_andamento['CPF'] == cpf) & 
+                    (df_andamento[col_destino].isna() | (df_andamento[col_destino] == ""))
+                ]
+                
+                if linhas_disponiveis.empty:
+                    break # Acabaram as linhas vazias para este CPF no Andamento
+                    
+                # Cria um dicionário {index_no_dataframe: valor_da_parcela}
+                dicionario_valores = linhas_disponiveis[col_v_andamento].to_dict()
+                
+                encontrou_match = False
+                
+                # 4. Testa combinações: primeiro de 2 em 2 linhas, depois 3 em 3... até max_linhas_somadas
+                # (Se o seu Andamento tiver muitas linhas do mesmo CPF, testar até 4 ou 5 é super rápido.
+                # Mais do que isso pode demorar, por isso o limite max_linhas_somadas).
+                tamanho_maximo_busca = min(len(dicionario_valores) + 1, max_linhas_somadas + 1)
+                
+                for r in range(2, tamanho_maximo_busca):
+                    # itertools.combinations gera todas as combinações possíveis de tamanho 'r'
+                    for combinacao in itertools.combinations(dicionario_valores.items(), r):
+                        # combinacao é uma tupla de tuplas: ((index1, valor1), (index2, valor2), ...)
+                        soma_combinacao = sum(item[1] for item in combinacao)
+                        
+                        # Verifica se a soma está dentro da tolerância
+                        if abs(soma_combinacao - valor_alvo) <= tolerancia:
+                            # Achamos a combinação!
+                            indices_para_preencher = [item[0] for item in combinacao]
+                            
+                            # Preenche o contrato nas linhas do Andamento
+                            df_andamento.loc[indices_para_preencher, col_destino] = contrato_alvo
+                            
+                            # Adiciona ao set de usados para pular no futuro
+                            contratos_ja_usados.add(contrato_alvo)
+                            match_count += 1
+                            encontrou_match = True
+                            
+                            print(f"Match por soma encontrado: CPF {cpf} | Contrato {contrato_alvo} | Front: R${valor_alvo} | Somas: {[item[1] for item in combinacao]}")
+                            break # Para a busca de combinações para ESTE contrato
+                            
+                    if encontrou_match:
+                        break # Pula para o próximo contrato do Front
+                        
+        print(f"Concluído. Total de contratos do Front alocados por soma de parcelas: {match_count}")
+        return df_andamento
+    
     
 
     def busca_greedy_backtracking(self, alvo, itens, max_contratos=5):
@@ -280,6 +462,20 @@ class ANDAMENTO:
         df_front_dispo = df_front[~df_front['Contrato'].astype(str).isin(map(str, ocupados))].copy()
         
         contratos_usados = set()
+
+        
+        # --- DEBUG CPF ESPECÍFICO ---
+        cpf_alvo = "780.865.073-00"
+        print(f"\n[DEBUG] processar_contratos_otimizado - ANTES da busca para o CPF {cpf_alvo}:")
+        colunas_verificar = ['Código na instituição', 'Contrato de Andamento', 'Valor da Parcela', col_destino]
+        colunas_existentes = [c for c in colunas_verificar if c in df_andamento.columns]
+        
+        filtro_cpf = df_andamento[df_andamento['CPF'] == cpf_alvo]
+        if not filtro_cpf.empty:
+            print(filtro_cpf[colunas_existentes])
+        else:
+            print("CPF não encontrado em df_andamento neste momento.")
+        print("-" * 50)
 
         # 3. Busca por Grupo (Backtracking por CPF)
         # Processamos primeiro os grupos para resolver somas de parcelas
@@ -556,6 +752,20 @@ class ANDAMENTO:
 
         # --- Passo 3: Aplicação e Expansão de Colunas ---
         df_sujo[coluna_destino] = df_sujo[coluna_destino].astype(str).replace('nan', '')
+
+        # --- DEBUG CPF ESPECÍFICO ---
+        cpf_alvo = "780.865.073-00"
+        print(f"\n[DEBUG] extrair_contratos_com_referencia - Lendo as colunas para o CPF {cpf_alvo}:")
+        colunas_verificar = ['Código na instituição', 'Contrato de Andamento', 'Valor da Parcela']
+        colunas_existentes = [c for c in colunas_verificar if c in df_sujo.columns]
+        
+        filtro_cpf = df_sujo[df_sujo['CPF'] == cpf_alvo]
+        if not filtro_cpf.empty:
+            print(filtro_cpf[colunas_existentes])
+        else:
+            print("CPF não encontrado em df_sujo neste momento.")
+        print("-" * 50)
+
         
         # Processa a busca
         res_raw = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
