@@ -10,10 +10,10 @@ import os
 import re
 
 
-class CONSIGI_KONEXIA:
+class QUANTUM:
     def __init__(self, portal_file_list, convenio, front, consignataria, caminho, funcao=None, conciliacao=None, kobraki=None, tacs=None, orbital=None):
-        self.averbados = portal_file_list
 
+        self.averbados = portal_file_list
 
         self.convenio = convenio
 
@@ -28,11 +28,12 @@ class CONSIGI_KONEXIA:
 
 
         conciliacao_falso = pd.DataFrame(
-            columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25', 'RECEBIDO GERAL'])
+            columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'PRODUTO','D8 JUN 25', 'ST JUL 25', 'RECEBIDO GERAL'])
         conciliacao_falso['CONTRATOS'] = 123
         conciliacao_falso['CPF'] = '123.456'
         conciliacao_falso['PRESTAÇÃO'] = 10
         conciliacao_falso['PRAZO'] = 96
+        conciliacao_falso['PRODUTO'] = 'EMPRESTIMO'
         conciliacao_falso['D8 JUN 25'] = 10
         conciliacao_falso['ST JUL 25'] = 'DESCONTO TOTAL'
         conciliacao_falso['RECEBIDO GERAL'] = 0
@@ -124,9 +125,6 @@ class CONSIGI_KONEXIA:
 
     def tratamento_front_preliminar(self):
         front_consig = self.unifica_front_funcao()
-
-        # Antes de tudo vamos mudar alguns Tipos de operacao para que não sejam removidos
-        front_consig.loc[front_consig['Contrato'].isin([48977, 742734, 748114, 748794, 751332]), "Tipo Operacao"] = "CARTAO DE CREDITO"
 
         conciliacao = self.conciliacao.copy()
 
@@ -420,11 +418,11 @@ class CONSIGI_KONEXIA:
 
             # --- Passo 2: Definir a função que será aplicada em cada linha (LÓGICA ALTERADA) ---
             def encontrar_contratos_na_linha(row):
-                cpf = row['CPF']
-                texto_contratos_sujo = str(row['NRO CONTRATO']).strip()
+                cpf = row['CSG_FMT_CPF   ']
+                texto_contratos_sujo = str(row['CON_NRO_CON_EXN_CGA']).strip()
             
-                cpf = row['CPF']
-                texto_contratos_sujo = str(row['NRO CONTRATO'])
+                cpf = row['CSG_FMT_CPF   ']
+                texto_contratos_sujo = str(row['CON_NRO_CON_EXN_CGA'])
 
                 # Garante que as listas existam
                 contratos_validos_para_cpf = cpf_contratos.get(cpf, [])
@@ -518,7 +516,7 @@ class CONSIGI_KONEXIA:
 
             # --- Passo 3: Aplicar a função e criar as novas colunas (sem alterações) ---
             print("Analisando a Planilha A e extraindo os contratos...")
-            df_sujo['NRO CONTRATO'] = df_sujo['NRO CONTRATO'].astype(str).str.replace('nan', '')
+            df_sujo['CON_NRO_CON_EXN_CGA'] = df_sujo['CON_NRO_CON_EXN_CGA'].astype(str).str.replace('nan', '')
 
 
             lista_de_contratos_encontrados = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
@@ -563,7 +561,7 @@ class CONSIGI_KONEXIA:
                 data_averbados.loc[mascara_esteira_valida, 'Soma_Calculada'] += (valores_validos + 20)
 
         # 3. Aplica a comparação final com o Valor Prestação (Teto)
-        data_averbados['Lançar'] = np.minimum(data_averbados['Soma_Calculada'], data_averbados['VALOR DA PARCELA'])
+        data_averbados['Lançar'] = np.minimum(data_averbados['Soma_Calculada'], data_averbados['CON_VLR_SOL'])
 
         # (Opcional) Remove a coluna temporária se não precisar mais
         data_averbados = data_averbados.drop(columns=['Soma_Calculada'])
@@ -623,23 +621,23 @@ class CONSIGI_KONEXIA:
         # =====================================================================
         # 3. Execução dos Merges no DataFrame A
         # =====================================================================
-        if averbado_contratos_faltantes['VALOR DA PARCELA'].dtype != 'float64':
-         averbado_contratos_faltantes['VALOR DA PARCELA'] = averbado_contratos_faltantes['VALOR DA PARCELA'].astype(str).str.replace(".", "").str.replace(",", ".")
-         averbado_contratos_faltantes['VALOR DA PARCELA'] = pd.to_numeric(averbado_contratos_faltantes['VALOR DA PARCELA'], errors='coerce')
+        if averbado_contratos_faltantes['CON_VLR_SOL'].dtype != 'float64':
+         averbado_contratos_faltantes['CON_VLR_SOL'] = averbado_contratos_faltantes['CON_VLR_SOL'].astype(str).str.replace(".", "").str.replace(",", ".")
+         averbado_contratos_faltantes['CON_VLR_SOL'] = pd.to_numeric(averbado_contratos_faltantes['CON_VLR_SOL'], errors='coerce')
 
         print(f'Tipo front_semi_exact :{front_semi_exact['Prestacao'].dtype}')
-        print(f'Tipo averbado_contratos_faltantes :{averbado_contratos_faltantes['VALOR DA PARCELA'].dtype}')
+        print(f'Tipo averbado_contratos_faltantes :{averbado_contratos_faltantes['CON_VLR_SOL'].dtype}')
 
         # Primeiro merge: Match exato (valor igual)
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_exact, 
-            left_on=['CPF', 'VALOR DA PARCELA'],   # Alterado para CPF
+            left_on=['CSG_FMT_CPF   ', 'CON_VLR_SOL'],   # Alterado para CPF
             right_on=['CPF', 'Prestacao'], 
             how='left'
         )
 
-        # Preenchemos a coluna "NRO CONTRATO"
-        averbado_contratos_faltantes['NRO CONTRATO'] = averbado_contratos_faltantes['NRO CONTRATO'].fillna(averbado_contratos_faltantes['Contrato'])
+        # Preenchemos a coluna "CON_NRO_CON_EXN_CGA"
+        averbado_contratos_faltantes['CON_NRO_CON_EXN_CGA'] = averbado_contratos_faltantes['CON_NRO_CON_EXN_CGA'].fillna(averbado_contratos_faltantes['Contrato'])
         
         # IMPORTANTE: Removi o 'CPF' do drop. Ele agora é a chave principal e não pode ser apagado!
         averbado_contratos_faltantes.drop(columns=['Prestacao', 'Contrato'], inplace=True)
@@ -648,13 +646,13 @@ class CONSIGI_KONEXIA:
         # Segundo merge: Caso de +20 reais
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_plus20, 
-            left_on=['CPF', 'VALOR DA PARCELA'],   # Alterado para CPF
+            left_on=['CSG_FMT_CPF   ', 'CON_VLR_SOL'],   # Alterado para CPF
             right_on=['CPF', 'Prestacao_Ajustada'], 
             how='left', 
             suffixes=('', '_20')
         )
 
-        averbado_contratos_faltantes['NRO CONTRATO'] = averbado_contratos_faltantes['NRO CONTRATO'].fillna(averbado_contratos_faltantes['Contrato'])
+        averbado_contratos_faltantes['CON_NRO_CON_EXN_CGA'] = averbado_contratos_faltantes['CON_NRO_CON_EXN_CGA'].fillna(averbado_contratos_faltantes['Contrato'])
         # Novamente, sem dar drop no CPF
         averbado_contratos_faltantes.drop(columns=['Prestacao', 'Contrato', 'Prestacao_Ajustada'], inplace=True)
 
@@ -662,13 +660,13 @@ class CONSIGI_KONEXIA:
         # Terceiro merge: Caso de +40 reais
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_plus40, 
-            left_on=['CPF', 'VALOR DA PARCELA'],   # Alterado para CPF
+            left_on=['CSG_FMT_CPF   ', 'CON_VLR_SOL'],   # Alterado para CPF
             right_on=['CPF', 'Prestacao_Ajustada'], 
             how='left', 
             suffixes=('', '_40')
         )
 
-        averbado_contratos_faltantes['NRO CONTRATO'] = averbado_contratos_faltantes['NRO CONTRATO'].fillna(averbado_contratos_faltantes['Contrato'])
+        averbado_contratos_faltantes['CON_NRO_CON_EXN_CGA'] = averbado_contratos_faltantes['CON_NRO_CON_EXN_CGA'].fillna(averbado_contratos_faltantes['Contrato'])
         averbado_contratos_faltantes.drop(columns=['Prestacao', 'Contrato', 'Prestacao_Ajustada'], inplace=True)
 
         return averbado_contratos_faltantes
@@ -676,6 +674,8 @@ class CONSIGI_KONEXIA:
     def trata_averbacao(self):
         # PUXA OS ARQUIVOS À SEREM TRATADOS
         data = self.averbados
+        print(f'O que está no data:\n{data}')
+
         front = self.tratamento_front_preliminar()
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
@@ -692,12 +692,13 @@ class CONSIGI_KONEXIA:
         convenio = self.convenio
 
         # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
-        # colunas = ['A D E', 'SERVIDOR', 'MATRÍCULA', 'CPF', 'VALOR DA PARCELA', 'NRO CONTRATO']
-        colunas = ['CONSIGNATÁRIA', 'PRODUTO','SERVIDOR', 'MATRÍCULA', 'CPF', 'VALOR DA PARCELA', 'NRO CONTRATO']
+        # colunas = ['A D E', 'SERVIDOR', 'MATRÍCULA', 'CPF', 'CON_VLR_SOL', 'CON_NRO_CON_EXN_CGA']
+        colunas = ['CON_NRO_OPE_EXN', 'CSG_MAT_FUC', 'CSG_NOM_CLI                          ', 'CSG_CPF_FUC', 'CSG_FMT_CPF   ', 'CON_NRO_CON_EXN_CGA',
+                   'CON_VLR_SOL']
         data_averbados_bruto = data[colunas]
 
-        data_averbados_bruto['NRO CONTRATO'] = data_averbados_bruto['NRO CONTRATO'].fillna('')
-        data_averbados_bruto = data_averbados_bruto[data_averbados_bruto['NRO CONTRATO'] != '']
+        data_averbados_bruto['CON_NRO_CON_EXN_CGA'] = data_averbados_bruto['CON_NRO_CON_EXN_CGA'].fillna('')
+        data_averbados_bruto = data_averbados_bruto[data_averbados_bruto['CON_NRO_CON_EXN_CGA'] != '']
 
         semi_front = self.tratamento_front_preliminar()
         if semi_front is False:
@@ -750,7 +751,7 @@ class CONSIGI_KONEXIA:
                 front.set_index('Contrato')['Esteira'].to_dict()
             )
 
-            # Cria a coluna de Valor da Parcela correspondente
+            # Cria a coluna de CON_VLR_SOL correspondente
             data_averbados[f'Valor_Unif_{i}'] = data_averbados[nome_coluna_contrato].map(
                 semi_front.set_index('Contrato')['Prestacao'].to_dict()
             )
@@ -791,7 +792,7 @@ class CONSIGI_KONEXIA:
             # Condição de Operações Liquidadas, se a linha estiver preenchida vai lançar 0
 
         # --- 2.5 Puxa as liminares ---
-        data_averbados["LIMINAR"] = data_averbados['CPF'].map(tutela.set_index('CPF')['Acao Judicial'].to_dict())
+        data_averbados["LIMINAR"] = data_averbados['CSG_FMT_CPF   '].map(tutela.set_index('CPF')['Acao Judicial'].to_dict())
         condicao_liminar = data_averbados['LIMINAR'] == 1
 
         # --- 3. Soma todos os valores encontrados (forma eficiente) ---
@@ -808,17 +809,17 @@ class CONSIGI_KONEXIA:
 
         # --- 4. Cálculo da Diferença e Formatação Final ---
 
-        # Garante que a coluna de VALOR DA PARCELA é numérica antes do cálculo
-        data_averbados['VALOR DA PARCELA'] = pd.to_numeric(data_averbados['VALOR DA PARCELA'], errors='coerce').fillna(0)
+        # Garante que a coluna de CON_VLR_SOL é numérica antes do cálculo
+        data_averbados['CON_VLR_SOL'] = pd.to_numeric(data_averbados['CON_VLR_SOL'], errors='coerce').fillna(0)
 
-        data_averbados['Diff'] = data_averbados['Soma'] - data_averbados['VALOR DA PARCELA']
+        data_averbados['Diff'] = data_averbados['Soma'] - data_averbados['CON_VLR_SOL']
         data_averbados['Diff'] = data_averbados['Diff'].round(2)
 
         # --- 5. Cria a coluna Lançar ---
         if consig == 'HOJE PREVIDÊNCIA PRIVADA':
             data_averbados = self.adiciona_peculio(data_averbados)
         else:
-            data_averbados['Lançar'] = np.minimum(data_averbados['Soma'], data_averbados['VALOR DA PARCELA'])
+            data_averbados['Lançar'] = np.minimum(data_averbados['Soma'], data_averbados['CON_VLR_SOL'])
             data_averbados.loc[condicao_liminar, 'Lançar'] = 0
 
         # print("Cálculos de Soma e Diferença finalizados.")
@@ -830,13 +831,13 @@ class CONSIGI_KONEXIA:
         data_averbados = self.trata_averbacao()
         front_trabalhado = self.tratamento_front()
         temp = data_averbados[data_averbados['Lançar'] != 0]
-        colunas_alancar = ['MATRÍCULA','CPF', 'SERVIDOR', 'Lançar']
+        colunas_alancar = ['CSG_MAT_FUC','CSG_FMT_CPF   ', 'CSG_NOM_CLI                          ', 'Lançar']
         a_lancar = pd.DataFrame(temp[colunas_alancar])
-        a_lancar = a_lancar.rename(columns={'MATRÍCULA': 'MATRICULA', 'SERVIDOR': 'NOME', 'Lançar': 'VALOR'})
+        a_lancar = a_lancar.rename(columns={'CSG_MAT_FUC': 'MATRICULA', 'CSG_FMT_CPF': 'CPF', 'CSG_NOM_CLI                          ': 'NOME', 'Lançar': 'Vlr parcela'})
 
 
         # Calcule a SOMASE para cada categoria no Averbacoes Trabalhadas
-        somas_por_categoria = data_averbados.groupby('CPF')['Lançar'].transform('sum')
+        somas_por_categoria = data_averbados.groupby('CSG_FMT_CPF   ')['Lançar'].transform('sum')
         data_averbados['SOMASE'] = somas_por_categoria
         data_averbados['SOMASE'] = data_averbados['SOMASE'].astype(float)
 
@@ -845,7 +846,7 @@ class CONSIGI_KONEXIA:
         data_averbados['SOMASE FRONT'] = ''
 
         soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
-        data_averbados['SOMASE FRONT'] = data_averbados['CPF'].map(soma_condicional_dict_averb)
+        data_averbados['SOMASE FRONT'] = data_averbados['CSG_FMT_CPF   '].map(soma_condicional_dict_averb)
 
         
         data_averbados['SOMASE FRONT'] = data_averbados['SOMASE FRONT'].map('{:.2f}'.format).astype(float)
@@ -862,56 +863,47 @@ class CONSIGI_KONEXIA:
         front_trabalhado.insert(18, 'DIFF', '', True)
 
         # Somase Averb no Front Trabalhado
-        soma_condicional_dict_front = data_averbados.groupby('CPF')['Lançar'].sum().to_dict()
+        soma_condicional_dict_front = data_averbados.groupby('CSG_FMT_CPF   ')['Lançar'].sum().to_dict()
         front_trabalhado['SOMASE AVERB'] = front_trabalhado['CPF'].map(soma_condicional_dict_front)
         front_trabalhado['DIFF'] = front_trabalhado['SOMASE FRONT'] - front_trabalhado['SOMASE AVERB'].astype(
             float)
     
 
         # Arredonda os números
-        a_lancar['VALOR'] = a_lancar['VALOR'].astype(float)
-        a_lancar['VALOR'] = a_lancar['VALOR'].map('{:.2f}'.format)
+        a_lancar['Vlr parcela'] = a_lancar['Vlr parcela'].astype(float)
+        a_lancar['Vlr parcela'] = a_lancar['Vlr parcela'].map('{:.2f}'.format)
 
         # Cria colunas no meio do Averbações a Lançar
-        if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
+        if self.convenio in ['PREF. SÃO JOSÉ DO RIO PRETO']:
             if datetime.now().month == 12 and datetime.now().day > 10:
                 folha_inclusao = f'01{datetime.now().year + 1}'
             elif datetime.now().day < 10:
-                folha_inclusao = f'{str(datetime.now().month).zfill(2)}{datetime.now().year}'
+                folha_inclusao = f'{datetime.now().year}{str(datetime.now().month).zfill(2)}{datetime.now().day}'
             else:
-                folha_inclusao = f'{str(datetime.now().month + 1).zfill(2)}{datetime.now().year}'
+                folha_inclusao = f'{datetime.now().year}{str(datetime.now().month + 1).zfill(2)}{datetime.now().day}'
         else:
-            folha_inclusao = f'{str(datetime.now().month).zfill(2)}{datetime.now().year}'
+            folha_inclusao = f'{datetime.now().year}{str(datetime.now().month).zfill(2)}{datetime.now().day}'
     
-        a_lancar.insert(3, 'COD ORGAO','', True)
+        a_lancar.insert(3, 'cod orgão','', True)
     
-        a_lancar.insert(5, 'FOLHA INCLUSAO', folha_inclusao, True)
-    
-        if self.convenio == 'PREF ARAGUAINA':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '816', True)
-        elif self.convenio == 'PREF GOIANIA':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '4925', True)
-        elif self.convenio == 'PREF TAUBATE':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '388', True)
-        elif self.convenio == 'PREF DUQUE DE CAXIAS':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '10321', True)
-        elif self.convenio == 'PREF SAO GONCALO':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '1546', True)
-        elif self.convenio == 'PREV SAO GONCALO':
-            a_lancar.insert(6, 'CODIGO DA VERBA', '344', True)
-        # a_lancar['VALOR DA PARCELA'] =  a_lancar['VALOR DA PARCELA'].apply(substituir_virgula_por_ponto)
+        a_lancar.insert(0, 'Vencimento', folha_inclusao, True)
+
+        # Criação da sequencia numérica
+        a_lancar['N seq registro'] = [str(i).zfill(6) for i in range(1, len(a_lancar) + 1)]
+
+        # a_lancar['CON_VLR_SOL'] =  a_lancar['CON_VLR_SOL'].apply(substituir_virgula_por_ponto)
     
         # --- 1. data_averbados ---
 
         # SOMASE Interno (Averbados)
         # transform('sum') já mantém o índice alinhado, perfeito.
-        data_averbados['SOMASE'] = data_averbados.groupby('CPF')['Lançar'].transform('sum').round(2)
+        data_averbados['SOMASE'] = data_averbados.groupby('CSG_FMT_CPF   ')['Lançar'].transform('sum').round(2)
 
         # SOMASE Externo (Vem do Front)
         soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
 
         # Mapeia e já preenche com 0 quem não for encontrado (fillna)
-        data_averbados['SOMASE FRONT'] = data_averbados['CPF'].map(soma_condicional_dict_averb).fillna(0).round(2)
+        data_averbados['SOMASE FRONT'] = data_averbados['CSG_FMT_CPF   '].map(soma_condicional_dict_averb).fillna(0).round(2)
 
         # Cálculo do DIFF
         data_averbados['DIFF'] = data_averbados['SOMASE FRONT'] - data_averbados['SOMASE']
@@ -938,16 +930,16 @@ class CONSIGI_KONEXIA:
             front_trabalhado['SOMASE FRONT'] = front_somase
 
         # SOMASE Externo (Vem do Averbados)
-        soma_condicional_dict_front = data_averbados.groupby('CPF')['Lançar'].sum().to_dict()
+        soma_condicional_dict_front = data_averbados.groupby('CSG_FMT_CPF   ')['Lançar'].sum().to_dict()
 
         # Cria a coluna SOMASE AVERB mapeando e preenchendo vazios com 0
-        # Nota: Certifique-se que front_trabalhado['CPF'] e data_averbados['CPF'] são idênticos (pontos/traços)
+        # Nota: Certifique-se que front_trabalhado['CPF'] e data_averbados['CSG_FMT_CPF   '] são idênticos (pontos/traços)
         front_trabalhado['SOMASE AVERB'] = front_trabalhado['CPF'].map(soma_condicional_dict_front).fillna(0).round(2)
         # Cálculo do DIFF
         front_trabalhado['DIFF'] = front_trabalhado['SOMASE FRONT'] - front_trabalhado['SOMASE AVERB']
     
         # Cria o arquivo Averbações Trabalhadas
-        if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
+        if self.convenio in ['PREF. SÃO JOSÉ DO RIO PRETO']:
             if datetime.now().month == 12:
                 if datetime.now().day > 10:
                     file_name = f'TRABALHADO CARTÃO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'
@@ -969,7 +961,7 @@ class CONSIGI_KONEXIA:
             print(f"arquivo_lancamento: ERRO AO SALVAR TRABALHADO CARTÃO {self.convenio}: {e}")
     
         # Cria o arquivo Averbações a Lançar
-        if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
+        if self.convenio in ['PREF. SÃO JOSÉ DO RIO PRETO']:
             if datetime.now().month == 12:
                 if datetime.now().day > 10:
                     file_lancar = f'LANCAMENTO CARTAO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'
@@ -991,7 +983,7 @@ class CONSIGI_KONEXIA:
             print(f"arquivo_lancamento: ERRO AO SALVAR LANCAMENTO CARTÃO {self.convenio}: {e}")
 
         # Cria o Front Trabalhado
-        if self.convenio in ['PREF SAO GONCALO', 'PREF DUQUE DE CAXIAS']:
+        if self.convenio in ['PREF. SÃO JOSÉ DO RIO PRETO']:
             if datetime.now().month == 12:
                 if datetime.now().day > 10:
                     file_front = f'FRONT TRABALHADO {self.convenio} {self.consignataria} 01{datetime.now().year + 1}.xlsx'

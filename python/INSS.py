@@ -174,6 +174,10 @@ class INSS:
         front_consig.insert(22, 'Valor a lançar', '', True)
         front_consig.insert(23, 'Análise', '', True)
 
+        print(f'Quais contratos estão atrelados ao CPF: 277.507.524-04? {self.averbados.loc[self.averbados['CPF'] == '277.507.524-04', 'NR_OPER_EDITADO']}')
+        print(f'O Contrato 300119744 string está no Averbados? {300119744 in self.averbados['NR_OPER_EDITADO'].values}')
+        print(f'O Contrato 300119744 inteiro está no Averbados? {'300119744' in self.averbados['NR_OPER_EDITADO'].values}')
+
         situacao_averbado_index = self.averbados.set_index('NR_OPER_EDITADO')['SITUAÇÃO'].copy()
         situacao_averbado_map = front_consig['Contrato'].map(situacao_averbado_index.to_dict())
         front_consig.insert(24, 'SITUAÇÃO', situacao_averbado_map, True)
@@ -294,11 +298,12 @@ class INSS:
         # Marca o que é Ação Judicial
         # No caso de Ação Judicial estiver estiver SIM e NÃO ao invés de 1 e 0
         front_consig_validado_termino['Acao Judicial'] = front_consig_validado_termino['Acao Judicial'].replace({'SIM': 1, 'NAO': 0})
-        # front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'Análise'] = "NÃO LANÇAR - AÇÃO JUDICIAL"
-        liminares = front_consig_validado_termino[front_consig_validado_termino['Acao Judicial'] == 1]
+        front_consig_validado_termino['Análise'] = front_consig_validado_termino['Análise'].fillna('')
+        front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'Análise'] = "NÃO LANÇAR - AÇÃO JUDICIAL"
+        '''liminares = front_consig_validado_termino[front_consig_validado_termino['Acao Judicial'] == 1]
         mask_liminar = front_consig_validado_termino['CPF'].isin(liminares['CPF'])
         front_consig_validado_termino['LIMINAR'] = front_consig_validado_termino['CPF'].map(liminares.set_index("CPF")["Contrato"].to_dict())
-        front_consig_validado_termino.loc[mask_liminar, 'Análise'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
+        front_consig_validado_termino.loc[mask_liminar, 'Análise'] = "NÃO LANÇAR - AÇÃO JUDICIAL"'''
 
 
         # Marca o que é Obito

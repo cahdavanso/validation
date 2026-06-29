@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CONVENIOS_NEOCONSIG = ["GOV. GOIÁS", "PREF. SÃO GONÇALO", "PREF. SÃO LUÍS", "PREF. SOROCABA"];
 
-    const CONVENIOS_QUANTUM = ["PREF. SÃO JOSE DO RIO PRETO", "PREVIDÊNCIA SÃO JOSE DO RIO PRETO", "CÂMARA MUNICIPAL DE TERESÓPOLIS"];
+    const CONVENIOS_QUANTUM = ["PREF. SÃO JOSÉ DO RIO PRETO", "PREVIDÊNCIA SÃO JOSÉ DO RIO PRETO", "CÂMARA MUNICIPAL DE TERESÓPOLIS"];
 
     const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_RF1, 
         ...CONVENIOS_INFOCONSIG, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_SIGRH, ...CONVENIOS_CONSIGI_KONEXIA, ...CONVENIOS_CIP, ...CONVENIOS_NEOCONSIG, ...CONVENIOS_QUANTUM].sort();
@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const FIELDS_SIGRH = ["FRONT", "FUNCAO", "AVERBADOS_SC_CAPITAL", "AVERBADOS_SC_CLICK", "ANDAMENTO_SC_CAPITAL", "ANDAMENTO_SC_CLICK", "CONCILIACAO", "KOBRAKI", "TACS", "ORBITAL"];
     const FIELDS_CONSIG_KONEXIA = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "AVERBADOS", "ORBITAL"];
     const FIELDS_NEOCONSIG = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "AVERBADOS", "ORBITAL"];
+    const FIELDS_QUANTUM = ["FRONT", "FUNCAO", "CONCILIACAO", "KOBRAKI", "TACS", "AVERBADOS", "ORBITAL"];
 
     const fileDataMap = {}; 
     
@@ -271,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentFields = FIELDS_NEOCONSIG;
         } else if (CONVENIOS_QUANTUM.includes(convenio)) {
             consignatariaArea.classList.remove('hidden');
-            currentFields = FIELDS_NEOCONSIG;
+            currentFields = FIELDS_QUANTUM;
         }
 
         uploadForm.classList.remove('hidden');

@@ -34,10 +34,11 @@ from python.Infoconsig import INFOCONSIG
 from python.Rf1 import RF1
 from python.Sigrh import SIGRH
 from python.Cip import CIP
+from python.Quantum import QUANTUM
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = False 
+MODO_DESENVOLVIMENTO = True 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -121,6 +122,8 @@ CIP_CONVENIO = ["PREF. SÃO PAULO", "GOV. SÃO PAULO"]
 
 NEOCONSIG_CONVENIO = ["GOV. GOIÁS", "PREF. SÃO GONÇALO", "PREF. SÃO LUÍS", "PREF. SOROCABA"]
 
+QUANTUM_CONVENIO = ["PREF. SÃO JOSÉ DO RIO PRETO", "PREVIDÊNCIA SÃO JOSÉ DO RIO PRETO", "CÂMARA MUNICIPAL DE TERESÓPOLIS"]
+
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
     "GOV. MARANHÃO", "GOV. MATO GROSSO", "GOV. PIAUÍ", "GOV. PERNAMBUCO","PREF. BAYEUX", "PREF. CAJAMAR",
@@ -176,16 +179,22 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
         try:
             filename = uploaded_file.filename.lower()
             print(f'nome do arquivo: {filename}')
+            print(f'Convenio: {conv}')
+            
             # 1. Pegar o cabeçalho Content-Disposition
             content_disposition = uploaded_file.headers.get("content-disposition", "")
             match = re.search('name="([^"]+)"', content_disposition)
             # Se encontrar o 'name', armazena, senão usa o filename como reserva
             name = match.group(1).lower() if match else "desconhecido"
+            print(f'Nome informal: {name}')
             content = await uploaded_file.read()
             file_obj = io.BytesIO(content)
             logging.info(f"Lendo: {uploaded_file.filename}")
 
-            # print(f'File list: {file_list}')
+            print(f'convenio é PREF. SÃO JOSÉ DO RIO PRETO? {conv == 'PREF. SÃO JOSÉ DO RIO PRETO'}')
+            print(f'convenio está no QUANTUM_CONVENIO? {conv in QUANTUM_CONVENIO}')
+            print(f'Arquivo é averbados? {name =='averbados'}')
+            print(f'Convenio é PREF. SÃO JOSÉ DO RIO PRETO, E O ARQUIVO É AVERBADOS? {conv in QUANTUM_CONVENIO and 'averbados' in name}')
             
             
             if "kobraki" in filename and filename.endswith(('.xlsx', '.xls')):
@@ -241,6 +250,8 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
                 df_temp = pd.read_csv(file_obj, sep=';', encoding='latin1')
                 if len(df_temp) > 3:
                     df = df_temp.iloc[:-3]
+            elif conv in QUANTUM_CONVENIO and 'averbados' in name:
+                df = pd.read_csv(file_obj, sep=';', encoding='latin1', header=1)
             elif conv in INFOCONSIG_CONVENIO and 'averbados' in name:
                 df = pd.read_csv(
                         file_obj, 
@@ -595,6 +606,20 @@ async def validar_planilhas(
             funcao=funcao_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
+            orbital=orbital_df
+        )
+    elif convenio in QUANTUM_CONVENIO:
+        logging.info("Usando validador: QUANTUM")
+        validador = QUANTUM(
+            portal_file_list=averbados_df, 
+            convenio=convenio,
+            front=front_df,
+            consignataria=consignataria,
+            conciliacao=conciliacao_df,
+            kobraki=kobraki_df,
+            tacs=tacs_df,
+            caminho=CAMINHO_SAIDA,
+            funcao=funcao_df,
             orbital=orbital_df
         )
     elif convenio in CONSIGFACIL_CONVENIOS:
