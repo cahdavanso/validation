@@ -68,7 +68,7 @@ caminho = r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\teste_programa"
 # averbado_unif = pd.concat()
 
 class IGEPREV_GOVTO:
-    def __init__(self, front, funcao, portal_file_path_to, portal_file_path_igeprev, d8_file_path_to, d8_file_path_igeprev, caminho, conciliacao=None, kobraki=None, tacs=None):
+    def __init__(self, front, funcao, portal_file_path_to, portal_file_path_igeprev, d8_file_path_to, d8_file_path_igeprev, caminho, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None):
         self.caminho = caminho
         self.front = front
         self.averbados_to = portal_file_path_to
@@ -77,6 +77,7 @@ class IGEPREV_GOVTO:
         self.d8_igeprev = d8_file_path_igeprev
         self.funcao = funcao
         self.kobraki = kobraki if kobraki is not None else None
+        self.extra_judicial = extra_judicial if extra_judicial is not None else None
         self.tacs = tacs if tacs is not None else None
         self.caminho = caminho
         
@@ -252,7 +253,7 @@ class IGEPREV_GOVTO:
 
     def validacao_termino(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo

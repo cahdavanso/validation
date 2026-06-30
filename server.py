@@ -38,7 +38,7 @@ from python.Quantum import QUANTUM
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = False 
+MODO_DESENVOLVIMENTO = True 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -100,11 +100,10 @@ SERHA_CONVENIO = ["GOV. MINAS GERAIS - IPSM", "GOV. MINAS GERAIS - CBMMG", "GOV.
 CONSIGLOG_CONVENIO = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", 
                       "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO", "PREF. RIBEIRÃO PRETO"]
 
-ZETRA_CONVENIO = [
-         "GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
-         "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL", "PREVIPALMAS",
-         "PREF. BARBACENA"
-         ]
+ZETRA_CONVENIO = ["GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
+                  "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL", "PREVIPALMAS",
+                  "PREF. BARBACENA", "GOV. ALAGOAS - TJAL"
+                ]
 
 RF1_CONVENIO = ["PREF. ANANINDEUA"]
 
@@ -122,7 +121,7 @@ CIP_CONVENIO = ["PREF. SÃO PAULO", "GOV. SÃO PAULO"]
 
 NEOCONSIG_CONVENIO = ["GOV. GOIÁS", "PREF. SÃO GONÇALO", "PREF. SÃO LUÍS", "PREF. SOROCABA"]
 
-QUANTUM_CONVENIO = ["PREF. SÃO JOSÉ DO RIO PRETO", "PREVIDÊNCIA SÃO JOSÉ DO RIO PRETO", "CÂMARA MUNICIPAL DE TERESÓPOLIS"]
+QUANTUM_CONVENIO = ["PREF. SÃO JOSÉ DO RIO PRETO", "PREVIDÊNCIA SÃO JOSÉ DO RIO PRETO", "CÂMARA MUNICIPAL DE TERESÓPOLIS", "PREF. JUÍZ DE FORA"]
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
@@ -198,6 +197,8 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
             
             
             if "kobraki" in filename and filename.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_obj, sheet_name='CONSOLIDADO')
+            elif "extrajudicial" in filename and filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(file_obj, sheet_name='CONSOLIDADO')
             elif "d8_to" in name:
                 d8_gov_to_amostra = pd.ExcelFile(file_obj)
@@ -366,6 +367,7 @@ async def validar_planilhas(
     ZIPS: List[UploadFile] = File(None, alias="ZIPS"),
     CONCILIACAO: List[UploadFile] = File(None, alias="CONCILIACAO"),
     KOBRAKI: List[UploadFile] = File(None, alias="KOBRAKI"),
+    EXTRA_JUDICIAL: List[UploadFile] = File(None, alias="EXTRA_JUDICIAL"),
     TACS: List[UploadFile] = File(None, alias="TACS"),
     D8_TO: List[UploadFile] = File(None, alias="D8_TO"),
     D8_IGEPREV: List[UploadFile] = File(None, alias="D8_IGEPREV"),
@@ -415,6 +417,7 @@ async def validar_planilhas(
     averbados_igeprev_df, erros = await read_and_unify_files(AVERBADOS_IGEPREV, convenio=convenio)
     conciliacao_df, erros = await read_and_unify_files(CONCILIACAO, convenio=convenio)
     kobraki_df, erros = await read_and_unify_files(KOBRAKI, convenio=convenio)
+    extra_judicial_df, errors = await read_and_unify_files(EXTRA_JUDICIAL, convenio=convenio)
     tacs_df, erros = await read_and_unify_files(TACS, convenio=convenio)
     d8_df_to, erros = await read_and_unify_files(D8_TO, convenio=convenio)
     d8_df_igeprev, erros = await read_and_unify_files(D8_IGEPREV, convenio=convenio)
@@ -445,6 +448,7 @@ async def validar_planilhas(
             consignataria=consignataria, 
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             andamento_list=andamento_df,
             orbital=orbital_df,
@@ -459,6 +463,7 @@ async def validar_planilhas(
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             casos_capital=casoscapital_df,
@@ -473,6 +478,7 @@ async def validar_planilhas(
             front=front_df,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             funcao=funcao_df,
             trabalhado_anterior=trabalhado_anterior_df,
@@ -490,6 +496,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             funcao=funcao_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
@@ -504,6 +511,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             funcao=funcao_df,
@@ -518,6 +526,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             rubrica=rubrica,
@@ -533,6 +542,7 @@ async def validar_planilhas(
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             consignataria=consignataria,
             caminho=CAMINHO_SAIDA,
@@ -549,6 +559,7 @@ async def validar_planilhas(
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             tacs=tacs_df,
+            extra_judicial=extra_judicial_df,
             kobraki=kobraki_df
         )
     elif convenio in CIP_CONVENIO:
@@ -562,6 +573,7 @@ async def validar_planilhas(
             conciliacao=conciliacao_df,
             tacs=tacs_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             orbital=orbital_df
         )
     elif convenio in TO_IGEPREV_CONVENIO:
@@ -575,6 +587,7 @@ async def validar_planilhas(
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA
         )
@@ -592,6 +605,7 @@ async def validar_planilhas(
                           orbital=orbital_df,
                           conciliacao=conciliacao_df,
                           kobraki=kobraki_df,
+                          extra_judicial=extra_judicial_df,
                           tacs=tacs_df)
         
     elif convenio in NEOCONSIG_CONVENIO:
@@ -603,6 +617,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             funcao=funcao_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
@@ -617,6 +632,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             funcao=funcao_df,
@@ -633,6 +649,7 @@ async def validar_planilhas(
             conciliacao=conciliacao_df,
             tacs=tacs_df,
             kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
             andamento_list=andamento_df,
             caminho=CAMINHO_SAIDA,
         )

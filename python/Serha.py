@@ -11,7 +11,8 @@ import logging
 import re
 
 class SERHA:
-    def __init__(self, portal_file_list, convenio, front, conciliacao, trabalhado_anterior, rubrica, caminho, kobraki=None, tacs=None, funcao=None, complementar=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, conciliacao, trabalhado_anterior, rubrica, caminho, kobraki=None, extra_judicial=None, 
+                 tacs=None, funcao=None, complementar=None, orbital=None):
         # isso é apenas para caso seja um arquivo de averbação
         self.averbados = portal_file_list if portal_file_list is not None else None
         if self.averbados is not None:
@@ -28,7 +29,9 @@ class SERHA:
         self.convenio = convenio
 
         # kobraki
-        self.kobraki = kobraki
+        self.kobraki = kobraki if kobraki is not None else None
+
+        self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
         self.tacs = tacs
 
@@ -494,7 +497,7 @@ class SERHA:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
         if conciliacao_tratado is False:
             print("validacao_termino_front: O tratamento da conciliação falhou. Verifique os erros anteriores.")

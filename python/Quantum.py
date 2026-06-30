@@ -11,7 +11,7 @@ import re
 
 
 class QUANTUM:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, funcao=None, conciliacao=None, kobraki=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
 
         self.averbados = portal_file_list
 
@@ -22,7 +22,9 @@ class QUANTUM:
         # Funcao
         self.funcao = funcao if funcao is not None else None
 
-        self.kobraki = kobraki
+        self.kobraki = kobraki if kobraki is not None else None
+
+        self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
         self.tacs = tacs if tacs is not None else None
 
@@ -348,7 +350,7 @@ class QUANTUM:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Front trabalhado são do mesmo tipo
@@ -418,10 +420,10 @@ class QUANTUM:
 
             # --- Passo 2: Definir a função que será aplicada em cada linha (LÓGICA ALTERADA) ---
             def encontrar_contratos_na_linha(row):
-                cpf = row['CSG_FMT_CPF   ']
+                cpf = row['CSG_FMT_CPF']
                 texto_contratos_sujo = str(row['CON_NRO_CON_EXN_CGA']).strip()
             
-                cpf = row['CSG_FMT_CPF   ']
+                cpf = row['CSG_FMT_CPF']
                 texto_contratos_sujo = str(row['CON_NRO_CON_EXN_CGA'])
 
                 # Garante que as listas existam
@@ -631,7 +633,7 @@ class QUANTUM:
         # Primeiro merge: Match exato (valor igual)
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_exact, 
-            left_on=['CSG_FMT_CPF   ', 'CON_VLR_SOL'],   # Alterado para CPF
+            left_on=['CSG_FMT_CPF', 'CON_VLR_SOL'],   # Alterado para CPF
             right_on=['CPF', 'Prestacao'], 
             how='left'
         )
@@ -646,7 +648,7 @@ class QUANTUM:
         # Segundo merge: Caso de +20 reais
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_plus20, 
-            left_on=['CSG_FMT_CPF   ', 'CON_VLR_SOL'],   # Alterado para CPF
+            left_on=['CSG_FMT_CPF', 'CON_VLR_SOL'],   # Alterado para CPF
             right_on=['CPF', 'Prestacao_Ajustada'], 
             how='left', 
             suffixes=('', '_20')
@@ -660,7 +662,7 @@ class QUANTUM:
         # Terceiro merge: Caso de +40 reais
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_plus40, 
-            left_on=['CSG_FMT_CPF   ', 'CON_VLR_SOL'],   # Alterado para CPF
+            left_on=['CSG_FMT_CPF', 'CON_VLR_SOL'],   # Alterado para CPF
             right_on=['CPF', 'Prestacao_Ajustada'], 
             how='left', 
             suffixes=('', '_40')
@@ -679,7 +681,7 @@ class QUANTUM:
         front = self.tratamento_front_preliminar()
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         if front is False:
@@ -693,8 +695,22 @@ class QUANTUM:
 
         # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
         # colunas = ['A D E', 'SERVIDOR', 'MATRÍCULA', 'CPF', 'CON_VLR_SOL', 'CON_NRO_CON_EXN_CGA']
-        colunas = ['CON_NRO_OPE_EXN', 'CSG_MAT_FUC', 'CSG_NOM_CLI                          ', 'CSG_CPF_FUC', 'CSG_FMT_CPF   ', 'CON_NRO_CON_EXN_CGA',
-                   'CON_VLR_SOL']
+        
+        # 1. Remove os espaços invisíveis do começo e do fim de TODAS as colunas
+        data.columns = data.columns.str.strip()
+
+        # 2. Agora a sua lista pode ficar limpa e padronizada para qualquer convênio!
+        colunas = [
+            'CON_NRO_OPE_EXN', 
+            'CSG_MAT_FUC', 
+            'CSG_NOM_CLI', 
+            'CSG_CPF_FUC', 
+            'CSG_FMT_CPF', 
+            'CON_NRO_CON_EXN_CGA',
+            'CON_VLR_SOL'
+        ]
+
+        # 3. O filtro vai funcionar perfeitamente
         data_averbados_bruto = data[colunas]
 
         data_averbados_bruto['CON_NRO_CON_EXN_CGA'] = data_averbados_bruto['CON_NRO_CON_EXN_CGA'].fillna('')
@@ -712,7 +728,7 @@ class QUANTUM:
 
         data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO
@@ -792,7 +808,7 @@ class QUANTUM:
             # Condição de Operações Liquidadas, se a linha estiver preenchida vai lançar 0
 
         # --- 2.5 Puxa as liminares ---
-        data_averbados["LIMINAR"] = data_averbados['CSG_FMT_CPF   '].map(tutela.set_index('CPF')['Acao Judicial'].to_dict())
+        data_averbados["LIMINAR"] = data_averbados['CSG_FMT_CPF'].map(tutela.set_index('CPF')['Acao Judicial'].to_dict())
         condicao_liminar = data_averbados['LIMINAR'] == 1
 
         # --- 3. Soma todos os valores encontrados (forma eficiente) ---
@@ -831,13 +847,13 @@ class QUANTUM:
         data_averbados = self.trata_averbacao()
         front_trabalhado = self.tratamento_front()
         temp = data_averbados[data_averbados['Lançar'] != 0]
-        colunas_alancar = ['CSG_MAT_FUC','CSG_FMT_CPF   ', 'CSG_NOM_CLI                          ', 'Lançar']
+        colunas_alancar = ['CSG_MAT_FUC','CSG_FMT_CPF', 'CSG_NOM_CLI', 'Lançar']
         a_lancar = pd.DataFrame(temp[colunas_alancar])
-        a_lancar = a_lancar.rename(columns={'CSG_MAT_FUC': 'MATRICULA', 'CSG_FMT_CPF': 'CPF', 'CSG_NOM_CLI                          ': 'NOME', 'Lançar': 'Vlr parcela'})
+        a_lancar = a_lancar.rename(columns={'CSG_MAT_FUC': 'MATRICULA', 'CSG_FMT_CPF': 'CPF', 'CSG_NOM_CLI': 'NOME', 'Lançar': 'Vlr parcela'})
 
 
         # Calcule a SOMASE para cada categoria no Averbacoes Trabalhadas
-        somas_por_categoria = data_averbados.groupby('CSG_FMT_CPF   ')['Lançar'].transform('sum')
+        somas_por_categoria = data_averbados.groupby('CSG_FMT_CPF')['Lançar'].transform('sum')
         data_averbados['SOMASE'] = somas_por_categoria
         data_averbados['SOMASE'] = data_averbados['SOMASE'].astype(float)
 
@@ -846,7 +862,7 @@ class QUANTUM:
         data_averbados['SOMASE FRONT'] = ''
 
         soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
-        data_averbados['SOMASE FRONT'] = data_averbados['CSG_FMT_CPF   '].map(soma_condicional_dict_averb)
+        data_averbados['SOMASE FRONT'] = data_averbados['CSG_FMT_CPF'].map(soma_condicional_dict_averb)
 
         
         data_averbados['SOMASE FRONT'] = data_averbados['SOMASE FRONT'].map('{:.2f}'.format).astype(float)
@@ -863,7 +879,7 @@ class QUANTUM:
         front_trabalhado.insert(18, 'DIFF', '', True)
 
         # Somase Averb no Front Trabalhado
-        soma_condicional_dict_front = data_averbados.groupby('CSG_FMT_CPF   ')['Lançar'].sum().to_dict()
+        soma_condicional_dict_front = data_averbados.groupby('CSG_FMT_CPF')['Lançar'].sum().to_dict()
         front_trabalhado['SOMASE AVERB'] = front_trabalhado['CPF'].map(soma_condicional_dict_front)
         front_trabalhado['DIFF'] = front_trabalhado['SOMASE FRONT'] - front_trabalhado['SOMASE AVERB'].astype(
             float)
@@ -897,13 +913,13 @@ class QUANTUM:
 
         # SOMASE Interno (Averbados)
         # transform('sum') já mantém o índice alinhado, perfeito.
-        data_averbados['SOMASE'] = data_averbados.groupby('CSG_FMT_CPF   ')['Lançar'].transform('sum').round(2)
+        data_averbados['SOMASE'] = data_averbados.groupby('CSG_FMT_CPF')['Lançar'].transform('sum').round(2)
 
         # SOMASE Externo (Vem do Front)
         soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
 
         # Mapeia e já preenche com 0 quem não for encontrado (fillna)
-        data_averbados['SOMASE FRONT'] = data_averbados['CSG_FMT_CPF   '].map(soma_condicional_dict_averb).fillna(0).round(2)
+        data_averbados['SOMASE FRONT'] = data_averbados['CSG_FMT_CPF'].map(soma_condicional_dict_averb).fillna(0).round(2)
 
         # Cálculo do DIFF
         data_averbados['DIFF'] = data_averbados['SOMASE FRONT'] - data_averbados['SOMASE']
@@ -930,10 +946,10 @@ class QUANTUM:
             front_trabalhado['SOMASE FRONT'] = front_somase
 
         # SOMASE Externo (Vem do Averbados)
-        soma_condicional_dict_front = data_averbados.groupby('CSG_FMT_CPF   ')['Lançar'].sum().to_dict()
+        soma_condicional_dict_front = data_averbados.groupby('CSG_FMT_CPF')['Lançar'].sum().to_dict()
 
         # Cria a coluna SOMASE AVERB mapeando e preenchendo vazios com 0
-        # Nota: Certifique-se que front_trabalhado['CPF'] e data_averbados['CSG_FMT_CPF   '] são idênticos (pontos/traços)
+        # Nota: Certifique-se que front_trabalhado['CPF'] e data_averbados['CSG_FMT_CPF'] são idênticos (pontos/traços)
         front_trabalhado['SOMASE AVERB'] = front_trabalhado['CPF'].map(soma_condicional_dict_front).fillna(0).round(2)
         # Cálculo do DIFF
         front_trabalhado['DIFF'] = front_trabalhado['SOMASE FRONT'] - front_trabalhado['SOMASE AVERB']

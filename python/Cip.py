@@ -11,7 +11,7 @@ import os
 import re
 
 class CIP:
-    def __init__(self, portal_file_list, convenio, front, caminho, funcao=None, conciliacao=None, kobraki=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, caminho, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
         self.averbados = portal_file_list
 
         self.convenio = convenio
@@ -21,7 +21,9 @@ class CIP:
         # Funcao
         self.funcao = funcao if funcao is not None else None
 
-        self.kobraki = kobraki
+        self.kobraki = kobraki if kobraki is not None else None
+
+        self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
         self.tacs = tacs if tacs is not None else None
 
@@ -308,7 +310,7 @@ class CIP:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Front trabalhado são do mesmo tipo
@@ -896,7 +898,7 @@ class CIP:
         front = self.tratamento_front_preliminar()
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         if front is False:
@@ -932,7 +934,7 @@ class CIP:
         data_averbados, front_base = self.processar_contratos_otimizado(data_averbados, front)
         data_averbados = self.extrair_contratos_com_referencia(data_averbados, front)
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO

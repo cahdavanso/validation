@@ -19,7 +19,7 @@ rejeitados = ['/']
 class CONSIGFACIL:
     # O init foi adaptado para receber os DataFrames do server.py, mas prepara os dados
     # exatamente como o original esperava (convertendo tipos, etc.)
-    def __init__(self, front, portal_file_list, convenio,  caminho, funcao=None, conciliacao=None, kobraki=None, tacs=None, andamento_list=None):
+    def __init__(self, front, portal_file_list, convenio,  caminho, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, andamento_list=None):
         
         self.convenio = convenio
         self.caminho = caminho
@@ -67,6 +67,8 @@ class CONSIGFACIL:
                                          'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
         
         self.kobraki = kobraki if kobraki is not None else None
+
+        self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
         self.tacs = tacs if tacs is not None else None
         
@@ -383,7 +385,7 @@ class CONSIGFACIL:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo

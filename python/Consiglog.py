@@ -11,7 +11,7 @@ import re
 
 
 class CONSIGLOG:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, funcao=None, conciliacao=None, kobraki=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
         self.averbados = portal_file_list
 
 
@@ -25,6 +25,8 @@ class CONSIGLOG:
         self.kobraki = kobraki
 
         self.tacs = tacs if tacs is not None else None
+
+        self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
 
         conciliacao_falso = pd.DataFrame(
@@ -365,7 +367,7 @@ class CONSIGLOG:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Front trabalhado são do mesmo tipo
@@ -707,7 +709,7 @@ class CONSIGLOG:
         front = self.tratamento_front_preliminar()
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         if front is False:
@@ -932,7 +934,7 @@ class CONSIGLOG:
 
         data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO

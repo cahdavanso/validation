@@ -13,7 +13,7 @@ import openpyxl
 
 
 class ZETRA:
-    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, funcao=None, historico=None, conciliacao=None, kobraki=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, funcao=None, historico=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
 
         self.caminho = caminho
 
@@ -25,7 +25,9 @@ class ZETRA:
 
         self.front = front
 
-        self.kobraki = kobraki
+        self.kobraki = kobraki if kobraki is not None else None
+
+        self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
         self.tacs = tacs if tacs is not None else None
 
@@ -57,6 +59,8 @@ class ZETRA:
         self.LAYOUT_CONFIG = {
             "PREF. AÇAILÂNDIA": {"MAT": 12, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 3, "VAL": 10, "PRZ": 3,
                                 "COMP": 6, "OP": 1},
+            "PREF. BARBACENA": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 4, "VAL": 10, "PRZ": 3,
+                                "COMP": 6, "OP": 1},
             "PREF. BELO HORIZONTE": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 4, "VAL": 10, "PRZ": 3,
                                     "COMP": 6, "OP": 1},
             "PREF. MACAÉ": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 4, "VAL": 10, "PRZ": 3,
@@ -72,7 +76,10 @@ class ZETRA:
             "PREF. CAMPINAS": {"MAT": 10, "ORG": 2, "COD": 3, "OP": 1, "PRZ": 2, "VAL": 10, "COMP": 8},
 
             "GOV. PARANÁ": {"MAT": 20, "CPF": 11, "NOME": 50, "EST": 3, "ID_ORG": 10, "COD": 4, "VAL": 10, "PRZ": 3, "COMP": 6,
-                            "OP": 1}
+                            "OP": 1},
+            
+            "GOV. ALAGOAS - TJAL": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 3, "VAL": 10, "PRZ": 3,
+                             "COMP": 6, "OP": 1}
         }
 
         self.arquivo_lancamento()
@@ -266,10 +273,14 @@ class ZETRA:
 
 
         # Insere as colunas vazias necessárias
-        front_consig.insert(21, 'Saldo', '', True)
-        front_consig.insert(22, 'Valor a lançar', '', True)
-        front_consig.insert(23, 'PRAZO', '', True)
-        front_consig.insert(24, 'OBS', '', True)
+        if 'Saldo' not in front_consig.columns:
+            front_consig.insert(21, 'Saldo', '')
+        if 'Valor a lançar' not in front_consig.columns:
+            front_consig.insert(22, 'Valor a lançar', '')
+        if 'PRAZO' not in front_consig.columns:
+            front_consig.insert(23, 'PRAZO', '')
+        if 'OBS' not in front_consig.columns:
+            front_consig.insert(24, 'OBS', '')
 
         print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
         
@@ -290,7 +301,8 @@ class ZETRA:
             print(f'Coluna PRODUTO não se encontra na conciliação. Erro: {e}')
             return False
         
-        front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
+        if 'Tipo Conciliação' not in front_consig.columns:
+            front_consig.insert(19, 'Tipo Conciliação', tipo_conci)
         front_consig['Tipo Conciliação'] = front_consig['Tipo Conciliação'].astype(str)
 
         # Adiciona só as esteiras que podem ser lançadas
@@ -324,7 +336,7 @@ class ZETRA:
 
             # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
             # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
-            mapa_orbital = orbital.set_index('CONTRATO')['Valor da Parcela']
+            mapa_orbital = orbital.set_index('CONTRATO')['VALID DESCONTO FINAL']
             # --- ETAPA 3: Definir quem vai ser alterado ---
             filtro_esteira = front_consig_esteiras['Esteira'] == '99 CARTAO UTILIZADO'
 
@@ -465,7 +477,7 @@ class ZETRA:
         if self.conciliacao is None:
             return front
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('float64')
@@ -794,6 +806,11 @@ class ZETRA:
             averbado_novo['SOMASE FRONT'] = averbado_novo['CPF'].map(soma_series_averb)
             averbado_novo['SOMASE FRONT'] = pd.to_numeric(averbado_novo['SOMASE FRONT'], errors='coerce').fillna(0)
 
+            if 'ORBITAL' in averbado_novo.columns:
+                # Usa .loc para garantir que a coluna seja adicionada
+                averbado_novo['ORBITAL'] = averbado_novo['ORBITAL'].fillna(0)
+                averbado_novo['SOMASE FRONT'] = averbado_novo['SOMASE FRONT'] + averbado_novo['ORBITAL']
+
             # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
             # da ordem atual do DataFrame. Se precisar de uma ordem específica,
             # um .sort_values() viria aqui.
@@ -834,7 +851,7 @@ class ZETRA:
 
         semi_front = front[front['Esteira'].isin(self.condicoes_1)]
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO
@@ -1112,13 +1129,13 @@ class ZETRA:
                                 "IGEPREV CIASPREV": "02470", "PREF. PIRACICABA": "5600", "PREF. PIRACICABA - SEMAE": "675",
                                 "PREV. PIRACICABA": "6277", "PREF. BELO HORIZONTE CB": "204U", "PREF. BELO HORIZONTE CC": "204V",
                                 "PREF. MACAÉ": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894", "PREF. CAMPINAS": "435",
-                                "GOV. PARANÁ": "5408"}
+                                "GOV. PARANÁ": "5408", "PREF. BARBACENA": "3609", "GOV. ALAGOAS - TJAL": "605"}
 
-        estab_dict = {"PREF. AÇAILÂNDIA": "001", "IGEPREV CAPITAL": "001", "IGEPREV CIASPREV": "001",
+        estab_dict = {"PREF. AÇAILÂNDIA": "001", "PREF. BARBACENA": "001", "IGEPREV CAPITAL": "001", "IGEPREV CIASPREV": "001",
                       "PREF. PIRACICABA": "001", "PREF. PIRACICABA - SEMAE": "002", "PREF. CAMPINAS": "",
                       "PREV. PIRACICABA": "001", "PREF. BELO HORIZONTE CB": "001", "PREF. BELO HORIZONTE CC": "001",
                       "PREF. MACAÉ": "001", "PREVIPALMAS CAPITAL": "001", "PREVIPALMAS CIASPREV": "001",
-                      "GOV. PARANÁ": "002"}
+                      "GOV. PARANÁ": "002", "GOV. ALAGOAS - TJAL": "001"}
 
         emp_dict_gov_rj = {"ADMINISTRAÇÃO DIRETA (GOVERNO ESTADO)": "01",
                            "ENCARGOS GERAIS DO ESTADO": "01",
@@ -1147,6 +1164,36 @@ class ZETRA:
                            "DEPARTAMENTO DE TRANSPORTES RODOVIARIOS DO EST RJ": "19",
                            "ADMINISTRAÇÃO DIRETA": "01"
                     }
+        
+        gov_pr_orgao_dict = {'Secretaria de Estado da Justiça e Cidadania e Direitos Humanos' : 'SEJU',
+                            'PARANAPREVIDENCIA' : 'PRPREV',
+                            'SECRETARIA DE ESTADO DA EDUCAÇÃO E DO ESPORTE' : 'SEED',
+                            'POLÍCIA MILITAR' : 'SESP-PM',
+                            'COLÉGIO ESTADUAL DO PARANÁ' : 'CEPR',
+                            'SECRETARIA DE ESTADO DA SEGURANÇA PÚBLICA' : 'SESP',
+                            'Universidade Estadual de Londrina (UEL)' : 'UEL',
+                            'BOMBEIRO MILITAR' : 'SESP-BM',
+                            'FUNDO ESTADUAL DA SAÚDE DO PARANÁ' : 'FUNSAUDE',
+                            'Universidade Estadual do Oeste do Paraná (UNIOESTE)' : 'UNIOESTE',
+                            'INSTITUTO ÁGUA E TERRA' : 'IAT',
+                            'UNESPAR - CAMPUS DE APUCARANA' : 'FECEA',
+                            'DEPARTAMENTO DE TRÂNSITO DO PARANÁ' : 'DETRAN',
+                            'GOVERNADORIA' : 'GOV',
+                            'AGÊNCIA DE DEFESA AGROPECUÁRIA DO PARANÁ' : 'ADAPAR',
+                            'DEPARTAMENTO DE ESTRADAS DE RODAGEM DO ESTADO DO PARANÁ' : 'DER',
+                            'Universidade Estadual do Centro-Oeste (Unicentro)' : 'UNICENTRO',
+                            'UNESPAR - CAMPUS DE PARANAGUA' : 'FAFIPAR',
+                            'UNIVERSIDADE ESTADUAL DO NORTE DO PARANÁ' : 'UENP',
+                            'CENTRO CULTURAL TEATRO GUAIRA' : 'CCTG',
+                            'SECRETARIA DE ESTADO DA COMUNICAÇÃO' : 'SECOM',
+                            'UNESPAR - CAMPUS DE CURITIBA I' : 'EMBAP',
+                            'CASA CIVIL' : 'CC',
+                            'SECRETARIA DE ESTADO DA AGRICULTURA E DO ABASTECIMENTO' : 'SEAB',
+                            'SECRETARIA DE ESTADO DA FAZENDA' : 'SEFA',
+                            'INSTITUTO AGRONÔMICO DO PARANÁ' : 'IDR',
+                            'UNESPAR - CAMPUS DE DE PARANAVAÍ' : 'FAFIPA',
+                            'SECRETARIA DE ESTADO DA ADMINISTRAÇÃO E DA PREVIDÊNCIA' : 'SEAP'
+                            }
 
 
         try:
@@ -1166,6 +1213,8 @@ class ZETRA:
         if self.convenio == 'GOV. RIO DE JANEIRO':
             colunas_alancar = ['Órgão', 'Matrícula', 'Servidor', 'CPF', 'Situação', 'Categoria', 'Consignatária', 'Id. órgão',
                     'Órgão.1', 'Id. serviço', 'Serviço', 'Nº ADE', 'Id. ADE', 'Data inc.', 'Vlr ant.', 'Vlr novo', 'Lançar']
+        elif self.convenio in ['GOV. PARANÁ']:
+            colunas_alancar = ['AGÊNCIA', 'Matrícula', 'Servidor', 'CPF', 'SITUAÇÃO', 'CATEGORIA', 'ÓRGÃO', 'PRODUTO', 'DATA', 'Vlr novo', 'Lançar']
         else:
             colunas_alancar = ['CORRESPONDENTE', 'Matrícula', 'Servidor', 'CPF', 'SITUAÇÃO', 'CATEGORIA', 'SERVIÇO', 'DATA', 'Vlr novo', 'Lançar']
         a_lancar = pd.DataFrame(temp[colunas_alancar])
@@ -1205,19 +1254,33 @@ class ZETRA:
 
         # Adiciona algumas colunas
         a_lancar.insert(3, "ESTABELECIMENTO", "", True)
-        a_lancar.insert(4, "ÓRGÃO", "", True)
         a_lancar.insert(5, "CÓDIGO DE DESCONTO", "", True)
         a_lancar.insert(7, "PRAZO TOTAL", "", True)
         a_lancar.insert(8, "COMPETÊNCIA", "", True)
         a_lancar.insert(9, "CÓDIGO DA OPERAÇÃO", "", True)
 
         a_lancar["ESTABELECIMENTO"] = estabelecimento if self.convenio != 'GOV. RIO DE JANEIRO' else a_lancar['Órgão.1'].map(emp_dict_gov_rj)
+
+        # No GOV. PARANÁ o estabelecimento muda se for aposentado/pensionsta e os demais
+        if self.convenio == 'GOV. PARANÁ':
+            mask_estabelecimento = ~a_lancar["CATEGORIA"].isin(["Aposentado", "Pensionista"])
+            a_lancar.loc[mask_estabelecimento, "ESTABELECIMENTO"] = "001"
+
         if self.convenio not in ['GOV. RIO DE JANEIRO']:
-            a_lancar['ÓRGÃO'] = '1'
-        else:
-            a_lancar['ÓRGÃO'] = a_lancar['Id. órgão'] if self.convenio != 'GOV. RIO DE JANEIRO' else a_lancar['Órgão.1']
+            if self.convenio in ['PREF. BARBACENA']:
+                # a_lancar["ÓRGÃO"] = temp["ÓRGÃO"]
+                a_lancar["ÓRGÃO"] = a_lancar["ÓRGÃO"].astype(str).str.replace('Prefeitura Municipal de Barbacena', '003').str.replace('SIMPAS - Sistema Municipal de Previdência e Assistência ao Servidor', '004')
+            elif self. convenio in ['GOV. PARANÁ']:
+                a_lancar["Id. órgão"] = a_lancar['ÓRGÃO'].map(gov_pr_orgao_dict)
+            else:
+                a_lancar['ÓRGÃO'] = '1'
+        '''else:
+            a_lancar['ÓRGÃO'] = a_lancar['Id. órgão'] if self.convenio != 'GOV. RIO DE JANEIRO' else a_lancar['Órgão.1']'''
 
         a_lancar['CÓDIGO DE DESCONTO'] = codigo_de_desconto
+
+        if self.convenio in ['PREF. BARBACENA']:
+            a_lancar.loc[a_lancar['ÓRGÃO'] == '003', 'CÓDIGO DE DESCONTO'] = '0369'
 
         self.process_layout(a_lancar, self.caminho)
 
@@ -1293,7 +1356,7 @@ class ZETRA:
         matricula = self.format_number(df['Matrícula'], regras['MAT'])
         cpf = self.format_cpf(df['CPF'], regras['CPF']) if not self.convenio == 'PREF. CAMPINAS' else ''
         nome = self.format_text(df['Servidor'], regras['NOME']) if not self.convenio == 'PREF. CAMPINAS' else ''
-        estab = self.format_number(df['ESTABELECIMENTO'], regras['EST']) if not self.convenio in ['PREF. CAMPINAS', 'GOV. PARANÁ'] else ''
+        estab = self.format_number(df['ESTABELECIMENTO'], regras['EST']) if self.convenio in ['PREF. CAMPINAS', 'GOV. PARANÁ'] else ''
         id_orgao = self.format_id_orgao(df['Id. órgão'], regras['ID_ORG']) if self.convenio == 'GOV. PARANÁ' else ''
         orgao = self.format_number(df['ÓRGÃO'], regras['ORG']) if not self.convenio == 'GOV. PARANÁ' else '' 
         cod_desc = self.format_number(df['CÓDIGO DE DESCONTO'], regras['COD']) if not self.convenio in ['GOV. RIO DE JANEIRO', 'PREF. MACAÉ'] else self.format_text(df['CÓDIGO DE DESCONTO'], regras['COD'])
@@ -1308,7 +1371,7 @@ class ZETRA:
         operacao = self.format_constant('I', regras['OP']) if self.convenio != 'PREF. CAMPINAS' else self.format_constant('7', regras['OP'])  # 'I' de Inclusão
 
         # 3. Concatena tudo
-        if self.convenio in ['PREF. AÇAILÂNDIA', 'PREF. MACAÉ', 'PREVIPALMAS', 'PREF. BELO HORIZONTE']:
+        if self.convenio in ['PREF. AÇAILÂNDIA', 'PREF. BARBACENA', 'PREF. MACAÉ', 'PREVIPALMAS', 'PREF. BELO HORIZONTE']:
             layout = (matricula + cpf + nome + estab + orgao + cod_desc + valor + prazo + comp + operacao)
         elif self.convenio == 'GOV. RIO DE JANEIRO':
             layout = (matricula + cpf + nome + cod_desc + estab + valor + comp + operacao)
@@ -1319,7 +1382,7 @@ class ZETRA:
         elif self.convenio == 'PREF. CAMPINAS':
             layout = (matricula + orgao + cod_desc + operacao + prazo + valor + comp)
         elif self.convenio == 'GOV. PARANÁ':
-            layout = (matricula + cpf + nome + estab + cod_desc + id_orgao + valor + prazo + comp + operacao)
+            layout = (matricula + cpf + nome + estab + id_orgao + cod_desc + valor + prazo + comp + operacao)
         else:
             print('Nenhum convênio conhecido foi apresentado para criar o arquivo de lançamento...')
             print(f'Convênio solicitado: {self.convenio}')

@@ -137,7 +137,8 @@ import os
 # print(f'TACS_DF:\n{tacs_df}')
 
 class SIGRH:
-    def __init__(self, front, averbado_capital, averbado_click, andamento_capital, andamento_click, convenio, consignataria, caminho, funcao=None, orbital=None, conciliacao=None, kobraki=None, tacs=None):
+    def __init__(self, front, averbado_capital, averbado_click, andamento_capital, andamento_click, convenio, consignataria, caminho, funcao=None, orbital=None, 
+                 conciliacao=None, kobraki=None, extra_judicial=None, tacs=None):
         self.convenio = convenio
         self.caminho = caminho
 
@@ -202,6 +203,8 @@ class SIGRH:
                                          'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
         
         self.kobraki = kobraki if kobraki is not None else None
+
+        self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
         self.tacs = tacs if tacs is not None else None
 
@@ -603,7 +606,7 @@ class SIGRH:
     
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
