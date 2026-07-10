@@ -19,7 +19,7 @@ rejeitados = ['/']
 class CONSIGFACIL:
     # O init foi adaptado para receber os DataFrames do server.py, mas prepara os dados
     # exatamente como o original esperava (convertendo tipos, etc.)
-    def __init__(self, front, portal_file_list, convenio,  caminho, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, andamento_list=None):
+    def __init__(self, front, portal_file_list, convenio,  caminho, funcao=None, conciliacao=None, orbital=None,kobraki=None, extra_judicial=None, tacs=None, andamento_list=None):
         
         self.convenio = convenio
         self.caminho = caminho
@@ -65,6 +65,8 @@ class CONSIGFACIL:
         self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
                                          'PRODUTO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO',
                                          'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
+        
+        self.orbital = orbital if orbital is not None else None
         
         self.kobraki = kobraki if kobraki is not None else None
 
@@ -157,6 +159,8 @@ class CONSIGFACIL:
 
         conciliacao = self.conciliacao.copy()
 
+        orbital = self.orbital
+
         # Insere as colunas vazias necessárias
         front_consig.insert(21, 'Saldo', '', True)
         front_consig.insert(22, 'Valor a lançar', '', True)
@@ -193,6 +197,45 @@ class CONSIGFACIL:
 
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
+        # Adiciona só as esteiras que podem ser lançadas
+        # --------------------------------------------- ORBITAL --------------------------------------------- #
+        # --- ETAPA 1: Garantir que as chaves são do mesmo tipo (Texto) ---
+        # Isso evita o erro clássico onde um lado é número e o outro é texto
+        if orbital is not None:
+            front_consig['Contrato'] = front_consig['Contrato'].astype(str).str.strip()
+            # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
+
+            if orbital['VALID DESCONTO FINAL'].dtype != "float64":
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
+                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+
+            for col in orbital.columns:
+                if "contrato" in col or "Contrato" in col:
+                    orbital.rename(columns={col:"CONTRATO"}, inplace=True)
+            orbital['CONTRATO'] = orbital['CONTRATO'].astype(str)
+
+            # --- ETAPA 2: Criar o "Dicionário de Busca" da Orbital ---
+            # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
+            mapa_orbital = orbital.set_index('CONTRATO')['VALID DESCONTO FINAL']
+            # --- ETAPA 3: Definir quem vai ser alterado ---
+            filtro_esteira = front_consig['Esteira'] == '99 CARTAO UTILIZADO'
+
+            # --- ETAPA 4: Fazer a mágica (Buscar valores) ---
+            # .loc[filtro, coluna] -> Seleciona só as linhas da esteira certa
+            # .map(mapa_orbital)   -> Faz o "PROCV" buscando no dicionário criado
+            valores_encontrados = front_consig.loc[filtro_esteira, 'Contrato'].map(mapa_orbital)
+
+            # --- ETAPA 5: Tratar quem não foi achado ---
+            # Se o contrato não existe na Orbital, o map devolve NaN.
+            # Usamos fillna(0) para trocar NaN por 0, conforme você pediu.
+            valores_encontrados = valores_encontrados.fillna(0)
+
+            # --- ETAPA 6: Gravar no DataFrame original ---
+            valores_encontrados_str = valores_encontrados # .astype(str)
+            front_consig.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
+
+        # front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
 
         # -------------------------------- MARCAR TUDO QUE NÃO LANÇA ---------------------------------- #
         # Marca saldo positivo
@@ -226,7 +269,8 @@ class CONSIGFACIL:
         front_consig_validado_termino['Contrato'] = front_consig_validado_termino['Contrato'].astype('int64')
 
         # Marca para tirar o que é ADIANTAMENTO SALARIAL de Tipo Operacao
-        front_consig_validado_termino.loc[front_consig_validado_termino['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
+        if self.convenio not in ['PREF. PALMAS']:
+            front_consig_validado_termino.loc[front_consig_validado_termino['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
 
         # Marcar tudo que contem prazo como Não cartão
         '''front_com_prazo = front_consig_validado_termino[
@@ -1061,6 +1105,7 @@ class CONSIGFACIL:
 
         averbado_finalizado = distribuicao_valores(averbado_novo)
         
+        # if self.convenio not in ['PREF. CAJAMAR']:
         if (averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL').any():
             averbado_finalizado.loc[averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL', 'Valor da reserva'] = averbado_finalizado['NOVO LANÇAR TOTAL']
             averbado_finalizado = distribuicao_valores(averbado_finalizado)

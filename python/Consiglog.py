@@ -37,6 +37,7 @@ class CONSIGLOG:
         conciliacao_falso['PRAZO'] = 96
         conciliacao_falso['D8 JUN 25'] = 10
         conciliacao_falso['ST JUL 25'] = 'DESCONTO TOTAL'
+        conciliacao_falso['PRODUTO'] = 'Cartão de Crédito'
         conciliacao_falso['RECEBIDO GERAL'] = 0
 
         self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
@@ -746,8 +747,8 @@ class CONSIGLOG:
             if self.orbital is not None:
                 preparando_orbital = TRATA_ORBITAL(self.orbital, front, self.convenio, self.caminho)
                 orbital_tratado = preparando_orbital.orbital_tratado()
-            orbital_tratado['VALID DESCONTO FINAL'] = pd.to_numeric(orbital_tratado['VALID DESCONTO FINAL'], errors='coerce')
-            mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALID DESCONTO FINAL'].sum()
+            orbital_tratado['VALOR DESCONTO'] = pd.to_numeric(orbital_tratado['VALOR DESCONTO'], errors='coerce')
+            mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
             data_averbados_bruto['ORBITAL'] = ''
             data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF_Formatado'].map(mask_orbital)
 
@@ -782,8 +783,8 @@ class CONSIGLOG:
             # Operações liquidadas. Tratando NRº OPER EDITADO
             # OP LIQUIDADO
             try:
-                oper_liq = self.front[self.front['Status'].str.contains('Liquidado|CANCELADO', na=False)][['Contrato']].copy()
-                contratos_tratados_liq = oper_liq['Contrato'].str.slice(0, 9)
+                oper_liq = self.front[self.front['Status'].astype(str).str.contains('Liquidado|CANCELADO', na=False)][['Contrato']].copy()
+                contratos_tratados_liq = oper_liq['Contrato'].astype(str).str.slice(0, 9)
                 oper_liq.insert(1, "Nº OPERAÇÃO EDITADO", contratos_tratados_liq, True)
 
             except Exception as e:
@@ -817,7 +818,7 @@ class CONSIGLOG:
 
                 # Cria a coluna de Valor da Parcela correspondente
                 data_averbados[f'Valor_Unif_{i}'] = data_averbados[nome_coluna_contrato].map(
-                    semi_front.set_index('Contrato')['Prestacao'].to_dict()
+                    front.set_index('Contrato')['Prestacao'].to_dict()
                 )
 
                 # Puxa os valores de saldo da conciliação
@@ -1004,7 +1005,8 @@ class CONSIGLOG:
 
             # Condição 2: Encontra onde um contrato liquidado foi efetivamente encontrado (FORMA CORRIGIDA E ROBUSTA)
             # .notna() garante que só pegamos as linhas onde o map retornou um valor, e não NaN.
-            condicao_op_liq = data_averbados[f'OP LIQ {i}'] == 1
+            data_averbados[f'OP LIQ {i}'] = data_averbados[f'OP LIQ {i}'].fillna('')
+            condicao_op_liq = data_averbados[f'OP LIQ {i}'] != ''
 
             # Ação: Nessas linhas, define o 'Valor_Unif' correspondente como 0
             # O operador | significa OU (se uma condição OU a outra for verdadeira)

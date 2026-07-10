@@ -130,6 +130,7 @@ class TRATA_ORBITAL:
         orbital_preparado['Proposta'] = orbital_preparado['Proposta'].astype('int64')
         orbital_preparado['Proposta'] = orbital_preparado['Proposta'].astype(str)
         orbital_final = pd.concat([front_so_orbital, orbital_preparado])
+        orbital_preparado['Proposta'] = orbital_preparado['Proposta'].astype(str)
 
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
         if self.convenio == "INSS":

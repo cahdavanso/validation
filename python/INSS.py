@@ -176,9 +176,15 @@ class INSS:
         front_consig.insert(22, 'Valor a lançar', '', True)
         front_consig.insert(23, 'Análise', '', True)
 
+        print(f'Quais contratos estão atrelados ao CPF: 277.507.524-04?\n"{front_consig.loc[front_consig['CPF'] == '277.507.524-04', 'Contrato']}"')
+        print(f'O Contrato 300119744 string está no Front? {'300119744' in front_consig['Contrato'].values}')
+        print(f'O Contrato 300119744 inteiro está no Front? {300119744 in front_consig['Contrato'].values}')
+
+        front_consig['Contrato'] = front_consig['Contrato'].astype('int64')
+
         print(f'Quais contratos estão atrelados ao CPF: 277.507.524-04? {self.averbados.loc[self.averbados['CPF'] == '277.507.524-04', 'NR_OPER_EDITADO']}')
-        print(f'O Contrato 300119744 string está no Averbados? {300119744 in self.averbados['NR_OPER_EDITADO'].values}')
-        print(f'O Contrato 300119744 inteiro está no Averbados? {'300119744' in self.averbados['NR_OPER_EDITADO'].values}')
+        print(f'O Contrato 300119744 string está no Averbados? {'300119744' in self.averbados['NR_OPER_EDITADO'].values}')
+        print(f'O Contrato 300119744 inteiro está no Averbados? {300119744 in self.averbados['NR_OPER_EDITADO'].values}')
 
         situacao_averbado_index = self.averbados.set_index('NR_OPER_EDITADO')['SITUAÇÃO'].copy()
         situacao_averbado_map = front_consig['Contrato'].map(situacao_averbado_index.to_dict())

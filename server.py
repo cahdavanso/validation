@@ -647,6 +647,7 @@ async def validar_planilhas(
             front=front_df,
             funcao=funcao_df,
             conciliacao=conciliacao_df,
+            orbital=orbital_df,
             tacs=tacs_df,
             kobraki=kobraki_df,
             extra_judicial=extra_judicial_df,

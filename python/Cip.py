@@ -940,8 +940,8 @@ class CIP:
         # Operações liquidadas. Tratando NRº OPER EDITADO
         # OP LIQUIDADO
         try:
-            oper_liq = self.front[self.front['Status'].str.contains('Liquidado|CANCELADO', na=False)][['Contrato']].copy()
-            contratos_tratados_liq = oper_liq['Contrato'].str.slice(0, 9)
+            oper_liq = self.front[self.front['Status'].astype(str).str.contains('Liquidado|CANCELADO', na=False)][['Contrato']].copy()
+            contratos_tratados_liq = oper_liq['Contrato'].astype(str).str.slice(0, 9)
             oper_liq.insert(1, "Nº OPERAÇÃO EDITADO", contratos_tratados_liq, True)
 
         except Exception as e:
@@ -1004,7 +1004,8 @@ class CIP:
 
             # Condição 2: Encontra onde um contrato liquidado foi efetivamente encontrado (FORMA CORRIGIDA E ROBUSTA)
             # .notna() garante que só pegamos as linhas onde o map retornou um valor, e não NaN.
-            condicao_op_liq = data_averbados[f'OP LIQ {i}'] == 1
+            data_averbados[f'OP LIQ {i}'] = data_averbados[f'OP LIQ {i}'].fillna('')
+            condicao_op_liq = data_averbados[f'OP LIQ {i}'] != ''
 
             # Ação: Nessas linhas, define o 'Valor_Unif' correspondente como 0
             # O operador | significa OU (se uma condição OU a outra for verdadeira)
@@ -1042,9 +1043,11 @@ class CIP:
                     # Usa .loc para garantir que a coluna seja adicionada
                     colunas_valores_unificados.loc[:, 'ORBITAL'] = data_averbados['ORBITAL']
                 data_averbados['Soma'] = colunas_valores_unificados.sum(axis=1)
+            else:
+                data_averbados['Soma'] = colunas_valores_unificados.sum(axis=1)
         else:
             print("Nenhuma coluna de valor encontrada. A coluna 'Soma' será inicializada com 0.")
-            data_averbados['Soma'] = 0
+            
 
         # --- 4. Cálculo da Diferença e Formatação Final ---
 
@@ -1201,6 +1204,8 @@ class CIP:
 
         # 3. Laço para montar os blocos repetitivos de cada contrato
         blocos_consignacao = ""
+        num_consigrio_ente = '097340' if self.convenio == "GOV. SÃO PAULO" else '6185'
+        cnpj_base_ente = '46379400' if self.convenio == "GOV. SÃO PAULO" else '49269251'
 
         for index, linha in df.iterrows():
             # Limpeza básica para garantir que não vão espaços em branco pro XML
@@ -1215,8 +1220,8 @@ class CIP:
             bloco = f"""            <Grupo_ASCC024_Consigrio>
                         <IdentdPartAdmdo>40083667</IdentdPartAdmdo>
                         <NumCtrlConsigrio>00001</NumCtrlConsigrio>
-                        <CNPJBaseEnte>46379400</CNPJBaseEnte>
-                        <NumConsigrioEnte>097340</NumConsigrioEnte>
+                        <CNPJBaseEnte>{cnpj_base_ente}</CNPJBaseEnte>
+                        <NumConsigrioEnte>{num_consigrio_ente}</NumConsigrioEnte>
                         <Grupo_ASCC024_Consignc>
                             <NumCPFServdr>{cpf}</NumCPFServdr>
                             <NUAvebcSCC>{averbacao}</NUAvebcSCC>
@@ -1250,7 +1255,7 @@ class CIP:
 
         # 5. Salva o arquivo no disco
         # IMPORTANTE: Como o cabeçalho do XML exige "utf-16BE", devemos salvar exatamente com esse encoding no Python.
-        with open("ASCC024_Gerado.xml", "w", encoding="utf-16-be") as arquivo_xml:
+        with open(fr"{self.caminho}\ASCC024_Gerado.xml", "w", encoding="utf-16-be") as arquivo_xml:
             arquivo_xml.write(xml_completo)
 
         print("Arquivo XML gerado com sucesso!")

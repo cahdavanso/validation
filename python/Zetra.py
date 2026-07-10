@@ -1215,6 +1215,8 @@ class ZETRA:
                     'Órgão.1', 'Id. serviço', 'Serviço', 'Nº ADE', 'Id. ADE', 'Data inc.', 'Vlr ant.', 'Vlr novo', 'Lançar']
         elif self.convenio in ['GOV. PARANÁ']:
             colunas_alancar = ['AGÊNCIA', 'Matrícula', 'Servidor', 'CPF', 'SITUAÇÃO', 'CATEGORIA', 'ÓRGÃO', 'PRODUTO', 'DATA', 'Vlr novo', 'Lançar']
+        elif self.convenio in ['PREF. BARBACENA']:
+            colunas_alancar = ['CORRESPONDENTE', 'Matrícula', 'Servidor', 'CPF', 'SITUAÇÃO', 'CATEGORIA', 'ÓRGÃO', 'SERVIÇO', 'DATA', 'Vlr novo', 'Lançar']
         else:
             colunas_alancar = ['CORRESPONDENTE', 'Matrícula', 'Servidor', 'CPF', 'SITUAÇÃO', 'CATEGORIA', 'SERVIÇO', 'DATA', 'Vlr novo', 'Lançar']
         a_lancar = pd.DataFrame(temp[colunas_alancar])

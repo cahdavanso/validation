@@ -23,9 +23,9 @@ class TRATA_CONCILIACAO:
             try:
                     print(f"KOBRAKI:\n{self.kobraki.head()}")
             except Exception as e:
-                    print(f"Erro ao exibir KOBRAKI:\n{e}")'''
+                    print(f"Erro ao exibir KOBRAKI:\n{e}")
         # Vamos verificar o tipo da coluna CONTRATO de KOBRAKI para garantir que é numérica
-        '''if 'CONTRATO' in self.kobraki.columns:
+        if 'CONTRATO' in self.kobraki.columns:
             print(f"Amostra de linhas da coluna CONTRATO:\n{self.kobraki['CONTRATO'].head()}")
             print(f"Tipo da coluna CONTRATO: {self.kobraki['CONTRATO'].dtype}")
 
@@ -37,10 +37,11 @@ class TRATA_CONCILIACAO:
         tacs_tratado = self.tacs
 
         extra_judicial_tratado = self.extra_judicial
-        if extra_judicial_tratado['VALOR RECEBIDO'].dtype != 'float64':
-                extra_judicial_tratado['VALOR RECEBIDO'] = extra_judicial_tratado['VALOR RECEBIDO'].astype(str).str.replace("R$ ", "").str.replace(".", "")
-                extra_judicial_tratado['VALOR RECEBIDO'] = extra_judicial_tratado['VALOR RECEBIDO'].str.replace(",", ".")
-                extra_judicial_tratado['VALOR RECEBIDO'] = pd.to_numeric(extra_judicial_tratado['VALOR RECEBIDO'], errors="coerce")
+        if extra_judicial_tratado is not None:
+            if extra_judicial_tratado['VALOR RECEBIDO'].dtype != 'float64' and extra_judicial_tratado is not None:
+                    extra_judicial_tratado['VALOR RECEBIDO'] = extra_judicial_tratado['VALOR RECEBIDO'].astype(str).str.replace("R$ ", "").str.replace(".", "")
+                    extra_judicial_tratado['VALOR RECEBIDO'] = extra_judicial_tratado['VALOR RECEBIDO'].str.replace(",", ".")
+                    extra_judicial_tratado['VALOR RECEBIDO'] = pd.to_numeric(extra_judicial_tratado['VALOR RECEBIDO'], errors="coerce")
 
         conciliacao_tratado = self.conciliacao
         # Converte para lista de colunas

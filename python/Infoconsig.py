@@ -913,8 +913,8 @@ class INFOCONSIG:
         # Operações liquidadas. Tratando NRº OPER EDITADO
         # OP LIQUIDADO
         try:
-            oper_liq = self.front[self.front['Status'].str.contains('Liquidado|CANCELADO', na=False)][['Contrato']].copy()
-            contratos_tratados_liq = oper_liq['Contrato'].str.slice(0, 9)
+            oper_liq = self.front[self.front['Status'].astype(str).str.contains('Liquidado|CANCELADO', na=False)][['Contrato']].copy()
+            contratos_tratados_liq = oper_liq['Contrato'].astype(str).str.slice(0, 9)
             oper_liq.insert(1, "Nº OPERAÇÃO EDITADO", contratos_tratados_liq, True)
 
         except Exception as e:
@@ -977,7 +977,8 @@ class INFOCONSIG:
 
             # Condição 2: Encontra onde um contrato liquidado foi efetivamente encontrado (FORMA CORRIGIDA E ROBUSTA)
             # .notna() garante que só pegamos as linhas onde o map retornou um valor, e não NaN.
-            condicao_op_liq = data_averbados[f'OP LIQ {i}'] == 1
+            data_averbados[f'OP LIQ {i}'] = data_averbados[f'OP LIQ {i}'].fillna('')
+            condicao_op_liq = data_averbados[f'OP LIQ {i}'] != ''
 
             # Ação: Nessas linhas, define o 'Valor_Unif' correspondente como 0
             # O operador | significa OU (se uma condição OU a outra for verdadeira)
