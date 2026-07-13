@@ -7,6 +7,7 @@ from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.Andamento import ANDAMENTO
 from python.Andamento_provisorio import ANDAMENTO_PROVISORIO
+from python.TrataOrbital import TRATA_ORBITAL
 import os
 import logging
 import chardet
@@ -879,7 +880,7 @@ class CONSIGFACIL:
     def verificacao_peculio_front(self, front_trabalhado):
         # Usando .copy() para não afetar o original por acidente
         averbados_unif = self.averbados
-        if self.convenio in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE', 'PREF. PORTO VELHO', 'PREF. NATAL','PREF. SANTA RITA']:
+        if self.convenio in ['PREF. CAMPINA GRANDE', 'PREF. RECIFE', 'PREF. PORTO VELHO', 'PREF. NATAL']:
             averbados_unif = averbados_unif[averbados_unif['Modalidade'].isin(['Cartão de Crédito', 'Cartão Benefício (Compras)', 'Cartão Benefício', 'Cartão Benefício(96)', 'Cartão Benefício Compra'])]
         else:
             averbados_unif = averbados_unif[averbados_unif['Modalidade'] == 'Cartão de Crédito']

@@ -79,6 +79,9 @@ class ZETRA:
                             "OP": 1},
             
             "GOV. ALAGOAS - TJAL": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 3, "VAL": 10, "PRZ": 3,
+                             "COMP": 6, "OP": 1},
+
+            "PREF. SOBRAL": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 3, "VAL": 10, "PRZ": 3,
                              "COMP": 6, "OP": 1}
         }
 
@@ -402,7 +405,7 @@ class ZETRA:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
         # Marcar o que não é cartão Conciliação
-        if self.convenio in ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']:
+        if self.convenio in ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ', 'PREF. SOBRAL']:
             print(f'Convenio é {self.convenio}')
             print(f'Convenio está em PREF. BELO HORIZONTE? {self.convenio in ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']}')
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
@@ -1129,13 +1132,13 @@ class ZETRA:
                                 "IGEPREV CIASPREV": "02470", "PREF. PIRACICABA": "5600", "PREF. PIRACICABA - SEMAE": "675",
                                 "PREV. PIRACICABA": "6277", "PREF. BELO HORIZONTE CB": "204U", "PREF. BELO HORIZONTE CC": "204V",
                                 "PREF. MACAÉ": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894", "PREF. CAMPINAS": "435",
-                                "GOV. PARANÁ": "5408", "PREF. BARBACENA": "3609", "GOV. ALAGOAS - TJAL": "605"}
+                                "GOV. PARANÁ": "5408", "PREF. BARBACENA": "3609", "GOV. ALAGOAS - TJAL": "605", "PREF. SOBRAL": "541"}
 
         estab_dict = {"PREF. AÇAILÂNDIA": "001", "PREF. BARBACENA": "001", "IGEPREV CAPITAL": "001", "IGEPREV CIASPREV": "001",
                       "PREF. PIRACICABA": "001", "PREF. PIRACICABA - SEMAE": "002", "PREF. CAMPINAS": "",
                       "PREV. PIRACICABA": "001", "PREF. BELO HORIZONTE CB": "001", "PREF. BELO HORIZONTE CC": "001",
                       "PREF. MACAÉ": "001", "PREVIPALMAS CAPITAL": "001", "PREVIPALMAS CIASPREV": "001",
-                      "GOV. PARANÁ": "002", "GOV. ALAGOAS - TJAL": "001"}
+                      "GOV. PARANÁ": "002", "GOV. ALAGOAS - TJAL": "001", "PREF. SOBRAL": "001"}
 
         emp_dict_gov_rj = {"ADMINISTRAÇÃO DIRETA (GOVERNO ESTADO)": "01",
                            "ENCARGOS GERAIS DO ESTADO": "01",
@@ -1373,7 +1376,7 @@ class ZETRA:
         operacao = self.format_constant('I', regras['OP']) if self.convenio != 'PREF. CAMPINAS' else self.format_constant('7', regras['OP'])  # 'I' de Inclusão
 
         # 3. Concatena tudo
-        if self.convenio in ['PREF. AÇAILÂNDIA', 'PREF. BARBACENA', 'PREF. MACAÉ', 'PREVIPALMAS', 'PREF. BELO HORIZONTE']:
+        if self.convenio in ['PREF. AÇAILÂNDIA', 'PREF. BARBACENA', 'PREF. MACAÉ', 'PREVIPALMAS', 'PREF. BELO HORIZONTE', 'PREF. SOBRAL']:
             layout = (matricula + cpf + nome + estab + orgao + cod_desc + valor + prazo + comp + operacao)
         elif self.convenio == 'GOV. RIO DE JANEIRO':
             layout = (matricula + cpf + nome + cod_desc + estab + valor + comp + operacao)
@@ -1395,6 +1398,7 @@ class ZETRA:
     def save_layout(self, layout, output_dir):
         # Nome do arquivo agora usa o convênio dinâmico
         print('save_layout processado')
+        print(f'Layout final:\n{layout}')  # Mostra as primeiras linhas para verificação
         file_name = f'LANCAMENTO {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.txt'
         file_path = f'{output_dir}/{file_name}'
         np.savetxt(file_path, layout.values, fmt='%s')
@@ -1402,14 +1406,20 @@ class ZETRA:
     def process_layout(self, arquivo, output_dir):
         averbados = arquivo.copy()  # Boa prática trabalhar com cópia
 
+        print(f'O que está em arquivo na função process_layout?\n{arquivo.head()}')
+
         # Filtragem mais robusta (converte para float antes de comparar)
         # Assim evita erros se '0.00' vier como '0' ou 0 (int)
-        averbados['Lançar_Float'] = pd.to_numeric(averbados['Lançar'], errors='coerce').fillna(0)
+        if averbados['Lançar'].dtype != 'float64':
+            averbados['Lançar_Float'] = averbados['Lançar'].astype(str).str.replace('.', '').str.replace(',', '.')
+            averbados['Lançar_Float'] = pd.to_numeric(averbados['Lançar'], errors='coerce').fillna(0)
         averbados = averbados[averbados['Lançar_Float'] > 0]
 
         if averbados.empty:
             print("Nenhum registro para lançar.")
             return
+        
+        print(f'O que está em averbados na função process_layout?\n{averbados.head()}')
 
         layout = self.create_layout(averbados)
         self.save_layout(layout, output_dir)

@@ -35,6 +35,7 @@ class NEOCONSIG:
         conciliacao_falso['CPF'] = '123.456'
         conciliacao_falso['PRESTAÇÃO'] = 10
         conciliacao_falso['PRAZO'] = 96
+        conciliacao_falso['PRODUTO'] = 'CARTÃO DE CRÉDITO'
         conciliacao_falso['D8 JUN 25'] = 10
         conciliacao_falso['ST JUL 25'] = 'DESCONTO TOTAL'
         conciliacao_falso['RECEBIDO GERAL'] = 0
@@ -176,7 +177,10 @@ class NEOCONSIG:
         # Adiciona só as esteiras que podem ser lançadas
         front_consig_esteiras = front_consig[front_consig['Esteira'].isin(self.condicoes_1)].copy()
 
-        # Trata coluna de Tipo da Conciliação
+        # 1. Altera o tipo da coluna para 'object' para que ela possa receber textos sem quebrar
+        front_consig_esteiras['Tipo Conciliação'] = front_consig_esteiras['Tipo Conciliação'].astype(object)
+
+        # 2. Sua linha original agora vai rodar perfeitamente!
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
 
         # --------------------------------------------- ORBITAL --------------------------------------------- #
@@ -248,6 +252,9 @@ class NEOCONSIG:
         front_consig_validado_termino['Acao Judicial'] = front_consig_validado_termino['Acao Judicial'].replace({'SIM': 1, 'NAO': 0})
         front_consig_validado_termino.loc[front_consig_validado_termino['Acao Judicial'] == 1, 'OBS'] = 'NÃO LANÇAR - AÇÃO JUDICIAL'
 
+                # Marca tudo que é orbital
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
+
         # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
         # Renomear nomes dos bancos no front porque estão vindo com 0 na frente
         front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CAPITAL CONSIG ", "CAPITAL CONSIG")
@@ -273,9 +280,7 @@ class NEOCONSIG:
         # No caso de ação judicial estiver estiver SIM e NÃO ao invés de 1 e 0
         # front_consig_validado_termino['Obito'] = front_consig_validado_termino['Obito'].replace({'SIM': 1, 'NÃO': 0})
         # front_consig_validado_termino.loc[front_consig_validado_termino['Obito'] == 1, 'OBS'] = 'NÃO LANÇAR - ÓBITO'
- 
-        # Marca tudo que é orbital
-        front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
+
 
         # Marcar o que não é cartão Conciliação
         front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
@@ -795,6 +800,10 @@ class NEOCONSIG:
                     semi_front.set_index('Contrato')['Prestacao'].to_dict()
                 )
 
+                print(f'Tipo da coluna Contrato Editado 1 comparado com Contrato: {data_averbados[nome_coluna_contrato].dtype} vs {semi_front["Contrato"].dtype}')
+
+                print(f'o que está em valor_unif_{i}:\n{data_averbados[f"Valor_Unif_{i}"]}')
+
                 # Puxa os valores de saldo da conciliação
                 data_averbados[f'Saldo {i}'] = data_averbados[nome_coluna_contrato].map(
                     conciliacao_tratado.set_index('CONTRATOS')['Saldo'].to_dict()
@@ -809,9 +818,13 @@ class NEOCONSIG:
 
                 # --- PASSO 2: PREPARAÇÃO E LIMPEZA DE DADOS ---
                 # Agora que todas as colunas foram criadas, garantimos que sejam numéricas para os cálculos.
-                data_averbados[f'Valor_Unif_{i}'] = pd.to_numeric(data_averbados[f'Valor_Unif_{i}'],
-                                                                  errors='coerce').fillna(0)
-                data_averbados[f'Saldo {i}'] = pd.to_numeric(data_averbados[f'Saldo {i}'], errors='coerce').fillna(0)
+                if data_averbados[f'Valor_Unif_{i}'].dtype != 'float64':
+                    data_averbados[f'Valor_Unif_{i}'] = data_averbados[f'Valor_Unif_{i}'].astype(str).str.replace('.', '').str.replace(',', '.')
+                    data_averbados[f'Valor_Unif_{i}'] = pd.to_numeric(data_averbados[f'Valor_Unif_{i}'], errors='coerce').fillna(0)
+
+                if data_averbados[f'Saldo {i}'].dtype != 'float64':
+                    data_averbados[f'Saldo {i}'] = data_averbados[f'Saldo {i}'].astype(str).str.replace('.', '').str.replace(',', '.')
+                    data_averbados[f'Saldo {i}'] = pd.to_numeric(data_averbados[f'Saldo {i}'], errors='coerce').fillna(0)
 
                 # --- PASSO 3: CONSTRUIR AS CONDIÇÕES E APLICAR A LÓGICA ---
 
