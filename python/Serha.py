@@ -5,19 +5,23 @@ import numpy as np
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.TrataOrbital import TRATA_ORBITAL
+from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
 from datetime import datetime
 import os
 import logging
 import re
 
 class SERHA:
-    def __init__(self, portal_file_list, convenio, front, conciliacao, trabalhado_anterior, rubrica, caminho, kobraki=None, extra_judicial=None, 
+    def __init__(self, portal_file_list, convenio, front, conciliacao, trabalhado_anterior, rubrica, caminho, andamento_funcao=None, kobraki=None, extra_judicial=None, 
                  tacs=None, funcao=None, complementar=None, orbital=None):
         # isso é apenas para caso seja um arquivo de averbação
         self.averbados = portal_file_list if portal_file_list is not None else None
         if self.averbados is not None:
             self.averbados.rename(columns={'Num Ipsemg': 'MASP     '}, inplace=True)
             self.averbados.rename(columns={'N_IPSEMG ': 'MASP     '}, inplace=True)
+            # 1. Remove os espaços invisíveis do começo e do fim de TODAS as colunas
+            self.averbados.columns = self.averbados.columns.str.strip()
+
             print(f'Colunas do arquivo de averbados: {self.averbados.columns if self.averbados is not None else "None"}')
 
         # Isso é apenas para caso o front seja um arquivo apenas
@@ -25,6 +29,8 @@ class SERHA:
 
         # Funcao
         self.funcao = funcao if funcao is not None else None
+
+        self.andamento_funcao = andamento_funcao if andamento_funcao is not None else None
 
         self.convenio = convenio
 
@@ -52,12 +58,18 @@ class SERHA:
 
         # TRABALHADOS DO MÊS ANTERIOR
         self.trabalhado_anterior = trabalhado_anterior if trabalhado_anterior is not None else None
+        # 1. Remove os espaços invisíveis do começo e do fim de TODAS as colunas
+        if self.trabalhado_anterior is not None:
+            self.trabalhado_anterior.columns = self.trabalhado_anterior.columns.str.strip()
 
         # LÊ A RUBRICA
         self.rubrica = rubrica
 
         # COMPLEMENTOS MÊS ANTERIOR
         self.complementares = complementar if complementar is not None else None
+        # 1. Remove os espaços invisíveis do começo e do fim de TODAS as colunas
+        if self.complementares is not None:
+            self.complementares.columns = self.complementares.columns.str.strip()
 
         self.caminho = caminho
 
@@ -146,7 +158,28 @@ class SERHA:
         return front_unif
 
     def tratamento_front_preliminar(self):
-        front_consig = self.unifica_front_funcao()
+        # 1. Instancia a classe
+        unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
+            front=self.front_unificados, 
+            convenio=self.convenio, 
+            funcao=self.funcao, 
+            andamento_funcao=self.andamento_funcao
+        )
+
+        # 2. Chama a primeira unificação (Função pura)
+        # Isso vai processar e preencher com verificar_ccb=True
+        front_meio_caminho = unificador.unifica_front_funcao()
+
+        # 3. Atualiza o front interno da classe para que a segunda unificação use os dados já combinados
+        unificador.front = front_meio_caminho
+
+        # 4. Chama a segunda unificação (Andamento Função)
+        # Isso vai processar a segunda base com verificar_ccb=False
+        front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
+
+        # O seu resultado final
+        front_consig = front_final_consig
+        # front_consig = self.unifica_front_funcao()
         conciliacao = self.conciliacao.copy()
 
         orbital = self.orbital.copy() if self.orbital is not None else None
@@ -261,10 +294,10 @@ class SERHA:
                 orbital.rename(columns={"VALOR DESCONTO": "VALID DESCONTO FINAL"}, inplace=True)
 
 
-            if orbital['VALID DESCONTO FINAL'].dtype != "float64":
+            '''if orbital['VALID DESCONTO FINAL'].dtype != "float64":
                 orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
                 orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
-                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')'''
 
 
             for col in orbital.columns:
@@ -554,7 +587,7 @@ class SERHA:
 
         front_feito['Contrato'] = front_feito['Contrato'].astype(str)
 
-        # print(f'Contratos da averbação:\n{averbados_puro['Contrato            ']}')
+        # print(f'Contratos da averbação:\n{averbados_puro['Contrato']}')
 
         def extrair_contratos_com_referencia(df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
             print("Iniciando o processo de extração de contratos...")
@@ -829,12 +862,12 @@ class SERHA:
             # Remove a última linha do relatório de averbados
             averbados = averbados.loc[~averbados.iloc[:, 0].astype(str).str.contains('Auditoria Reservas Geral', na=False)].copy()
 
-            # print(f'Relatorio de averbados:\n{averbados[['Contrato            ', 'Acao        ']]}')
+            # print(f'Relatorio de averbados:\n{averbados[['Contrato', 'Acao']]}')
 
             # No relatório de averbações abriremos o filtro da coluna "Acao", selecionaremos tudo que é Cancelamento e excluiremos da planilha
-            averbados_sem_cancelamento = averbados.loc[averbados['Acao        '] != 'Cancelamento']
+            averbados_sem_cancelamento = averbados.loc[averbados['Acao'] != 'Cancelamento']
 
-            # print(averbados_sem_cancelamento[['Contrato            ', 'Acao        ']])
+            # print(averbados_sem_cancelamento[['Contrato', 'Acao']])
 
             # Colocar os casos complementares
             # A partir da complementar vou fazer um contse para saber se já existe no Trabalhado Cartão atual
@@ -902,14 +935,14 @@ class SERHA:
 
             # Criação da coluna DATA, que é a junção de Data com Hora
             try:
-                data_hora = averbados_sem_cancelamento['Data      '] + " " + averbados_sem_cancelamento['Hora    ']
+                data_hora = averbados_sem_cancelamento['Data'] + " " + averbados_sem_cancelamento['Hora']
             except Exception as e:
-                averbados_sem_cancelamento['Data      '] = pd.to_datetime(averbados_sem_cancelamento['Data      '], format='ISO8601', errors='coerce').dt.strftime('%d/%m/%Y')
-                averbados_sem_cancelamento['Data      '] = averbados_sem_cancelamento['Data      '].astype(str).str.strip()
-                averbados_sem_cancelamento['Hora    '] = averbados_sem_cancelamento['Hora    '].astype(str).str.strip()
+                averbados_sem_cancelamento['Data'] = pd.to_datetime(averbados_sem_cancelamento['Data'], format='ISO8601', errors='coerce').dt.strftime('%d/%m/%Y')
+                averbados_sem_cancelamento['Data'] = averbados_sem_cancelamento['Data'].astype(str).str.strip()
+                averbados_sem_cancelamento['Hora'] = averbados_sem_cancelamento['Hora'].astype(str).str.strip()
                 print(f'Tipo da coluna Data {averbados_sem_cancelamento["Data      "].dtype}')
                 print(f'Tipo da coluna Hora {averbados_sem_cancelamento["Hora    "].dtype}')
-                data_hora = averbados_sem_cancelamento['Data      '] + " " + averbados_sem_cancelamento['Hora    ']
+                data_hora = averbados_sem_cancelamento['Data'] + " " + averbados_sem_cancelamento['Hora']
                 print(f"Apuração de data e hora: {e}")
             
 
@@ -928,7 +961,7 @@ class SERHA:
             averbados_sem_cancelamento['cont la'] = averbados_sem_cancelamento['CPF Consig.'].map(cont_la)
             averbados_sem_cancelamento['cont la'] = averbados_sem_cancelamento['cont la'].fillna(0)
 
-            print(f'Averbados sem cancelamento cont igual a 1:\n{averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la']>= 1, ['CPF Consig.', 'Contrato            ','cont la']]}')
+            # print(f'Averbados sem cancelamento cont igual a 1:\n{averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la']>= 1, ['CPF Consig.','Contrato','cont la']]}')
 
             # Vamos remover os cont la que forem iguais ou maiores que 1
             averbados_cont_la_zero = averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la'] == 0].copy()
@@ -939,13 +972,13 @@ class SERHA:
             except Exception as e:
                 print(f"DEBUG: ERRO AO SALVAR AVERBADOS {self.convenio}: {e}")
 
-            # print(averbados_cont_la_zero[['CPF Consig.', 'Contrato            ', 'cont la']])
+            # print(averbados_cont_la_zero[['CPF Consig.','Contrato', 'cont la']])
 
             nova_coluna_data = trabalhado_mes_passado['DATA'].tolist() + averbados_cont_la_zero['DATA'].tolist()
-            nova_coluna_masp = trabalhado_mes_passado['MASP'].tolist() + averbados_cont_la_zero['MASP     '].tolist()
+            nova_coluna_masp = trabalhado_mes_passado['MASP'].tolist() + averbados_cont_la_zero['MASP'].tolist()
             nova_coluna_CPF = trabalhado_mes_passado['CPF Consignado'].tolist() + averbados_cont_la_zero['CPF Consig.'].tolist()
-            nova_coluna_nome = trabalhado_mes_passado['Nome Consignado'].tolist() + averbados_cont_la_zero['Nome Consignado                         '].tolist()
-            nova_coluna_contrato_original = trabalhado_mes_passado['ContratoOriginal'].tolist() + averbados_cont_la_zero['Contrato            '].tolist()
+            nova_coluna_nome = trabalhado_mes_passado['Nome Consignado'].tolist() + averbados_cont_la_zero['Nome Consignado'].tolist()
+            nova_coluna_contrato_original = trabalhado_mes_passado['ContratoOriginal'].tolist() + averbados_cont_la_zero['Contrato'].tolist()
 
             nova_planilha_data = pd.DataFrame(nova_coluna_data, columns=['DATA'])
 
@@ -976,7 +1009,7 @@ class SERHA:
 
 
             # Transforma as duas colunas em str
-            averbados_cont_la_um['Contrato            '] = averbados_cont_la_um['Contrato            '].astype(str).str.strip()
+            averbados_cont_la_um['Contrato'] = averbados_cont_la_um['Contrato'].astype(str).str.strip()
             trabalhado_mes_passado['ContratoOriginal'] = trabalhado_mes_passado['ContratoOriginal'].astype(str)
 
             # Verifica quais contratos que permanecem iguais
@@ -984,7 +1017,7 @@ class SERHA:
             # print(trabalhado_mes_passado['Contrato para copiar'])
 
             '''print(f'Tipo da coluna Contrato para copiar: {trabalhado_mes_passado['Contrato para copiar'].loc[trabalhado_mes_passado['CPF Consignado'] == 99140187691]}')
-            print(f'Tipo da coluna Contato do averbados_cont_la: {averbados_cont_la_um['Contrato            '].loc[averbados_cont_la_um['CPF Consig.'] == 99140187691]}')'''
+            print(f'Tipo da coluna Contato do averbados_cont_la: {averbados_cont_la_um['Contrato'].loc[averbados_cont_la_um['CPF Consig.'] == 99140187691]}')'''
 
             trabalhado_mes_passado['DATA'] = pd.to_datetime(trabalhado_mes_passado['DATA'], errors='coerce')
             trabalhado_mes_passado = trabalhado_mes_passado.sort_values(by='DATA', ascending=False)
@@ -992,7 +1025,7 @@ class SERHA:
             trabalhado_mes_passado = trabalhado_mes_passado.drop_duplicates(subset='MASP', keep='first')
 
 
-            averbados_cont_la_um['contratos passados'] = averbados_cont_la_um['Contrato            '].map(trabalhado_mes_passado.set_index('ContratoOriginal')['Contrato para copiar'])
+            averbados_cont_la_um['contratos passados'] = averbados_cont_la_um['Contrato'].map(trabalhado_mes_passado.set_index('ContratoOriginal')['Contrato para copiar'])
             # print(averbados_cont_la_um)
             averbados_cont_la_um = averbados_cont_la_um.drop_duplicates(subset='CPF Consig.', keep='first')
 
@@ -1007,7 +1040,7 @@ class SERHA:
             # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- UPDATE DOS CONTRATOS -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
             # Criar o "mapa" de busca a partir do df_B
             # (Transforma averbados_cont_la_um em um "dicionário": {CPF: Contrato})
-            mapa_de_contratos = averbados_cont_la_um.set_index('CPF Consig.')['Contrato            ']
+            mapa_de_contratos = averbados_cont_la_um.set_index('CPF Consig.')['Contrato']
 
             # Use o .map() para criar uma coluna de "Novos Contratos"
             # A coluna 'CPF' do df_A é usada como chave de busca no 'mapa'

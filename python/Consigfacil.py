@@ -8,6 +8,7 @@ from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.Andamento import ANDAMENTO
 from python.Andamento_provisorio import ANDAMENTO_PROVISORIO
 from python.TrataOrbital import TRATA_ORBITAL
+from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
 import os
 import logging
 import chardet
@@ -20,7 +21,7 @@ rejeitados = ['/']
 class CONSIGFACIL:
     # O init foi adaptado para receber os DataFrames do server.py, mas prepara os dados
     # exatamente como o original esperava (convertendo tipos, etc.)
-    def __init__(self, front, portal_file_list, convenio,  caminho, funcao=None, conciliacao=None, orbital=None,kobraki=None, extra_judicial=None, tacs=None, andamento_list=None):
+    def __init__(self, front, portal_file_list, convenio,  caminho, andamento_funcao=None, funcao=None, conciliacao=None, orbital=None,kobraki=None, extra_judicial=None, tacs=None, andamento_list=None):
         
         self.convenio = convenio
         self.caminho = caminho
@@ -46,6 +47,8 @@ class CONSIGFACIL:
 
         # 3. Funcao
         self.funcao = funcao if funcao is not None else None
+        self.andamento_funcao = andamento_funcao if andamento_funcao is not None else None
+
 
         # 4. Conciliação
         conciliacao_falso = pd.DataFrame(
@@ -89,37 +92,6 @@ class CONSIGFACIL:
     # =========================================================================
 
     def unifica_front_funcao(self):
-        front = self.front
-        # print(f'colunas de front: {front.columns}')
-        funcao = self.funcao
-
-        if funcao is None:
-            print('\nDEBUG class ANDAMENTO -> funcao unifica_fron_funcao -> Arquivo "Função" é nulo, retornando "front" sem tratamento\n')
-            return front
-        # tipos dos contratos de cada dataframe
-        '''print('Tipo da coluna Contrato do Front', front['Contrato'].dtype)
-        print('Tipo da coluna NR_PROP do Funcao', funcao['NR_PROP'].dtype)'''
-
-        contrato_front = front['Contrato']
-        ccb_tratado = front['CCB'].astype(str).str.slice(0, 9).fillna(0).astype('float64')
-
-        ccb_tratado = ccb_tratado.astype('int64')
-
-        # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
-        contrato_funcao = funcao['NR_PROP']
-        print(f'Contrato 301120431 está no função ainda?\n{funcao.loc[funcao['NR_PROP'] == 301120431, 'NR_PROP']}')
-        front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE')), 'Esteira'] = 'INTEGRADO'
-
-        # Tira os contratos do Front que já existem no Função
-        # funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
-
-        # Tira os contratos CCB do Front que também existem no Função
-        funcao = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
-
-        print(f'Contrato 301120431 está no função ainda?\n{funcao.loc[funcao['NR_PROP'] == 301120431, 'NR_PROP']}')
-
-        # Juntar Funcao com Front
-        # 1. Defina o mapeamento de nomes (De: Para)
         mapeamento = {
             'NR_PROP': 'Contrato',
             'CPF': 'CPF',
@@ -130,18 +102,66 @@ class CONSIGFACIL:
             'PRODUTO': 'Tipo Operacao',
             'ORIGEM_4': 'Convenio'
         }
+        return self._processar_unificacao_front(
+            base_adicional=self.funcao, 
+            coluna_contrato='NR_PROP', 
+            mapeamento=mapeamento, 
+            verificar_ccb=True
+        )
+    
+    def unifica_front_funcao_esteiras_andamento(self):
+        mapeamento = {
+            'Proposta': 'Contrato',
+            'CPF/CNPJ': 'CPF',
+            'MatrÍcula': 'Matricula',
+            'Cliente': 'Nome',
+            'Quantidade de Parcelas': 'Prazo',
+            'Valor da Parcela': 'Prestacao',
+            'Descrição do Produto': 'Tipo Operacao',
+            'Descrição da Atividade': 'Esteira',
+            'Descrição EMPREGADOR': 'Convenio'
+        }
+        return self._processar_unificacao_front(
+            base_adicional=self.andamento_funcao, 
+            coluna_contrato='Proposta', 
+            mapeamento=mapeamento, 
+            verificar_ccb=False
+        )
 
-        # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
-        # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
-        funcao_ajustado = funcao[list(mapeamento.keys())].rename(columns=mapeamento)
+    # =====================================================================
+    # FUNÇÃO MESTRE QUE PROCESSA A LÓGICA (EVITANDO REPETIÇÃO)
+    # =====================================================================
+    def _processar_unificacao_front(self, base_adicional, coluna_contrato, mapeamento, verificar_ccb=False):
+        front = self.front
 
-        print(f'Contrato 301120431 está no função ainda?\n{funcao.loc[funcao['NR_PROP'] == 301120431, 'NR_PROP']}')
+        if base_adicional is None or base_adicional.empty:
+            print('\nDEBUG -> Base adicional é nula ou vazia. Retornando "front" sem tratamento.\n')
+            return front
 
-        # 3. Use o concat para unir os dois DataFrames
-        # O ignore_index=True serve para gerar um novo índice sequencial no DF final
-        front_unif = pd.concat([front, funcao_ajustado], ignore_index=True)
+        contrato_front = front['Contrato']
+        contratos_base = base_adicional[coluna_contrato].astype('int64')
 
-        # Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
+        # 1. Transforma em INTEGRADO o que for andamento/pendente no front e constar na base
+        front.loc[front['Contrato'].isin(contratos_base) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE')), 'Esteira'] = 'INTEGRADO'
+
+        # 2. Remove da base adicional os contratos que já existem no Front
+        base_tratada = base_adicional[~base_adicional[coluna_contrato].isin(contrato_front)].copy()
+
+        # 3. Filtro extra de CCB (usado apenas pela unifica_front_funcao)
+        if verificar_ccb:
+            ccb_tratado = front['CCB'].astype(str).str.slice(0, 9).fillna(0).astype('float64').astype('int64')
+            base_tratada = base_tratada[~base_tratada[coluna_contrato].isin(ccb_tratado)].copy()
+
+        # 4. Filtra e renomeia as colunas usando o mapeamento fornecido
+        base_ajustada = base_tratada[list(mapeamento.keys())].rename(columns=mapeamento)
+
+        # DEBUG: Verifica o contrato 301120431 na base já ajustada (buscando pela coluna certa: 'Contrato')
+        print(f'Contrato 301120431 está na base ainda?\n{base_ajustada.loc[base_ajustada["Contrato"] == 301120431, "Contrato"]}')
+
+        # 5. Junta o Front com a Base Tratada
+        front_unif = pd.concat([front, base_ajustada], ignore_index=True)
+
+        # 6. Preenche valores genéricos onde ficou nulo
         front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
         front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
         front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG")
@@ -151,12 +171,12 @@ class CONSIGFACIL:
 
         print('front unif finalzin:\n', front_unif.tail())
 
-        # front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
-
         return front_unif
 
     def tratamento_front_preliminar(self):
-        front_consig = self.unifica_front_funcao()
+        unificacao_front_funcao = UNIFICA_FRONT_FUNC_ESTEIRAS(self.front, self.convenio, self.funcao, self.andamento_funcao)
+        front_consig = unificacao_front_funcao.unifica_front_funcao()
+        # front_consig = self.unifica_front_funcao()
 
         conciliacao = self.conciliacao.copy()
 
@@ -233,7 +253,7 @@ class CONSIGFACIL:
             valores_encontrados = valores_encontrados.fillna(0)
 
             # --- ETAPA 6: Gravar no DataFrame original ---
-            valores_encontrados_str = valores_encontrados # .astype(str)
+            valores_encontrados_str = valores_encontrados.astype(str)
             front_consig.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
 
         # front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
@@ -1106,10 +1126,11 @@ class CONSIGFACIL:
 
         averbado_finalizado = distribuicao_valores(averbado_novo)
         
-        # if self.convenio not in ['PREF. CAJAMAR']:
-        if (averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL').any():
-            averbado_finalizado.loc[averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL', 'Valor da reserva'] = averbado_finalizado['NOVO LANÇAR TOTAL']
-            averbado_finalizado = distribuicao_valores(averbado_finalizado)
+
+        if self.convenio not in ['GOV. PIAUÍ']:
+            if (averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL').any():
+                averbado_finalizado.loc[averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL', 'Valor da reserva'] = averbado_finalizado['NOVO LANÇAR TOTAL']
+                averbado_finalizado = distribuicao_valores(averbado_finalizado)
         
 
         try:

@@ -35,6 +35,7 @@ from python.Rf1 import RF1
 from python.Sigrh import SIGRH
 from python.Cip import CIP
 from python.Quantum import QUANTUM
+from python.Safeconsig import SAFECONSIG
 
 app = FastAPI()
 # Mude para False quando subir para produção
@@ -98,7 +99,7 @@ INSS_CONVENIO = ["INSS"]
 SERHA_CONVENIO = ["GOV. MINAS GERAIS - IPSM", "GOV. MINAS GERAIS - CBMMG", "GOV. MINAS GERAIS - PMMG", "GOV. MINAS GERAIS - SEPLAG", "GOV. MINAS GERAIS - IPSEMG"]
 
 CONSIGLOG_CONVENIO = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - COTAR", 
-                      "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREF. TAUBATÉ", "PREVIDÊNCIA SÃO GONÇALO", "PREF. RIBEIRÃO PRETO"]
+                      "PREF. DUQUE DE CAXIAS - IMPDC", "PREF. GOIÂNIA", "PREF. SANTOS", "PREVIDÊNCIA SÃO GONÇALO", "PREF. RIBEIRÃO PRETO"]
 
 ZETRA_CONVENIO = ["GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
                   "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL", "PREVIPALMAS",
@@ -122,6 +123,8 @@ CIP_CONVENIO = ["PREF. SÃO PAULO", "GOV. SÃO PAULO"]
 NEOCONSIG_CONVENIO = ["GOV. GOIÁS", "PREF. SÃO GONÇALO", "PREF. SÃO LUÍS", "PREF. SOROCABA"]
 
 QUANTUM_CONVENIO = ["PREF. SÃO JOSÉ DO RIO PRETO", "PREVIDÊNCIA SÃO JOSÉ DO RIO PRETO", "CÂMARA MUNICIPAL DE TERESÓPOLIS", "PREF. JUÍZ DE FORA"]
+
+SAFECONSIG_CONVENIO = ["PREF. TAUBATÉ", "PREF. SANTOS", "GOV. CEARÁ", "GOV. ALAGOAS"]
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
@@ -189,11 +192,6 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
             content = await uploaded_file.read()
             file_obj = io.BytesIO(content)
             logging.info(f"Lendo: {uploaded_file.filename}")
-
-            print(f'convenio é PREF. SÃO JOSÉ DO RIO PRETO? {conv == 'PREF. SÃO JOSÉ DO RIO PRETO'}')
-            print(f'convenio está no QUANTUM_CONVENIO? {conv in QUANTUM_CONVENIO}')
-            print(f'Arquivo é averbados? {name =='averbados'}')
-            print(f'Convenio é PREF. SÃO JOSÉ DO RIO PRETO, E O ARQUIVO É AVERBADOS? {conv in QUANTUM_CONVENIO and 'averbados' in name}')
             
             
             if "kobraki" in filename and filename.endswith(('.xlsx', '.xls')):
@@ -225,6 +223,8 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
 
             elif "averbados" in name and convenio in ['PREF. SÃO PAULO', 'GOV. SÃO PAULO']:
                 df = pd.read_excel(file_obj, header=3)
+            elif "averbados" in name and convenio in ['PREF. TAUBATÉ', 'GOV. CEARÁ', 'PREF. SANTOS']:
+                df = pd.read_excel(file_obj, header=1)
             elif "averbados_to" in name:
                 df_preliminar = pd.read_excel(file_obj)
                 linha_identificacao = str(df_preliminar.iloc[5].values)
@@ -377,6 +377,7 @@ async def validar_planilhas(
     CREDBASE: List[UploadFile] = File(None, alias="CREDBASE"),
     FRONT: List[UploadFile] = File(None, alias="FRONT"),
     FUNCAO: List[UploadFile] = File(None, alias="FUNCAO"),
+    XAO: List[UploadFile] = File(None, alias="XAO"),
     ANDAMENTO: List[UploadFile] = File(None, alias="ANDAMENTO"),
     ANDAMENTO_SC_CAPITAL: List[UploadFile] = File(None, alias="ANDAMENTO_SC_CAPITAL"),
     ANDAMENTO_SC_CLICK: List[UploadFile] = File(None, alias="ANDAMENTO_SC_CLICK"),
@@ -427,6 +428,7 @@ async def validar_planilhas(
     credbase_df, erros = await read_and_unify_files(CREDBASE, convenio=convenio)
     front_df, erros = await read_and_unify_files(FRONT, convenio=convenio)
     funcao_df, erros = await read_and_unify_files(FUNCAO, convenio=convenio)
+    xao_df, errors = await read_and_unify_files(XAO, convenio=convenio)
     andamento_df, erros = await read_and_unify_files(ANDAMENTO, convenio=convenio)
     and_sc_capital_df, erros = await read_and_unify_files(ANDAMENTO_SC_CAPITAL, convenio=convenio)
     and_sc_click_df, erros = await read_and_unify_files(ANDAMENTO_SC_CLICK, convenio=convenio)
@@ -481,6 +483,7 @@ async def validar_planilhas(
             extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             funcao=funcao_df,
+            andamento_funcao = xao_df,
             trabalhado_anterior=trabalhado_anterior_df,
             rubrica=rubrica,
             caminho=CAMINHO_SAIDA,
@@ -638,6 +641,24 @@ async def validar_planilhas(
             funcao=funcao_df,
             orbital=orbital_df
         )
+
+    elif convenio in SAFECONSIG_CONVENIO:
+        # Padrão para todos os outros (Consigfacil)
+        logging.info("Usando validador: SAFECONSIG")
+        validador = SAFECONSIG(
+            portal_file_list=averbados_df, 
+            convenio=convenio,
+            front=front_df,
+            andamento_funcao=xao_df,
+            funcao=funcao_df,
+            conciliacao=conciliacao_df,
+            orbital=orbital_df,
+            tacs=tacs_df,
+            kobraki=kobraki_df,
+            extra_judicial=extra_judicial_df,
+            caminho=CAMINHO_SAIDA,
+        )
+
     elif convenio in CONSIGFACIL_CONVENIOS:
         # Padrão para todos os outros (Consigfacil)
         logging.info("Usando validador: CONSIGFACIL")
@@ -645,6 +666,7 @@ async def validar_planilhas(
             portal_file_list=averbados_df, 
             convenio=convenio,
             front=front_df,
+            andamento_funcao=xao_df,
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             orbital=orbital_df,
