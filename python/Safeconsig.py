@@ -241,7 +241,7 @@ class SAFECONSIG:
             return False
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        front_consig_cartao_conciliacao = front_consig[~front_consig['Novo Tipo Operacao'].str.contains('EMPRESTIMO|EMPRÉSTIMO', na=False)].copy()
+        front_consig_cartao_conciliacao = front_consig[~front_consig['Tipo Operacao'].str.contains('EMPRESTIMO|EMPRÉSTIMO', na=False)].copy()
         print(f'Comprimento de front_consig_cartao_conciliacao: {len(front_consig_cartao_conciliacao)}')
 
         # Separar o que não é cartão de crédito da conciliação
@@ -568,7 +568,7 @@ class SAFECONSIG:
         # soma_condicional_dict_averb_cpf = front_preliminar.groupby('CPF')['SOMASE LOCAL POR CPF'].sum().to_dict()
 
         somase_cred = front_preliminar.groupby('CPF')['Valor a lançar'].sum().to_dict()
-        averbado_novo['SOMASE CRED'] = averbado_novo['CPF'].map(somase_cred).fillna(0)
+        averbado_novo['SOMASE CRED'] = averbado_novo['CPF Ponto e Traço'].map(somase_cred).fillna(0)
 
 
         # =============================================================================
