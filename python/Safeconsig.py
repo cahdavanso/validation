@@ -6,6 +6,7 @@ from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.TrataOrbital import TRATA_ORBITAL
 from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
+from python.funcoes_comuns import TRATA_CONTRATOS
 from datetime import datetime
 import os
 import logging
@@ -75,10 +76,7 @@ class SAFECONSIG:
 
         # --- GATILHO: Inicia a lógica original automaticamente ---
         logging.info("Iniciando lógica original do Consigfacil...")
-        self.front_trabalhado = self.tratamento_front()
-        self.averbados_func()
 
-    def tratamento_front_preliminar(self):
         # 1. Instancia a classe
         unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
             front=self.front, 
@@ -96,10 +94,19 @@ class SAFECONSIG:
 
         # 4. Chama a segunda unificação (Andamento Função)
         # Isso vai processar a segunda base com verificar_ccb=False
-        front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
+        self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
+
+        self.front_semi_trabalhado = self.tratamento_front_preliminar()
+        self.front_trabalhado = self.tratamento_front()
+        prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        self.conciliacao_tratada = prepara_conciliacao.trata_conciliacao()
+        
+        self.averbados_func()
+
+    def tratamento_front_preliminar(self):
 
         # O seu resultado final
-        front_consig = front_final_consig
+        front_consig = self.front_final_consig
         # front_consig = self.unifica_front_funcao()
 
         conciliacao = self.conciliacao.copy()
@@ -135,7 +142,8 @@ class SAFECONSIG:
             print(f'Coluna PRODUTO não se encontra na conciliação. Erro: {e}')
             return False
         
-        front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
+        if 'Tipo Conciliação' not in front_consig.columns:
+            front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
         front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
@@ -291,15 +299,14 @@ class SAFECONSIG:
         return front_consig_trabalhado
     
     def validacao_termino_front(self, front):
-        front_copy = front.copy()
+        # TRAVA DE SEGURANÇA: Remove qualquer coluna duplicada que tenha vindo dos merges anteriores
+        front_copy = front.loc[:, ~front.columns.duplicated()].copy()
+        
         teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
-        # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
-
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('float').astype('Int64')
-        # conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
 
         print('DEBUG: Colunas da conciliação tratada')
         try:
@@ -307,163 +314,29 @@ class SAFECONSIG:
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR Conciliacao_TESTE.xlsx: {e}")
 
-
-        # print(f'status \n{cred_copy[cred_copy['Codigo_Credbase'] == 300846910]}')
-
-        # Puxar o saldo para o credbase
-        front_copy['Saldo'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo']).to_dict()
-        # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
+        # CORREÇÃO DO MAP: O .to_dict() agora está no lugar certo (dentro do parêntese do map)
+        front_copy['Saldo'] = front_copy['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo'].to_dict())
 
         front_copy.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
+        
+        # Garante que não tenhamos colunas duplicadas novamente após o rename
+        front_copy = front_copy.loc[:, ~front_copy.columns.duplicated()]
+
         if front_copy['Prestacao'].dtype != 'float64':
             front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace('.', '', regex=False)
             front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
             front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
 
+        print(f'Colunas de front_copy: {front_copy.columns}')
+        
         # Valor que vai ser lançado
-        # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
-        valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['Prestacao'])
+        # Agora o Pandas sabe que está lidando com uma Series vs Series
+        valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float(np.inf)), front_copy['Prestacao'])
 
         front_copy['Valor a lançar'] = valor_a_lancar
 
         return front_copy
     
-    def extrair_contratos_com_referencia(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
-        """
-        Extrai e limpa números de contrato de um DataFrame usando outro como referência.
-
-        Args:
-            df_sujo (pd.DataFrame): O DataFrame correspondente à "Planilha A",
-                                    com a coluna de contratos poluída (ex: 'CONTRATOS')
-                                    e uma coluna de CPF (ex: 'CPF').
-            df_limpo (pd.DataFrame): O DataFrame correspondente à "Planilha B",
-                                     com colunas de contratos limpos e CPF.
-
-        Returns:
-            pd.DataFrame: O DataFrame original (df_sujo) com novas colunas para cada
-                          contrato encontrado e limpo.
-        """
-
-
-        print("Iniciando o processo de extração de contratos...")
-
-        # Função de limpeza (pode ser definida aqui ou fora)
-        def limpar_contrato(texto: str) -> str:
-            if not isinstance(texto, str):
-                texto = str(texto)
-                texto = texto.replace(" ", "")
-            return re.sub(r'[^0-9a-zA-Z]', '', texto)  # Mantém letras e números
-
-        # --- Passo 1: Criar o mapa de referência (sem alterações) ---
-        print(f'df_limpo: {df_limpo}')
-        df_limpo['Contrato'] = df_limpo['Contrato'].astype(str).str.strip()
-        print("Criando mapa de referência CPF -> Contratos...")
-        cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict()
-        # print(f'Mapa contratos:\n{cpf_contratos}')
-
-        # --- Passo 2: Definir a função que será aplicada em cada linha (LÓGICA ALTERADA) ---
-        def encontrar_contratos_na_linha(row):
-            cpf = row['CPF']
-            texto_contratos_sujo = str(row['Id. ADE'])
-
-            # Garante que as listas existam
-            contratos_validos_para_cpf = cpf_contratos.get(cpf, [])
-
-            if not contratos_validos_para_cpf:
-                return []
-
-            # 1. DIVIDIR: Mesma lógica de limpeza
-            partes_sujas = [p for p in re.split(r'[-/,;\s]+', texto_contratos_sujo) if p]
-
-            if not partes_sujas:
-                return []
-
-            encontrados_nesta_linha = []
-
-            # Listas de controle
-            contratos_disponiveis = list(contratos_validos_para_cpf)
-
-            # --- MUDANÇA: LIMIAR ALTO ---
-            # Agora podemos exigir quase perfeição porque mudamos o método de comparação
-            LIMIAR_SEGURO = 70
-
-            for parte in partes_sujas:
-                parte_limpa = limpar_contrato(parte)
-                if not parte_limpa or len(parte_limpa) < 3:
-                    continue
-
-                melhor_match_para_parte = None
-                maior_score_ponderado = 0  # Mudamos o nome para deixar claro
-
-                for i, contrato_valido in enumerate(contratos_disponiveis):
-
-                    # Vamos testar os dois alvos separadamente
-                    alvos = [
-                        (contrato_valido, 'CONTRATO'),
-                    ]
-
-                    for alvo_texto, tipo_alvo in alvos:
-                        if not alvo_texto: continue
-
-                        alvo_limpo = limpar_contrato(alvo_texto)
-                        score_base = 0
-
-                        # --- SUA LÓGICA NOVA (PERFEITA) ---
-                        if alvo_limpo.endswith(parte_limpa):
-                            score_base = 100
-                        else:
-                            score_partial = fuzz.partial_ratio(parte_limpa, alvo_limpo)
-                            if score_partial >= LIMIAR_SEGURO:
-                                score_base = score_partial
-                            else:
-                                score_ratio = fuzz.ratio(parte_limpa, alvo_limpo)
-                                if score_ratio >= LIMIAR_SEGURO:
-                                    score_base = score_ratio
-                        # ----------------------------------
-
-                        # --- A CORREÇÃO DO DESEMPATE AQUI ---
-
-                        # Se o score for bom (acima do limiar), calculamos o "Score Ponderado"
-                        if score_base >= LIMIAR_SEGURO:
-
-                            score_final = score_base
-
-                            # Damos um BÔNUS se o match foi no CONTRATO
-                            # Isso garante que 100 (Contrato) ganhe de 100 (Operação)
-                            if tipo_alvo == 'CONTRATO':
-                                score_final += 1  # O "pulo do gato"
-
-                            # Verifica se esse é o melhor match desta parte suja até agora
-                            if score_final > maior_score_ponderado:
-                                maior_score_ponderado = score_final
-                                # IMPORTANTE: Independente se o match foi na operação ou contrato,
-                                # nós SEMPRE salvamos o 'contrato_valido' como o resultado.
-                                melhor_match_para_parte = contrato_valido
-
-                if melhor_match_para_parte:
-                    encontrados_nesta_linha.append(melhor_match_para_parte)
-
-                    # Remove das listas para não duplicar na mesma linha
-                    if melhor_match_para_parte in contratos_disponiveis:
-                        index_remocao = contratos_disponiveis.index(melhor_match_para_parte)
-                        del contratos_disponiveis[index_remocao]
-
-            return encontrados_nesta_linha
-
-        # --- Passo 3: Aplicar a função e criar as novas colunas (sem alterações) ---
-        print("Analisando a Planilha A e extraindo os contratos...")
-        df_sujo['Id. ADE'] = df_sujo['Id. ADE'].astype(str).str.replace('nan', '')
-
-        lista_de_contratos_encontrados = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
-
-        df_contratos_novos = pd.DataFrame(lista_de_contratos_encontrados.tolist(), index=df_sujo.index)
-        df_contratos_novos.columns = [f'Contrato Editado {i + 1}' for i in df_contratos_novos.columns]
-
-        df_resultado = pd.concat([df_sujo, df_contratos_novos], axis=1)
-
-        print("Processo concluído com sucesso!")
-        r'''df_resultado.to_excel(fr'{self.caminho}\Relatório Averbados Contratos tratados.xlsx', index=False)'''
-        return df_resultado
     
     def verificacao_peculio_front(self, front_trabalhado):
         # Usando .copy() para não afetar o original por acidente
@@ -512,13 +385,16 @@ class SAFECONSIG:
     def averbados_func(self):
         # Contse do Credbase no relatório de averbados
         front_consig = self.front_trabalhado
-        averbados = self.averbados
-        averbados = averbados[averbados['Prazo'] == 'Prazo Rotativo'].copy()
-
         if front_consig is False:
             print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
+        averbado_a_tratar = TRATA_CONTRATOS(front_semi_trabalhado=self.front_semi_trabalhado, averbados=self.averbados, conciliacao_tratada=self.conciliacao_tratada, 
+                                            nome_coluna_cpf="CPF", nome_coluna_contrato="Nº de Controle", nome_coluna_parcela="Parc. Reservada")
+        averbados = averbado_a_tratar.trata_averbacao()
+        averbados_prazo = averbados[averbados['Prazo'] != 'Prazo Rotativo'].copy()
+        averbados = averbados[averbados['Prazo'] == 'Prazo Rotativo'].copy()
 
+        
 
         front_preliminar = front_consig.copy()
 
@@ -635,99 +511,7 @@ class SAFECONSIG:
 
             return
 
-        averbado_finalizado = self.extrair_contratos_com_referencia(averbado_novo, front_consig)
-
-        semi_front = front_consig[front_consig['Esteira'].isin(self.condicoes_1)]
-
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
-        conciliacao_tratado = teste_conciliacao.trata_conciliacao()
-
-        # Operações liquidadas. Tratando NRº OPER EDITADO
-        # OP LIQUIDADO
-        try:
-            oper_liq = front_consig[front_consig['Status'].str.contains('Liquidado|CANCELADO')]
-            contratos_tratados_liq = oper_liq['Contrato'].astype(str).str.slice(0, 9)
-            oper_liq.insert(1, "Nº OPERAÇÃO EDITADO", contratos_tratados_liq, True)
-        except ValueError:
-            oper_liq = pd.DataFrame()
-            oper_liq["Nº OPERAÇÃO EDITADO"] = ''
-            oper_liq["Contrato"] = ''
-
-        tutela = front_consig[front_consig['Acao Judicial'] == 'SIM']
-
-        # consig = self.consignataria
-
-        # --- 1. Identifica TODAS as colunas que contêm contratos ---
-        # Inclui a coluna original e as que foram extraídas pela função anterior.
-        # Ajuste 'Contrato' se a sua coluna original tiver um nome diferente (ex: 'Identificador')
-        # colunas_com_contratos = ['Contrato'] + [col for col in averbado_finalizado.columns if 'Contrato Editado' in col]
-        colunas_com_contratos = [col for col in averbado_finalizado.columns if 'Contrato Editado' in col]
-
-        # Remove duplicatas, caso o nome 'Contrato' já esteja na lista
-        colunas_com_contratos = list(dict.fromkeys(colunas_com_contratos))
-
-        # print(f"Colunas de contrato identificadas para análise: {colunas_com_contratos}")
-
-
-        # --- 2. Loop único para criar as colunas de Esteira e Valor para CADA contrato ---
-        # O enumerate nos dá um índice numérico (i) para criar nomes de coluna únicos.
-        for i, nome_coluna_contrato in enumerate(colunas_com_contratos, start=1):
-            # print(f"Processando coluna '{nome_coluna_contrato}'...")
-
-            # Cria a coluna de Esteira correspondente
-            averbado_finalizado[f'Esteira_{i}'] = averbado_finalizado[nome_coluna_contrato].map(
-                front_consig.set_index('Contrato')['Esteira'].to_dict()
-            )
-
-            # Cria a coluna de Valor da Parcela correspondente
-            averbado_finalizado[f'Valor_Unif_{i}'] = averbado_finalizado[nome_coluna_contrato].map(
-                semi_front.set_index('Contrato')['Prestacao'].to_dict()
-            )
-
-            # Puxa os valores de saldo da conciliação
-            averbado_finalizado[f'Saldo {i}'] = averbado_finalizado[nome_coluna_contrato].map(
-                conciliacao_tratado.set_index('CONTRATOS')['Saldo'].to_dict()
-            )
-
-            # Puxando os contratos liquidados (FORMA CORRIGIDA)
-            # Cria a nova coluna 'OP LIQ {i}' com o resultado do map
-            averbado_finalizado[f'OP LIQ {i}'] = averbado_finalizado[nome_coluna_contrato].map(
-                oper_liq.set_index('Nº OPERAÇÃO EDITADO')['Contrato'].to_dict()
-            )
-
-            # --- PASSO 2: PREPARAÇÃO E LIMPEZA DE DADOS ---
-            # Agora que todas as colunas foram criadas, garantimos que sejam numéricas para os cálculos.
-            if averbado_finalizado[f'Valor_Unif_{i}'].dtype != 'float64':
-                averbado_finalizado[f'Valor_Unif_{i}'] = averbado_finalizado[f'Valor_Unif_{i}'].astype(str).str.replace(".", '')
-                averbado_finalizado[f'Valor_Unif_{i}'] = averbado_finalizado[f'Valor_Unif_{i}'].astype(str).str.replace(",", '.')
-
-            averbado_finalizado[f'Valor_Unif_{i}'] = pd.to_numeric(averbado_finalizado[f'Valor_Unif_{i}'],
-                                                            errors='coerce').fillna(0)
-            averbado_finalizado[f'Saldo {i}'] = pd.to_numeric(averbado_finalizado[f'Saldo {i}'], errors='coerce').fillna(-np.inf)
-
-            # --- PASSO 3: CONSTRUIR AS CONDIÇÕES E APLICAR A LÓGICA ---
-
-            # Condição 1: Encontra todas as linhas onde o Saldo (já limpo) é >= 0
-            condicao_saldo_positivo = averbado_finalizado[f'Saldo {i}'] >= -1
-
-            # Condição 2: Encontra onde um contrato liquidado foi efetivamente encontrado (FORMA CORRIGIDA E ROBUSTA)
-            # .notna() garante que só pegamos as linhas onde o map retornou um valor, e não NaN.
-            condicao_op_liq = averbado_finalizado[f'OP LIQ {i}'].notna()
-
-            # Ação: Nessas linhas, define o 'Valor_Unif' correspondente como 0
-            # O operador | significa OU (se uma condição OU a outra for verdadeira)
-            averbado_finalizado.loc[(condicao_saldo_positivo | condicao_op_liq), f'Valor_Unif_{i}'] = 0
-            # --- FIM DA NOVA LÓGICA ---
-
-            # Condição de Operações Liquidadas, se a linha estiver preenchida vai lançar 0
-
-        # --- 2.5 Puxa as liminares ---
-        averbado_finalizado["LIMINAR"] = averbado_finalizado['CPF Ponto e Traço'].map(tutela.set_index('CPF')['Contrato'].to_dict())
-        condicao_liminar = averbado_finalizado['LIMINAR'].notna()
-
-        # --- 3. Soma todos os valores encontrados (forma eficiente) ---
-
-        # Pega a lista de todas as colunas de valor que acabamos de criar
+        averbado_finalizado = averbado_novo.copy()
 
         # colunas_valores_unificados = [col for col in averbado_finalizado.columns if 'Valor_Unif_' in col]
         colunas_valores_unificados = averbado_finalizado.filter(like='Valor_Unif_')
@@ -753,20 +537,28 @@ class SAFECONSIG:
         # --- 4. Cálculo da Diferença e Formatação Final ---
 
         # Garante que a coluna de Vlr novo é numérica antes do cálculo
-        averbado_finalizado['Vlr novo'] = averbado_finalizado['Vlr novo'].str.replace('.', '')
-        averbado_finalizado['Vlr novo'] = averbado_finalizado['Vlr novo'].str.replace(',', '.')
-        averbado_finalizado['Vlr novo'] = pd.to_numeric(averbado_finalizado['Vlr novo'], errors='coerce').fillna(0)
+        if averbado_finalizado['Vlr novo'].dtype != 'float64':
+            averbado_finalizado['Vlr novo'] = averbado_finalizado['Vlr novo'].str.replace('.', '')
+            averbado_finalizado['Vlr novo'] = averbado_finalizado['Vlr novo'].str.replace(',', '.')
+            averbado_finalizado['Vlr novo'] = pd.to_numeric(averbado_finalizado['Vlr novo'], errors='coerce').fillna(0)
 
         averbado_finalizado['Diff'] = averbado_finalizado['Soma'] - averbado_finalizado['Vlr novo']
         averbado_finalizado['Diff'] = averbado_finalizado['Diff'].round(2)
 
         # --- 5. Cria a coluna Lançar ---
-        print(f'CONSIGNATARIA: {self.consignataria}')
-        if consig == 'HOJE PREVIDENCIA PRIVADA':
+        '''print(f'CONSIGNATARIA: {self.consignataria}')
+        if self.consignataria == 'HOJE PREVIDENCIA PRIVADA':
             averbado_finalizado = self.adiciona_peculio(averbado_finalizado)
-        else:
-            averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma'], averbado_finalizado['Vlr novo'])
-            averbado_finalizado.loc[condicao_liminar, 'Lançar'] = 0
+        else:'''
+
+        # Vamos criar a coluna lancado_prazo para subtrair de Soma
+        averbado_finalizado['lancado_prazo'] = averbados_prazo.groupby('CPF')['Parc. Reservada'].transform('sum')
+
+        averbado_finalizado['Soma Final'] = averbado_finalizado['Soma'] - averbado_finalizado['lancado_prazo']
+
+        averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma'], averbado_finalizado['Vlr novo'])
+            
+        averbado_finalizado.loc[averbado_finalizado['LIMINAR'] == "SIM", 'Lançar'] = 0
 
         # Remoção de duplicatas por matrícula
         # averbado_finalizado.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)

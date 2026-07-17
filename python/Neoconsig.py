@@ -906,6 +906,7 @@ class NEOCONSIG:
         data_averbados_bruto = data[colunas]
 
         # Passo 1: Garantir que a coluna é do tipo string
+        # Criar coluna de CPF com ponto e traço
         cpf_str = data_averbados_bruto['CPF SERVIDOR'].astype(str)
         cpf_str_ajustado = cpf_str.str.zfill(11)
         cpf_formatado = cpf_str_ajustado.str.slice(0, 3) + '.' + \
