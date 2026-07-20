@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
                              "GOV. MINAS GERAIS - SEPLAG", "GOV. MINAS GERAIS - IPSEMG"];
 
     const CONVENIOS_CONSIGLOG = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DUQUE DE CAXIAS", "PREF. DUQUE DE CAXIAS - IMPDC", 
-                                 "PREF. GOIÂNIA", "PREF. SANTOS", "PREVIDÊNCIA SÃO GONÇALO", "PREF. RIBEIRÃO PRETO"];
+                                 "PREF. GOIÂNIA", "PREVIDÊNCIA SÃO GONÇALO", "PREF. RIBEIRÃO PRETO"];
 
     const CONVENIOS_ZETRA = ["GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", "PREF. BARBACENA",
                              "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL", "PREVIPALMAS",

@@ -23,16 +23,16 @@ class SAFECONSIG:
         # 1. Averbados
         self.averbados = portal_file_list if portal_file_list is not None else pd.DataFrame()
         # Mantendo a conversão de tipo original:
-        if 'Parc. Reservada' in self.averbados.columns:
+        if 'Parc. Averbada' in self.averbados.columns:
             # Parcela de Averbados já serão floats
-            if self.averbados['Parc. Reservada'].dtype != 'float64':
-                self.averbados['Parc. Reservada'] = self.averbados['Parc. Reservada'].astype(str).str.replace(".", "")
-                self.averbados['Parc. Reservada'] = self.averbados['Parc. Reservada'].str.replace(",", ".")
-                self.averbados['Parc. Reservada'] = pd.to_numeric(self.averbados['Parc. Reservada'], errors="coerce")
-                self.averbados['Parc. Reservada'] = pd.to_numeric(self.averbados['Parc. Reservada'], errors="coerce")
+            if self.averbados['Parc. Averbada'].dtype != 'float64':
+                self.averbados['Parc. Averbada'] = self.averbados['Parc. Averbada'].astype(str).str.replace(".", "")
+                self.averbados['Parc. Averbada'] = self.averbados['Parc. Averbada'].str.replace(",", ".")
+                self.averbados['Parc. Averbada'] = pd.to_numeric(self.averbados['Parc. Averbada'], errors="coerce")
+                self.averbados['Parc. Averbada'] = pd.to_numeric(self.averbados['Parc. Averbada'], errors="coerce")
         else:
             # Garante a coluna caso venha vazio, para não quebrar a lógica original
-            self.averbados['Parc. Reservada'] = 0.0
+            self.averbados['Parc. Averbada'] = 0.0
 
         # 2. Front
         self.front = front if front is not None else pd.DataFrame()
@@ -161,10 +161,12 @@ class SAFECONSIG:
             front_consig['Contrato'] = front_consig['Contrato'].astype(str).str.strip()
             # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
 
-            if orbital['VALID DESCONTO FINAL'].dtype != "float64":
-                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", "")
-                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
-                orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+            if orbital['VALID DESCONTO FINAL'].dtype == "float64":
+                orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(".", ",")
+                # orbital['VALID DESCONTO FINAL'] = orbital['VALID DESCONTO FINAL'].astype(str).str.replace(",", ".")
+                # orbital['VALID DESCONTO FINAL'] = pd.to_numeric(orbital['VALID DESCONTO FINAL'], errors='coerce')
+            
+            print(f'Qual o valor da parcela no CPF: 506.188.733-68?\n{orbital.loc[orbital['num_cpf_mutuario'] == '506.188.733-68', 'VALID DESCONTO FINAL']}')
 
             for col in orbital.columns:
                 if "contrato" in col or "Contrato" in col:
@@ -251,11 +253,11 @@ class SAFECONSIG:
             print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
         
-        front_consig = front_consig[front_consig['OBS'] == 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'].copy()
+        front_consig = front_consig[~front_consig['OBS'].str.contains('NÃO LANÇAR - ESTEIRA NÃO PERMITIDA')].copy()
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        front_consig_cartao_conciliacao = front_consig[~front_consig['Tipo Operacao'].str.contains('EMPRESTIMO|EMPRÉSTIMO', na=False)].copy()
-        print(f'Comprimento de front_consig_cartao_conciliacao: {len(front_consig_cartao_conciliacao)}')
+        '''front_consig_cartao_conciliacao = front_consig[~front_consig['Tipo Operacao'].str.contains('EMPRESTIMO|EMPRÉSTIMO', na=False)].copy()
+        print(f'Comprimento de front_consig_cartao_conciliacao: {len(front_consig_cartao_conciliacao)}')'''
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -264,7 +266,7 @@ class SAFECONSIG:
         # condicao_cartao = ['CARTAO DE CREDITO']
         # front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['Tipo Operacao'].isin(condicao_cartao)].copy()
         # Faz concat dos dois dataframes
-        front_consig_trabalhado = front_consig_cartao_conciliacao.copy()
+        front_consig_trabalhado = front_consig.copy()
 
 
         # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
@@ -379,8 +381,8 @@ class SAFECONSIG:
                 averbado_finalizado.loc[mascara_esteira_valida, 'Soma_Calculada'] += (valores_validos + 20)
 
         # 3. Aplica a comparação final com o Valor Prestação (Teto)
-        averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma_Calculada'], averbado_finalizado['Parc. Reservada'])
-        print(f'\naverbado_finalizado_peculio\n{averbado_finalizado['Parc. Reservada']}\n')
+        averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma_Calculada'], averbado_finalizado['Parc. Averbada'])
+        print(f'\naverbado_finalizado_peculio\n{averbado_finalizado['Parc. Averbada']}\n')
 
         # (Opcional) Remove a coluna temporária se não precisar mais
         averbado_finalizado = averbado_finalizado.drop(columns=['Soma_Calculada'])
@@ -394,9 +396,15 @@ class SAFECONSIG:
             print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
         averbado_a_tratar = TRATA_CONTRATOS(front_semi_trabalhado=self.front_semi_trabalhado, averbados=self.averbados, conciliacao_tratada=self.conciliacao_tratada, 
-                                            nome_coluna_cpf="CPF", nome_coluna_contrato="Nº de Controle", nome_coluna_parcela="Parc. Reservada")
+                                            nome_coluna_cpf="CPF", nome_coluna_contrato="Nº de Controle", nome_coluna_parcela="Parc. Averbada")
         averbados = averbado_a_tratar.trata_averbacao()
         averbados_prazo = averbados[averbados['Prazo'] != 'Prazo Rotativo'].copy()
+        if averbados_prazo['Parc. Averbada'].dtype != 'float64':
+            averbados_prazo['Parc. Averbada'] = averbados_prazo['Parc. Averbada'].astype(str).str.replace(".", "")
+            averbados_prazo['Parc. Averbada'] = averbados_prazo['Parc. Averbada'].astype(str).str.replace(",", ".")
+            averbados_prazo['Parc. Averbada'] = pd.to_numeric(averbados_prazo['Parc. Averbada'], errors="coerce")
+
+        averbados_prazo.to_excel(os.path.join(self.caminho, f"AVERBADOS COM PRAZO {self.convenio}.xlsx"), index=False)
         averbados = averbados[averbados['Prazo'] == 'Prazo Rotativo'].copy()
 
         
@@ -419,7 +427,7 @@ class SAFECONSIG:
         # averbados.insert(5, 'CONCAT', '', True)
         averbados['CONTSE CPF'] = ''
         averbados['CONTSE SEQ'] = ''
-        averbados['SOMASE CRED'] = ''
+        averbados['SOMASE FRONT'] = ''
         # averbados['PARCELA CPF'] = ''
         # averbados['VALOR ATRIBUIDO'] = ''
         # averbados['FALTA ATRIBUIR'] = ''
@@ -427,10 +435,10 @@ class SAFECONSIG:
         averbados['OBS'] = ''
 
         # Tira valor vazio do Valor da Reserva
-        averbados['Parc. Reservada'] = averbados['Parc. Reservada'].fillna('')
-        mask_nao = (averbados['Parc. Reservada'] == 0) | \
-                   (averbados['Parc. Reservada'] == '0') | \
-                   (averbados['Parc. Reservada'] == '')
+        averbados['Parc. Averbada'] = averbados['Parc. Averbada'].fillna('')
+        mask_nao = (averbados['Parc. Averbada'] == 0) | \
+                   (averbados['Parc. Averbada'] == '0') | \
+                   (averbados['Parc. Averbada'] == '')
 
         # 3. Aplicamos a marcação e o filtro
         averbados.loc[mask_nao, 'OBS'] = 'NÃO'
@@ -449,7 +457,17 @@ class SAFECONSIG:
         # soma_condicional_dict_averb_cpf = front_preliminar.groupby('CPF')['SOMASE LOCAL POR CPF'].sum().to_dict()
 
         somase_cred = front_preliminar.groupby('CPF')['Valor a lançar'].sum().to_dict()
-        averbado_novo['SOMASE CRED'] = averbado_novo['CPF Ponto e Traço'].map(somase_cred).fillna(0)
+        averbado_novo['SOMASE FRONT'] = averbado_novo['CPF Ponto e Traço'].map(somase_cred).fillna(0)
+
+        
+        # Vamos criar a coluna lancado_prazo para subtrair de Soma
+        # 3. Agrupamento Seguro: Cria um "dicionário" de somas por CPF
+        soma_por_cpf = averbados_prazo.groupby('CPF')['Parc. Averbada'].sum()
+
+        # 4. Cruzamento Seguro: Mapeia a soma para o novo usando o CPF como ponte
+        averbado_novo['lancado_prazo'] = averbado_novo['CPF'].map(soma_por_cpf).fillna(0)
+        averbado_novo['lancado_prazo'] = averbado_novo['lancado_prazo'].fillna(0)
+        averbado_novo['SOMASE FRONT'] = averbado_novo['SOMASE FRONT'] - averbado_novo['lancado_prazo']
 
 
         # =============================================================================
@@ -461,27 +479,27 @@ class SAFECONSIG:
             # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
             averbado_novo = averbado_trabalhado
 
-            averbado_novo['Parc. Reservada'] = pd.to_numeric(averbado_novo['Parc. Reservada'], errors='coerce').fillna(0)
+            averbado_novo['Parc. Averbada'] = pd.to_numeric(averbado_novo['Parc. Averbada'], errors='coerce').fillna(0)
 
-            '''if averbado_novo['SOMASE CRED'].dtype != 'float64':
-                averbado_novo['SOMASE CRED'] = averbado_novo['SOMASE CRED'].astype(str).str.replace('.', '').str.replace(',', '.')'''
-            averbado_novo['SOMASE CRED'] = pd.to_numeric(averbado_novo['SOMASE CRED'], errors='coerce').fillna(0)
+            '''if averbado_novo['SOMASE FRONT'].dtype != 'float64':
+                averbado_novo['SOMASE FRONT'] = averbado_novo['SOMASE FRONT'].astype(str).str.replace('.', '').str.replace(',', '.')'''
+            averbado_novo['SOMASE FRONT'] = pd.to_numeric(averbado_novo['SOMASE FRONT'], errors='coerce').fillna(0)
 
             # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
             # Esta é a "mágica" que substitui a necessidade de um loop.
-            averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF Ponto e Traço')['Parc. Reservada'].cumsum()
+            averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF Ponto e Traço')['Parc. Averbada'].cumsum()
 
             # 2. Calcula o valor que JÁ FOI ALOCADO para as linhas ANTERIORES.
             # É a soma acumulada até a linha atual, menos o valor da própria linha.
-            alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Parc. Reservada']
+            alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Parc. Averbada']
             averbado_novo['ALOCADO ANTERIORMENTE'] = alocado_anteriormente
 
             # 3. Calcula o saldo restante do SOMASE ANTES de processar a linha atual.
-            saldo_restante = averbado_novo['SOMASE CRED'] - alocado_anteriormente
+            saldo_restante = averbado_novo['SOMASE FRONT'] - alocado_anteriormente
 
             # 4. O valor a lançar é o MÍNIMO entre o que a reserva da linha pede e o saldo que ainda temos.
             # Usamos .clip(0) para garantir que o saldo não seja negativo (se já estourou, é 0).
-            valor_a_lancar = np.minimum(averbado_novo['Parc. Reservada'], saldo_restante.clip(0))
+            valor_a_lancar = np.minimum(averbado_novo['Parc. Averbada'], saldo_restante.clip(0))
 
             # averbado_novo['VALOR A LANÇAR CPF'] = averbado_novo['VALOR A LANÇAR CPF'].round(2)
             averbado_novo['VALOR A LANÇAR'] = valor_a_lancar.round(2)
@@ -490,7 +508,7 @@ class SAFECONSIG:
 
             # 7. Vamos criar a coluna Diff para lançar os parciais
             somase_lancar = averbado_novo.groupby('CPF')['VALOR A LANÇAR'].transform('sum')
-            averbado_novo['DIFF'] = somase_lancar - averbado_novo['SOMASE CRED']
+            averbado_novo['DIFF'] = somase_lancar - averbado_novo['SOMASE FRONT']
             averbado_novo['DIFF'] = averbado_novo['DIFF'].round(2)
 
             # 8. Adiciona a coluna de SITUAÇÃO DE DESCONTO para TOTAL ou PARCIAL
@@ -499,14 +517,14 @@ class SAFECONSIG:
             averbado_novo.loc[averbado_novo['DIFF'] >= 0, 'SITUAÇÃO DE DESCONTO'] = 'TOTAL'
 
             # 9. Novo Lançar total
-            averbado_novo['NOVO LANÇAR TOTAL'] = averbado_novo['Parc. Reservada'] - averbado_novo['DIFF']
+            averbado_novo['NOVO LANÇAR TOTAL'] = averbado_novo['Parc. Averbada'] - averbado_novo['DIFF']
 
             return averbado_novo
 
             # 7. (Opcional) Remove a coluna auxiliar que criamos.
         # averbado_novo = averbado_novo.drop(columns=['SOMA ACUMULADA DA RESERVA'])
 
-        if self.convenio == 'PREF. TAUBATÉ':
+        if self.convenio in ['PREF. TAUBATÉ', 'PREF. SANTOS', 'GOV. ALAGOAS', 'GOV. CEARÁ']:
             averbado_finalizado = distribuicao_valores(averbado_novo)
 
             try:
@@ -541,13 +559,13 @@ class SAFECONSIG:
 
         # --- 4. Cálculo da Diferença e Formatação Final ---
 
-        # Garante que a coluna de Parc. Reservada é numérica antes do cálculo
-        if averbado_finalizado['Parc. Reservada'].dtype != 'float64':
-            averbado_finalizado['Parc. Reservada'] = averbado_finalizado['Parc. Reservada'].str.replace('.', '')
-            averbado_finalizado['Parc. Reservada'] = averbado_finalizado['Parc. Reservada'].str.replace(',', '.')
-            averbado_finalizado['Parc. Reservada'] = pd.to_numeric(averbado_finalizado['Parc. Reservada'], errors='coerce').fillna(0)
+        # Garante que a coluna de Parc. Averbada é numérica antes do cálculo
+        if averbado_finalizado['Parc. Averbada'].dtype != 'float64':
+            averbado_finalizado['Parc. Averbada'] = averbado_finalizado['Parc. Averbada'].str.replace('.', '')
+            averbado_finalizado['Parc. Averbada'] = averbado_finalizado['Parc. Averbada'].str.replace(',', '.')
+            averbado_finalizado['Parc. Averbada'] = pd.to_numeric(averbado_finalizado['Parc. Averbada'], errors='coerce').fillna(0)
 
-        averbado_finalizado['Diff'] = averbado_finalizado['Soma'] - averbado_finalizado['Parc. Reservada']
+        averbado_finalizado['Diff'] = averbado_finalizado['Soma'] - averbado_finalizado['Parc. Averbada']
         averbado_finalizado['Diff'] = averbado_finalizado['Diff'].round(2)
 
         # --- 5. Cria a coluna Lançar ---
@@ -556,13 +574,10 @@ class SAFECONSIG:
             averbado_finalizado = self.adiciona_peculio(averbado_finalizado)
         else:'''
 
-        # Vamos criar a coluna lancado_prazo para subtrair de Soma
-        averbado_finalizado['lancado_prazo'] = averbados_prazo.groupby('CPF')['Parc. Reservada'].transform('sum')
-        averbado_finalizado['lancado_prazo'] = averbado_finalizado['lancado_prazo'].fillna(0)
 
-        averbado_finalizado['Soma Final'] = averbado_finalizado['Soma'] - averbado_finalizado['lancado_prazo']
+        averbado_finalizado['Soma Final'] = np.maximum(averbado_finalizado['Soma'] - averbado_finalizado['lancado_prazo'], 0)
 
-        averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma'], averbado_finalizado['Parc. Reservada'])
+        averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma Final'], averbado_finalizado['Parc. Averbada'])
             
         averbado_finalizado.loc[averbado_finalizado['LIMINAR'] == "SIM", 'Lançar'] = 0
 

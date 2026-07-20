@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import re
 from thefuzz import fuzz
+from python.ESTEIRAS import load_esteiras
 import os
 
 
@@ -16,6 +17,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
             print('Tipo da coluna Valor da Parcela antes da conversão:\n', self.andamento_funcao['Valor da Parcela'].dtype)
             if self.andamento_funcao['Valor da Parcela'].dtype == 'float64':
                 self.andamento_funcao['Valor da Parcela'] = self.andamento_funcao['Valor da Parcela'].astype(str).str.replace(".", ",")
+
 
         self.mapeamento_convenio = {
                                     'GOV. ALAGOAS': ['GOV AL CC', 'GOV AL EMP', 'GOV AL CB'],
@@ -115,21 +117,22 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
             print(f'Andamento do função filtrado para o convenio {self.convenio}:\n{self.andamento_funcao.head()}')
 
     def unifica_front_funcao(self):
-            mapeamento = {
-                'NR_PROP': 'Contrato',
-                'CPF': 'CPF',
-                'MATRICULA': 'Matricula',
-                'CLIENTE': 'Nome',
-                'PARC': 'Prazo',
-                'VLR_PARC': 'Prestacao',
-                'PRODUTO': 'Tipo Operacao',
-                'ORIGEM_4': 'Convenio'
-            }
-            return self._processar_unificacao_front(
-                base_adicional=self.funcao, 
-                coluna_contrato='NR_PROP', 
-                mapeamento=mapeamento, 
-                verificar_ccb=True
+        mapeamento = {
+            'NR_PROP': 'Contrato',
+            'CPF': 'CPF',
+            'MATRICULA': 'Matricula',
+            'CLIENTE': 'Nome',
+            'PARC': 'Prazo',
+            'VLR_PARC': 'Prestacao',
+            'PRODUTO': 'Tipo Operacao',
+            'ORIGEM_4': 'Convenio'
+        }
+        return self._processar_unificacao_front(
+            base_adicional=self.funcao, 
+            coluna_contrato='NR_PROP', 
+            mapeamento=mapeamento, 
+            verificar_ccb=True,
+            atualizar_esteira_integrado=True  # <-- LIGA A REGRA AQUI
         )
     
     def unifica_front_funcao_esteiras_andamento(self):
@@ -148,13 +151,14 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
             base_adicional=self.andamento_funcao, 
             coluna_contrato='Proposta', 
             mapeamento=mapeamento, 
-            verificar_ccb=False
+            verificar_ccb=False,
+            atualizar_esteira_integrado=False  # <-- DESLIGA A REGRA AQUI
         )
 
     # =====================================================================
     # FUNÇÃO MESTRE QUE PROCESSA A LÓGICA (EVITANDO REPETIÇÃO)
     # =====================================================================
-    def _processar_unificacao_front(self, base_adicional, coluna_contrato, mapeamento, verificar_ccb=False):
+    def _processar_unificacao_front(self, base_adicional, coluna_contrato, mapeamento, verificar_ccb=False, atualizar_esteira_integrado=False):
         front = self.front
 
         if base_adicional is None or base_adicional.empty:
@@ -164,8 +168,9 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         contrato_front = front['Contrato'].astype('int64')
         contratos_base = base_adicional[coluna_contrato].astype('int64')
 
-        # 1. Transforma em INTEGRADO o que for andamento/pendente no front e constar na base
-        front.loc[front['Contrato'].isin(contratos_base) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE')), 'Esteira'] = 'INTEGRADO'
+        # 1. Transforma em INTEGRADO apenas se o parâmetro permitir (chamada pela self.funcao)
+        if atualizar_esteira_integrado:
+            front.loc[front['Contrato'].isin(contratos_base) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE')), 'Esteira'] = 'INTEGRADO'
 
         # 2. Remove da base adicional os contratos que já existem no Front
         base_tratada = base_adicional[~base_adicional[coluna_contrato].isin(contrato_front)].copy()
@@ -198,7 +203,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         # 3. Faz a marcação garantindo que a coluna de busca está sem espaços extras nas pontas (.str.strip())
         mask_orbital = (front_unif['Tipo Operacao'].str.strip().isin(produtos_orbital)) & (front_unif['Orbital'] == '')
         front_unif.loc[mask_orbital, 'Orbital'] = "SIM"
-        front_unif.loc[front_unif['Orbital'] == ''] = "NAO"
+        front_unif.loc[front_unif['Orbital'] == '', 'Orbital'] = "NAO"
 
         front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG")
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
@@ -219,6 +224,7 @@ class TRATA_CONTRATOS:
         self.nome_coluna_cpf = nome_coluna_cpf
         self.nome_coluna_contrato = nome_coluna_contrato
         self.nome_coluna_parcela = nome_coluna_parcela
+        self.condicoes_1 = load_esteiras()
 
     def extrair_contratos_com_referencia(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
             print("Iniciando o processo de extração de contratos...")
@@ -584,10 +590,11 @@ class TRATA_CONTRATOS:
             # .notna() garante que só pegamos as linhas onde o map retornou um valor, e não NaN.
             data_averbados[f'OP LIQ {i}'] = data_averbados[f'OP LIQ {i}'].fillna('')
             condicao_op_liq = data_averbados[f'OP LIQ {i}'] != ''
+            condicao_esteira = ~data_averbados[f'Esteira_{i}'].isin(self.condicoes_1)
 
             # Ação: Nessas linhas, define o 'Valor_Unif' correspondente como 0
             # O operador | significa OU (se uma condição OU a outra for verdadeira)
-            data_averbados.loc[(condicao_saldo_positivo | condicao_op_liq), f'Valor_Unif_{i}'] = 0
+            data_averbados.loc[(condicao_saldo_positivo | condicao_op_liq | condicao_esteira), f'Valor_Unif_{i}'] = 0
             # --- FIM DA NOVA LÓGICA ---
 
             # Condição de Operações Liquidadas, se a linha estiver preenchida vai lançar 0
