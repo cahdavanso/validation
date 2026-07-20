@@ -95,6 +95,7 @@ class SAFECONSIG:
         # 4. Chama a segunda unificação (Andamento Função)
         # Isso vai processar a segunda base com verificar_ccb=False
         self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
+        self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio}.xlsx"), index=False)
 
         self.front_semi_trabalhado = self.tratamento_front_preliminar()
         self.front_trabalhado = self.tratamento_front()
@@ -146,7 +147,9 @@ class SAFECONSIG:
             front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
-        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+        # front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+        front_consig_esteiras = front_consig
+        front_consig_esteiras.loc[~front_consig_esteiras['Esteira'].isin(esteiras_permitidas), 'OBS'] = 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'
 
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
@@ -247,6 +250,8 @@ class SAFECONSIG:
         if front_consig is False:
             print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
+        
+        front_consig = front_consig[front_consig['OBS'] == 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'].copy()
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
         front_consig_cartao_conciliacao = front_consig[~front_consig['Tipo Operacao'].str.contains('EMPRESTIMO|EMPRÉSTIMO', na=False)].copy()
@@ -374,8 +379,8 @@ class SAFECONSIG:
                 averbado_finalizado.loc[mascara_esteira_valida, 'Soma_Calculada'] += (valores_validos + 20)
 
         # 3. Aplica a comparação final com o Valor Prestação (Teto)
-        averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma_Calculada'], averbado_finalizado['Vlr novo'])
-        print(f'\naverbado_finalizado_peculio\n{averbado_finalizado['Vlr novo']}\n')
+        averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma_Calculada'], averbado_finalizado['Parc. Reservada'])
+        print(f'\naverbado_finalizado_peculio\n{averbado_finalizado['Parc. Reservada']}\n')
 
         # (Opcional) Remove a coluna temporária se não precisar mais
         averbado_finalizado = averbado_finalizado.drop(columns=['Soma_Calculada'])
@@ -536,13 +541,13 @@ class SAFECONSIG:
 
         # --- 4. Cálculo da Diferença e Formatação Final ---
 
-        # Garante que a coluna de Vlr novo é numérica antes do cálculo
-        if averbado_finalizado['Vlr novo'].dtype != 'float64':
-            averbado_finalizado['Vlr novo'] = averbado_finalizado['Vlr novo'].str.replace('.', '')
-            averbado_finalizado['Vlr novo'] = averbado_finalizado['Vlr novo'].str.replace(',', '.')
-            averbado_finalizado['Vlr novo'] = pd.to_numeric(averbado_finalizado['Vlr novo'], errors='coerce').fillna(0)
+        # Garante que a coluna de Parc. Reservada é numérica antes do cálculo
+        if averbado_finalizado['Parc. Reservada'].dtype != 'float64':
+            averbado_finalizado['Parc. Reservada'] = averbado_finalizado['Parc. Reservada'].str.replace('.', '')
+            averbado_finalizado['Parc. Reservada'] = averbado_finalizado['Parc. Reservada'].str.replace(',', '.')
+            averbado_finalizado['Parc. Reservada'] = pd.to_numeric(averbado_finalizado['Parc. Reservada'], errors='coerce').fillna(0)
 
-        averbado_finalizado['Diff'] = averbado_finalizado['Soma'] - averbado_finalizado['Vlr novo']
+        averbado_finalizado['Diff'] = averbado_finalizado['Soma'] - averbado_finalizado['Parc. Reservada']
         averbado_finalizado['Diff'] = averbado_finalizado['Diff'].round(2)
 
         # --- 5. Cria a coluna Lançar ---
@@ -553,10 +558,11 @@ class SAFECONSIG:
 
         # Vamos criar a coluna lancado_prazo para subtrair de Soma
         averbado_finalizado['lancado_prazo'] = averbados_prazo.groupby('CPF')['Parc. Reservada'].transform('sum')
+        averbado_finalizado['lancado_prazo'] = averbado_finalizado['lancado_prazo'].fillna(0)
 
         averbado_finalizado['Soma Final'] = averbado_finalizado['Soma'] - averbado_finalizado['lancado_prazo']
 
-        averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma'], averbado_finalizado['Vlr novo'])
+        averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma'], averbado_finalizado['Parc. Reservada'])
             
         averbado_finalizado.loc[averbado_finalizado['LIMINAR'] == "SIM", 'Lançar'] = 0
 

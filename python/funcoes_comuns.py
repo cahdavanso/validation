@@ -186,7 +186,20 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
 
         # 6. Preenche valores genéricos onde ficou nulo
         front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
-        front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
+        # 1. Preenche os vazios
+        front_unif['Orbital'] = front_unif['Orbital'].fillna("")
+
+        # 2. Cria a lista limpando possíveis espaços invisíveis nas pontas
+        produtos_orbital = [
+            'CARTÃO PLÁSTICO', 'CARTÃO PLÁSTICO - RE', 'CARTAO - SEG PARC', 
+            'CARTAO SEGURO - A VISTA', 'CARTÃO MT PL', 'CARTAO DIGITAL'
+        ]
+
+        # 3. Faz a marcação garantindo que a coluna de busca está sem espaços extras nas pontas (.str.strip())
+        mask_orbital = (front_unif['Tipo Operacao'].str.strip().isin(produtos_orbital)) & (front_unif['Orbital'] == '')
+        front_unif.loc[mask_orbital, 'Orbital'] = "SIM"
+        front_unif.loc[front_unif['Orbital'] == ''] = "NAO"
+
         front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG")
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")

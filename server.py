@@ -223,7 +223,7 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
 
             elif "averbados" in name and convenio in ['PREF. SÃO PAULO', 'GOV. SÃO PAULO']:
                 df = pd.read_excel(file_obj, header=3)
-            elif "averbados" in name and convenio in ['PREF. TAUBATÉ', 'GOV. CEARÁ', 'PREF. SANTOS']:
+            elif "averbados" in name and convenio in ['GOV. CEARÁ', 'GOV. ALAGOAS', 'PREF. TAUBATÉ', 'PREF. SANTOS']:
                 df = pd.read_excel(file_obj, header=1)
             elif "averbados_to" in name:
                 df_preliminar = pd.read_excel(file_obj)
