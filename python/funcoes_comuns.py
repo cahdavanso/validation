@@ -119,10 +119,12 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
     def unifica_front_funcao(self):
         mapeamento = {
             'NR_PROP': 'Contrato',
+            'NR_OPER': 'CCB',
             'CPF': 'CPF',
             'MATRICULA': 'Matricula',
             'CLIENTE': 'Nome',
             'PARC': 'Prazo',
+            'DT_BASE': 'Data Averbacao',
             'VLR_PARC': 'Prestacao',
             'PRODUTO': 'Tipo Operacao',
             'ORIGEM_4': 'Convenio'
@@ -138,10 +140,12 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
     def unifica_front_funcao_esteiras_andamento(self):
         mapeamento = {
             'Proposta': 'Contrato',
+            'Operação': 'CCB',
             'CPF/CNPJ': 'CPF',
             'MatrÍcula': 'Matricula',
             'Cliente': 'Nome',
             'Quantidade de Parcelas': 'Prazo',
+            'Data Base': 'Data Averbacao',
             'Valor da Parcela': 'Prestacao',
             'Descrição do Produto': 'Tipo Operacao',
             'Descrição da Atividade': 'Esteira',

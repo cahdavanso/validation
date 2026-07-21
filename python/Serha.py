@@ -34,6 +34,28 @@ class SERHA:
 
         self.convenio = convenio
 
+        self.caminho = caminho
+
+        # 1. Instancia a classe
+        unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
+            front=self.front_unificados, 
+            convenio=self.convenio, 
+            funcao=self.funcao, 
+            andamento_funcao=self.andamento_funcao
+        )
+
+        # 2. Chama a primeira unificação (Função pura)
+        # Isso vai processar e preencher com verificar_ccb=True
+        front_meio_caminho = unificador.unifica_front_funcao()
+
+        # 3. Atualiza o front interno da classe para que a segunda unificação use os dados já combinados
+        unificador.front = front_meio_caminho
+
+        # 4. Chama a segunda unificação (Andamento Função)
+        # Isso vai processar a segunda base com verificar_ccb=False
+        self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
+        self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio}.xlsx"), index=False)
+
         # kobraki
         self.kobraki = kobraki if kobraki is not None else None
 
@@ -70,8 +92,6 @@ class SERHA:
         # 1. Remove os espaços invisíveis do começo e do fim de TODAS as colunas
         if self.complementares is not None:
             self.complementares.columns = self.complementares.columns.str.strip()
-
-        self.caminho = caminho
 
         self.orbital = orbital if orbital is not None else None
 
@@ -178,7 +198,7 @@ class SERHA:
         front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
 
         # O seu resultado final
-        front_consig = front_final_consig
+        front_consig = self.front_final_consig
         # front_consig = self.unifica_front_funcao()
         conciliacao = self.conciliacao.copy()
 
@@ -244,7 +264,7 @@ class SERHA:
                         
                         # Adiciona ao set (removendo o texto 'nan' que o astype(str) gera de valores nulos)
                         contratos_trabalhado_anterior.update(col_convertida[col_convertida != 'nan'])
-            front_cartao['Tipo Operacao'] = np.where(front_cartao['Contrato'].astype(str).str.strip().isin(contratos_trabalhado_anterior), 'CARTAO DE CREDITO', front_cartao['Tipo Operacao'])
+            # front_cartao['Tipo Operacao'] = np.where(front_cartao['Contrato'].astype(str).str.strip().isin(contratos_trabalhado_anterior), 'CARTAO DE CREDITO', front_cartao['Tipo Operacao'])
             front_consig = front_cartao.copy()
 
 
@@ -329,11 +349,13 @@ class SERHA:
 
 
         # ------------------------------------ ESTEIRAS REMOVIDAS ------------------------------------- #
-        front_consig_esteiras_removidas = front_consig[~front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+        '''front_consig_esteiras_removidas = front_consig[~front_consig['Esteira'].isin(esteiras_permitidas)].copy()
         try:
             front_consig_esteiras_removidas.to_excel(os.path.join(self.caminho, f'FRONT ESTEIRAS REMOVIDAS {self.convenio}.xlsx'), index=False)
         except Exception as e:
-            print(f"Erro ao salvar o arquivo de esteiras removidas: {e}")
+            print(f"Erro ao salvar o arquivo de esteiras removidas: {e}")'''
+        
+        front_consig_esteiras.loc[~front_consig_esteiras['Esteira'].isin(esteiras_permitidas), 'OBS'] = 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'
 
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
@@ -410,7 +432,7 @@ class SERHA:
             pass
         else:
             # front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = "NÃO LANÇAR - NÃO BENEFÍCIO"
         # Marcar liquidados em StatusContrato
         front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
 
@@ -444,6 +466,7 @@ class SERHA:
         else:
             # front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False)].copy()
             front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('CARTAO BENEFICIO', na=False)].copy()
+            # front_consig_cartao_conciliacao = front_consig.copy()
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -1055,86 +1078,145 @@ class SERHA:
 
 
         elif self.rubrica == 'BENEFÍCIO':
-            # 1. Garante que a coluna aceite strings (evita o TypeError de int64)
+            # ====================================================================================
+            # 1. LIMPEZA INICIAL (Mantido do seu código original)
+            # ====================================================================================
             trabalhado_mes_passado['ContratoOriginal'] = trabalhado_mes_passado['ContratoOriginal'].astype(object)
             trabalhado_mes_passado.loc[
                 ~trabalhado_mes_passado['ContratoOriginal'].astype(str).str.contains('/'),
                 'ContratoOriginal'
-            ] = trabalhado_mes_passado['Contrato editado'].astype(str) # .str[:9]
+            ] = trabalhado_mes_passado['Contrato 1'].astype(str)
 
-            # 1. Lista de colunas a verificar
-            cols_contratos = ['ContratoOriginal'] + [col for col in trabalhado_mes_passado.columns if
-                                                     str(col).startswith('Contrato')]
+            cols_contratos = ['ContratoOriginal'] + [col for col in trabalhado_mes_passado.columns if str(col).startswith('Contrato')]
                         
-            # 2. SELEÇÃO CRUCIAL: Remove colunas com nomes duplicados da nossa lista de interesse
-            # Isso garante que se houver dois "ContratoOriginal", apenas o primeiro será pego
             df_filtrado = trabalhado_mes_passado[cols_contratos]
             df_filtrado = df_filtrado.loc[:, ~df_filtrado.columns.duplicated()]
             
-            
             cols = trabalhado_mes_passado[cols_contratos].columns
             dup_cols = cols[cols.duplicated()].unique()
-            logging.error(f"Colunas duplicadas encontradas: {dup_cols}")
+            if not dup_cols.empty:
+                logging.error(f"Colunas duplicadas encontradas: {dup_cols}")
 
-            # 2. Cria a lista unificada e limpa o ".0"
             lista_bloqueio = (
                 df_filtrado
-                .apply(lambda x: x.astype(str))  # Converte tudo para texto
-                .stack()  # Empilha
-                .unique()  # Remove duplicatas
+                .apply(lambda x: x.astype(str))
+                .stack()
+                .unique()
             )
-
-            # --- A CORREÇÃO MÁGICA AQUI ---
-            # Transforma em Series para poder usar métodos de string (.str)
-            lista_bloqueio = pd.Series(lista_bloqueio)
-
-            # Remove o ".0" apenas se ele estiver no FINAL da string
-            lista_bloqueio = lista_bloqueio.str.replace(r'\.0$', '', regex=True)
-
-            # 3. Aplica o filtro
+            
+            lista_bloqueio = pd.Series(lista_bloqueio).str.replace(r'\.0$', '', regex=True)
             beneficio_filter = ~front_trabalhado['Contrato'].astype(str).isin(lista_bloqueio)
+            front_ben_filter = front_trabalhado[beneficio_filter].loc[front_trabalhado['CPF'] != '054.873.956-08'].copy()
 
-            front_ben_filter = front_trabalhado[beneficio_filter].loc[front_trabalhado['CPF'] != '054.873.956-08']
-            # print(front_ben_filter['Cliente'])
-            '''print(f'Codigo_Credbase do front trabalhado \n{type(front_trabalhado.loc[0, "Contrato"])}')
-            print(f'ContratoOriginal do trabalhado_mes_passado \n{type(trabalhado_mes_passado.loc[0, "ContratoOriginal"])}')
+            # ====================================================================================
+            # 2. A NOVA LÓGICA DE ALOCAÇÃO DE CONTRATOS (Passos 1 a 5)
+            # ====================================================================================
+            
+            # (Passo 5) CPF Consignado: Sem ponto, traço e zero à esquerda
+            front_ben_filter['CPF Consignado'] = front_ben_filter['CPF'].replace(r'\D', '', regex=True).str.lstrip('0')
+            trabalhado_mes_passado['CPF Consignado'] = trabalhado_mes_passado['CPF Consignado'].fillna('').astype(str).replace(r'\D', '', regex=True).str.lstrip('0')
 
-            print(f'São iguais? {front_trabalhado.loc[0, "Contrato"] == trabalhado_mes_passado.loc[0, "ContratoOriginal"]}')'''
+            # Agrupar novos contratos do Front por CPF
+            novos_por_cpf = front_ben_filter.groupby('CPF Consignado').agg({
+                'Contrato': lambda x: list(x.astype(str)),
+                'Matricula': 'first',      # MASP
+                'CPF': 'first',            # CPF Ponto e Traço
+                'Nome': 'first',           # Nome Consignado
+                'Data Cessão': 'first'     # DATA
+            }).reset_index()
 
-            nova_coluna_data = trabalhado_mes_passado['DATA'].tolist() + front_ben_filter['Data Cessão'].tolist()
-            nova_coluna_masp = trabalhado_mes_passado['MASP'].tolist() + front_ben_filter['Matricula'].tolist()
-            nova_coluna_CPF = trabalhado_mes_passado['CPF Consignado'].tolist() + front_ben_filter[
-                'CPF'].tolist()
-            nova_coluna_nome = trabalhado_mes_passado['Nome Consignado'].tolist() + front_ben_filter[
-                'Nome'].tolist()
-            nova_coluna_contrato_original = trabalhado_mes_passado['ContratoOriginal'].tolist() + front_ben_filter[
-                'Contrato'].tolist()
-            nova_planilha_data = pd.DataFrame(nova_coluna_data, columns=['DATA'])
+            # Identificar as colunas de "Contrato {i}" que já existem
+            cols_contrato_existentes = [col for col in trabalhado_mes_passado.columns if str(col).startswith('Contrato ') and col != 'Contrato original']
+            
+            # Se por acaso não existir nenhuma, cria a primeira
+            if not cols_contrato_existentes:
+                trabalhado_mes_passado['Contrato 1'] = np.nan
+                cols_contrato_existentes = ['Contrato 1']
 
-            outras_colunas_data = trabalhado_mes_passado.drop(columns=['DATA'])
+            # (Passo 1) Isolar os CPFs que já estão presentes
+            cpfs_existentes = trabalhado_mes_passado['CPF Consignado'].unique()
+            novas_linhas = []
 
-            nova_planilha_data.reset_index(drop=True, inplace=True)
-            outras_colunas_data.reset_index(drop=True, inplace=True)
+            for _, row in novos_por_cpf.iterrows():
+                cpf = row['CPF Consignado']
+                lista_contratos_novos = row['Contrato']
 
-            trabalhado_mes_passado = pd.concat(
-                [nova_planilha_data, outras_colunas_data.reindex(nova_planilha_data.index)], axis=1)
+                # (Passo 2) Para CPFs já presentes: Alocar na horizontal
+                if cpf in cpfs_existentes:
+                    idx = trabalhado_mes_passado.index[trabalhado_mes_passado['CPF Consignado'] == cpf].tolist()[0]
 
-            trabalhado_mes_passado['MASP'] = nova_coluna_masp
+                    for novo_contrato in lista_contratos_novos:
+                        # Verifica se o contrato já está em alguma coluna para evitar duplicidade
+                        contratos_atuais = trabalhado_mes_passado.loc[idx, cols_contrato_existentes].astype(str).values
+                        if novo_contrato in contratos_atuais:
+                            continue
+                        
+                        alocado = False
+                        # Busca a primeira coluna "Contrato {i}" que está vazia
+                        for col in cols_contrato_existentes:
+                            valor_celula = str(trabalhado_mes_passado.at[idx, col]).strip().lower()
+                            if pd.isna(trabalhado_mes_passado.at[idx, col]) or valor_celula in ['', 'nan', 'none']:
+                                trabalhado_mes_passado.at[idx, col] = novo_contrato
+                                alocado = True
+                                break
+                        
+                        # Se todas estiverem ocupadas, cria uma nova (Ex: Contrato 3)
+                        if not alocado:
+                            prox_num = len(cols_contrato_existentes) + 1
+                            nova_col = f'Contrato {prox_num}'
+                            trabalhado_mes_passado[nova_col] = np.nan
+                            cols_contrato_existentes.append(nova_col)
+                            trabalhado_mes_passado.at[idx, nova_col] = novo_contrato
+                
+                # (Passos 3, 4 e 5) Para CPFs NOVOS: Criar a linha com mapeamento completo
+                else:
+                    nova_linha = {
+                        'MASP': row['Matricula'],
+                        'CPF Consignado': cpf,
+                        'CPF Ponto e Traço': row['CPF'],
+                        'Nome Consignado': row['Nome'],
+                        'DATA': row['Data Cessão'],
+                        'ContratoOriginal': lista_contratos_novos[0] # Pega o primeiro como original
+                    }
 
-            trabalhado_mes_passado['CPF Consignado'] = nova_coluna_CPF
-            trabalhado_mes_passado['CPF Consignado'] = trabalhado_mes_passado['CPF Consignado'].replace(r"\D", "", regex=True)
+                    # Insere os contratos começando da coluna "Contrato 1"
+                    for i, contrato in enumerate(lista_contratos_novos):
+                        num_col = i + 1
+                        nome_col = f'Contrato {num_col}'
+                        if nome_col not in cols_contrato_existentes:
+                            trabalhado_mes_passado[nome_col] = np.nan
+                            cols_contrato_existentes.append(nome_col)
+                        nova_linha[nome_col] = contrato
 
-            trabalhado_mes_passado['Nome Consignado'] = nova_coluna_nome
+                    novas_linhas.append(nova_linha)
 
-            trabalhado_mes_passado['ContratoOriginal'] = nova_coluna_contrato_original
+            # Junta os novos CPFs ao DataFrame principal
+            if novas_linhas:
+                df_novos = pd.DataFrame(novas_linhas)
+                trabalhado_mes_passado = pd.concat([trabalhado_mes_passado, df_novos], ignore_index=True)
 
-            # FAZER NOVAMENTO O TRATAMENTO DO TRABALHADO COMO SE FOSSE UM NOVO EM FOLHA
-            trabalhado_mes_atual = trabalhado_mes_passado[['DATA', 'MASP', 'CPF Consignado', 'Nome Consignado', 'ContratoOriginal']].copy()
+            # ====================================================================================
+            # 3. TRATAMENTO FINAL (Mantendo as colunas dinâmicas)
+            # ====================================================================================
+            
+            # Aqui estava o grande risco do código antigo: Se você fizesse um recuo apenas nas colunas 
+            # fixas, apagaria as colunas Contrato 1, Contrato 2 recém criadas.
+            colunas_para_manter = ['DATA', 'MASP', 'CPF Consignado', 'Nome Consignado', 'ContratoOriginal'] + cols_contrato_existentes
+            
+            # Se algum CPF novo trouxe 'CPF Ponto e Traço', adiciona na lista para não perder
+            if 'CPF Ponto e Traço' in trabalhado_mes_passado.columns:
+                colunas_para_manter.append('CPF Ponto e Traço')
 
-            trabalhado_mes_atual['CPF Consignado'] = trabalhado_mes_atual['CPF Consignado'].fillna(0).astype(int)
+            trabalhado_mes_atual = trabalhado_mes_passado[colunas_para_manter].copy()
+
+            # Recria a coluna de CPF Ponto e Traço no padrão exato da sua classe (Caso algum antigo estivesse sem)
+            trabalhado_mes_atual['CPF Consignado'] = trabalhado_mes_atual['CPF Consignado'].replace('', '0').fillna(0).astype(int)
             cpf_tratado = trabalhado_mes_atual['CPF Consignado'].astype(str).str.zfill(11).str.replace(
                 r'(\d{3})(\d{3})(\d{3})(\d{2})', r'\1.\2.\3-\4', regex=True)
 
+            # Garante que a coluna entra na posição 4 e sobrescreve a temporária caso já exista
+            if 'CPF Ponto e Traço' in trabalhado_mes_atual.columns:
+                trabalhado_mes_atual = trabalhado_mes_atual.drop(columns=['CPF Ponto e Traço'])
             trabalhado_mes_atual.insert(4, 'CPF Ponto e Traço', cpf_tratado, True)
 
         # Vamos separar só os NaN
@@ -1219,7 +1301,44 @@ class SERHA:
 
             except IndexError:
                 # Caso de segurança, se a coluna for "Contrato" sem número
-                print(f"Aviso: A coluna '{col}' não segue o padrão 'Contrato [número]'."),
+                print(f"Aviso: A coluna '{col}' não segue o padrão 'Contrato [número]'.")
+        
+
+        # CRIA UM ARQUIVO EXCLUSIVO DE FRONT SEM OS CONTRATOS USADOS EM CARTÃO
+        if self.rubrica == 'CARTÃO':
+            # Vamos criar a coluna no front original chamado "CONTRATO USADO" e vamos inserir nela somente os contratos presente em cada coluna de Contrato {i} de trabalhado_mes_atual_tratado
+            front_usado = self.front_final_consig
+            front_usado.insert(1, 'CONTRATO USADO', '')
+            
+            # 1. Isolar as colunas de contrato (conforme você já mapeou)
+            colunas_contrato = trabalhado_mes_atual_tratado.filter(regex=r'^Contrato \d+$').columns
+
+            # 2. Achatar todas as colunas em uma única matriz (array) e pegar apenas os valores únicos
+            todos_contratos = trabalhado_mes_atual_tratado[colunas_contrato].values.ravel()
+            contratos_unicos = pd.unique(todos_contratos)
+
+            # 3. Remover valores nulos (NaN) que possam ter vindo de células vazias
+            contratos_unicos = contratos_unicos[~pd.isnull(contratos_unicos)]
+
+            # 4. TRAVA DE SEGURANÇA: Converter para string para evitar erros de tipagem no cruzamento
+            # (Evita que o Pandas ache que 12345 numérico é diferente de '12345' texto)
+            lista_contratos_limpa = [str(c).replace('.0', '').strip() for c in contratos_unicos]
+
+            # Supondo que a coluna principal de busca no front_usado se chame 'Contrato'
+            front_usado_temp_str = front_usado['Contrato'].astype(str).str.replace('.0', '', regex=False).str.strip()
+
+            # 5. Preencher a coluna "CONTRATO USADO"
+            # Essa linha copia o número do contrato para a nova coluna SE ele existir na nossa lista de usados.
+            # Caso contrário, deixará como NaN (vazio).
+            mask_usados = front_usado_temp_str.isin(lista_contratos_limpa)
+
+            front_usado.loc[mask_usados, 'CONTRATO USADO'] = front_usado.loc[mask_usados, 'Contrato']
+            front_usado['CONTRATO USADO'] = front_usado['CONTRATO USADO'].fillna('')
+
+            front_cartao_sem_contratos_usados_final = front_usado[front_usado['CONTRATO USADO'] == '']
+            front_cartao_contratos_usados_final = front_usado[front_usado['CONTRATO USADO'] != '']
+            front_cartao_sem_contratos_usados_final.to_excel(os.path.join(self.caminho, f"FRONT SEM CONTRATOS USADOS DE CARTAO {self.convenio} {self.rubrica}.xlsx"), index=False)
+            front_cartao_contratos_usados_final.to_excel(os.path.join(self.caminho, f"FRONT COM CONTRATOS USADOS DE CARTAO {self.convenio} {self.rubrica}.xlsx"), index=False)
 
         # Orbitall
 
