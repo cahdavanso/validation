@@ -3,6 +3,7 @@ import re
 from thefuzz import fuzz
 import os
 from python.ESTEIRAS import load_esteiras
+from python.funcoes_comuns import FRONT_TRABALHADO
 import itertools
 
 # front_bruto = r"F:\Dados\NOVA ESTRUTURA\LANÇAMENTO CARTÕES\TRABALHANDO\2026\05 - Maio\GUIDO ROBOTO\PAIUI\relatorio_2026-04-16_13-19-47_parte_1.csv"
@@ -82,7 +83,7 @@ class ANDAMENTO:
         return front_unif
     
     def andamento_func_front(self):
-        front = self.unifica_front_funcao()
+        front = self.front
         # 1. VALIDAÇÃO E TRATAMENTO INICIAL
         if self.andamento is None:
             return front
@@ -139,10 +140,15 @@ class ANDAMENTO:
         # andam_file_simples = self.extrair_contratos_simples(andam_referencia_prazos, front_para_processar)
             
         
+        front_trabalhado_funcao = FRONT_TRABALHADO(front=front, convenio=self.convenio)
+
+        front_trabalhado_puro = front_trabalhado_funcao.tratamento_front()
 
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
-        andam_file = self.processar_contrato_simples(andam_referencia_prazos, front_para_processar)
-        andam_file = self.associar_por_soma_andamento(andam_file, front_para_processar)
+        andam_file = self.processar_contrato_simples(andam_referencia_prazos, front_para_processar, tolerancia_bool=False, trabalhados_so_ativos=front_trabalhado_puro)
+        andam_file = self.processar_contrato_simples(andam_file, front_para_processar, tolerancia_bool=True, trabalhados_so_ativos=None)
+        andam_file = self.associar_por_soma_andamento(andam_file, front_para_processar, tolerancia_bool=False, front_so_ativos=front_trabalhado_puro)
+        andam_file = self.associar_por_soma_andamento(andam_file, front_para_processar, tolerancia_bool=True, front_so_ativos=None)
         andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
         andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar, 'Contrato de Andamento')
         print(f'Andamento depois de extrair_contratos\n{andam_file.columns}')
@@ -192,9 +198,37 @@ class ANDAMENTO:
 
         return front_final
     
-    def processar_contrato_simples(self, df_andamento, df_front):
+    def processar_contrato_simples(self, df_andamento, df_front_puro, tolerancia_bool=False, trabalhados_so_ativos=None):
         # 1. Limpeza e Padronização
         df_andamento = df_andamento.drop_duplicates(subset=['Código']).copy()
+
+        if trabalhados_so_ativos is not None:
+            df_front = trabalhados_so_ativos
+        else:
+            df_front = df_front_puro
+
+        # Puxa a lista de esteiras prioritárias
+        esteiras_lancar = self.esteiras
+
+        # 1. Ordem de prioridade para o Tipo de Operação
+        ordem = {
+            'CARTAO BENEFICIO': 1,
+            'EMPRESTIMO': 2
+        }
+        df_front['prioridade_operacao'] = df_front['Tipo Operacao'].map(ordem).fillna(3)
+
+        # 2. NOVA LÓGICA: Ordem de prioridade para a Esteira
+        # Se a 'Esteira' atual estiver dentro da lista 'esteiras_lancar', recebe 1. Senão, recebe 2.
+        import numpy as np # Garanta que o numpy está importado no topo do seu script
+        df_front['prioridade_esteira'] = np.where(df_front['Esteira'].isin(esteiras_lancar), 1, 2)
+
+        # 3. Ordenação combinada
+        # Ele vai ordenar primeiro pelo Tipo Operação, depois vai puxar as esteiras_lancar para cima, 
+        # e por último vai desempatar por ordem alfabética da própria coluna 'Esteira'
+        df_front = df_front.sort_values(
+            by=['prioridade_operacao', 'prioridade_esteira', 'Esteira'],
+            ascending=[True, True, True]
+        )
         
         for df in [df_andamento, df_front]:
             df['CPF'] = df['CPF'].astype(str).str.strip()
@@ -232,7 +266,7 @@ class ANDAMENTO:
 
         # 5. Busca com Tolerância (0.10)
         vazios = df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")].copy()
-        tolerancia = 0.10
+        tolerancia = 0.10 if tolerancia_bool else 0
 
         for idx, row in vazios.iterrows():
             cpf_busca = row['CPF']
@@ -262,28 +296,44 @@ class ANDAMENTO:
         return df_andamento.fillna('')
     
     # Cole esta função dentro da sua classe, junto com as outras
-    def associar_por_soma_andamento(self, df_andamento: pd.DataFrame, df_front: pd.DataFrame, tolerancia: float = 1.00, max_linhas_somadas: int = 5) -> pd.DataFrame:
+    def associar_por_soma_andamento(self, df_andamento: pd.DataFrame, df_front_puro: pd.DataFrame,  max_linhas_somadas: int = 5, tolerancia_bool=False, front_so_ativos=None) -> pd.DataFrame:
         """
         Busca no Front os contratos que podem ser formados pela SOMA de múltiplas linhas 
         no df_andamento para o mesmo CPF.
         """
         print("\nIniciando busca por soma de parcelas (Subset Sum)...")
 
-        # Ordena por prioridade o Tipo Operacao
-        # Criar ordem de prioridade
+        tolerancia = 1 if tolerancia_bool else 0
+
+        if front_so_ativos is not None:
+            df_front = df_front_puro
+        else:
+            df_front = front_so_ativos
+
+        # Puxa a lista de esteiras prioritárias
+        esteiras_lancar = self.esteiras
+
+        # 1. Ordem de prioridade para o Tipo de Operação
         ordem = {
             'CARTAO BENEFICIO': 1,
             'EMPRESTIMO': 2
         }
+        df_front['prioridade_operacao'] = df_front['Tipo Operacao'].map(ordem).fillna(3)
 
-        df_front['prioridade'] = df_front['Tipo Operacao'].map(ordem).fillna(3)
+        # 2. NOVA LÓGICA: Ordem de prioridade para a Esteira
+        # Se a 'Esteira' atual estiver dentro da lista 'esteiras_lancar', recebe 1. Senão, recebe 2.
+        import numpy as np # Garanta que o numpy está importado no topo do seu script
+        df_front['prioridade_esteira'] = np.where(df_front['Esteira'].isin(esteiras_lancar), 1, 2)
 
+        # 3. Ordenação combinada
+        # Ele vai ordenar primeiro pelo Tipo Operação, depois vai puxar as esteiras_lancar para cima, 
+        # e por último vai desempatar por ordem alfabética da própria coluna 'Esteira'
         df_front = df_front.sort_values(
-            by=['prioridade', 'Esteira'],
-            ascending=[True, True]
+            by=['prioridade_operacao', 'prioridade_esteira', 'Esteira'],
+            ascending=[True, True, True]
         )
 
-        df_front = df_front.drop(columns='prioridade')
+        # df_front = df_front.drop(columns='prioridade')
         
         # Garante que as colunas alvo existem e preenche os vazios do Andamento
         col_destino = 'Contrato de Andamento'
@@ -361,7 +411,7 @@ class ANDAMENTO:
                             match_count += 1
                             encontrou_match = True
                             
-                            print(f"Match por soma encontrado: CPF {cpf} | Contrato {contrato_alvo} | Front: R${valor_alvo} | Somas: {[item[1] for item in combinacao]}")
+                            # print(f"Match por soma encontrado: CPF {cpf} | Contrato {contrato_alvo} | Front: R${valor_alvo} | Somas: {[item[1] for item in combinacao]}")
                             break # Para a busca de combinações para ESTE contrato
                             
                     if encontrou_match:

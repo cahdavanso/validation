@@ -257,8 +257,8 @@ class TRATA_CONTRATOS:
                 return re.sub(r'[^0-9a-zA-Z]', '', texto)  # Mantém letras e números
 
             # --- Passo 1: Criar o mapa de referência (sem alterações) ---
-            df_limpo['Contrato'] = df_limpo['Contrato'].astype(str).str.strip()
-            df_limpo['CCB'] = df_limpo['CCB'].astype(str).str.strip()
+            df_limpo['Contrato'] = df_limpo['Contrato'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+            df_limpo['CCB'] = df_limpo['CCB'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
             print("Criando mapa de referência CPF -> Contratos...")
             
             cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict()
@@ -510,7 +510,11 @@ class TRATA_CONTRATOS:
         data_averbados_bruto['CPF_temp'] = data_averbados_bruto[self.nome_coluna_cpf].astype(str).str.replace(r'[.-]', '', regex=True).str.strip().str.zfill(11)
         front = self.front
         front['CPF'] = front['CPF'].astype(str).str.replace(r'[.-]', '', regex=True).str.strip().str.zfill(11)
-        front['Contrato'] = front['Contrato'].astype(str).str.strip()
+        
+        # Como era: front['Contrato'] = front['Contrato'].astype(str).str.strip()
+        
+        # Como deve ficar:
+        front['Contrato'] = front['Contrato'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
         # teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
         teste_conciliacao = self.conciliacao_tratada
@@ -628,4 +632,49 @@ class TRATA_CONTRATOS:
 
         # Feito a verificação dos contratos, esteiras e valores do front, o restante será tratado em cada módulo
         return data_averbados
+    
 
+class FRONT_TRABALHADO:
+    def __init__ (self, front, convenio):
+        self.tratamento_front_preliminar = front
+        self.convenio = convenio
+
+    def tratamento_front(self):
+        front_consig = self.tratamento_front_preliminar
+        print(f'Comprimento de front_consig: {len(front_consig)}')
+
+
+        if front_consig is False:
+            print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
+            return False
+
+        # Separar o que não é cartão de crédito da conciliação
+        # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
+
+        # Pegar o que é CARTAO DE CREDITO do front
+        # condicao_cartao = ['CARTAO DE CREDITO']
+        # front_consig_cartao_front = front_consig_nao_cartao[front_consig_nao_cartao['Tipo Operacao'].isin(condicao_cartao)].copy()
+        # Faz concat dos dois dataframes
+        front_consig_trabalhado = front_consig.copy()
+
+        # ------------------------------- TIRA O QUE É ADIANTAMENTO SALARIAL ------------------------------- #
+        if self.convenio not in ['PREF. PALMAS']:
+            front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False)].copy()
+        print(f'Comprimento de front_consig_trabalhado: {len(front_consig_trabalhado)}')
+
+        # ---------------------------------- TIRAR AÇÃO JUDICIAL DO FRONT ---------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Acao Judicial'] != 'SIM'].copy()
+        print(f'Comprimento de front_consig_trabalhado pós ação judicial: {len(front_consig_trabalhado)}')
+
+        # ---------------------------------- TIRAR ÓBITO DO FRONT ---------------------------------- #
+        # front_consig_trabalhado = front_consig_trabalhado.loc[front_consig_trabalhado['Obito'] != 1].copy()
+
+        # --------------------------------------- TIRA BANCO OUTROS ----------------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Consignataria'].str.contains('OUTROS|FUTURO', na=False)].copy()
+        print(f'Comprimento de front_consig_trabalhado pós outros bancos: {len(front_consig_trabalhado)}')
+
+        # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
+        front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado|CANCELADO', na=False)].copy()
+        print(f'Comprimento de front_consig_trabalhado pós liquidados: {len(front_consig_trabalhado)}')
+
+        return front_consig_trabalhado

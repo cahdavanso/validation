@@ -6,7 +6,6 @@ from thefuzz import fuzz
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.Andamento import ANDAMENTO
-from python.Andamento_provisorio import ANDAMENTO_PROVISORIO
 from python.TrataOrbital import TRATA_ORBITAL
 from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
 import os
@@ -80,6 +79,26 @@ class CONSIGFACIL:
         
         # 5. Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
+
+        # 1. Instancia a classe
+        unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
+            front=self.front, 
+            convenio=self.convenio, 
+            funcao=self.funcao, 
+            andamento_funcao=self.andamento_funcao
+        )
+
+        # 2. Chama a primeira unificação (Função pura)
+        # Isso vai processar e preencher com verificar_ccb=True
+        front_meio_caminho = unificador.unifica_front_funcao()
+
+        # 3. Atualiza o front interno da classe para que a segunda unificação use os dados já combinados
+        unificador.front = front_meio_caminho
+
+        # 4. Chama a segunda unificação (Andamento Função)
+        # Isso vai processar a segunda base com verificar_ccb=False
+        self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
+        self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio}.xlsx"), index=False)
 
         # --- GATILHO: Inicia a lógica original automaticamente ---
         logging.info("Iniciando lógica original do Consigfacil...")
@@ -174,8 +193,7 @@ class CONSIGFACIL:
         return front_unif
 
     def tratamento_front_preliminar(self):
-        unificacao_front_funcao = UNIFICA_FRONT_FUNC_ESTEIRAS(self.front, self.convenio, self.funcao, self.andamento_funcao)
-        front_consig = unificacao_front_funcao.unifica_front_funcao()
+        front_consig = self.front_final_consig
         # front_consig = self.unifica_front_funcao()
 
         conciliacao = self.conciliacao.copy()
@@ -284,7 +302,7 @@ class CONSIGFACIL:
         front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS|FUTURO', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO ERRADO'
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
-        objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.andamento, self.funcao) # if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
+        objeto_andamento = ANDAMENTO(self.front_final_consig, self.convenio, self.caminho, self.andamento, self.funcao) # if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
         front_com_prazo = objeto_andamento.andamento_func_front()
         front_consig_validado_termino['PRAZO'] = front_consig_validado_termino['Contrato'].astype(str).map(front_com_prazo.set_index('Contrato')['PRAZO'])
         front_consig_validado_termino['Contrato'] = front_consig_validado_termino['Contrato'].astype('int64')
