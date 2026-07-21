@@ -12,6 +12,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         self.convenio = convenio
         self.funcao = funcao
         self.andamento_funcao = andamento_funcao
+        self.condicoes_1 = load_esteiras()
 
         if self.andamento_funcao is not None:
             print('Tipo da coluna Valor da Parcela antes da conversão:\n', self.andamento_funcao['Valor da Parcela'].dtype)
@@ -175,6 +176,21 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         # 1. Transforma em INTEGRADO apenas se o parâmetro permitir (chamada pela self.funcao)
         if atualizar_esteira_integrado:
             front.loc[front['Contrato'].isin(contratos_base) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE')), 'Esteira'] = 'INTEGRADO'
+
+        if 'Descrição da Atividade' in base_adicional.columns:
+            # 1. Cria o "dicionário" de busca {Proposta: Descrição da Atividade}
+            mapa_andamento_pendente = base_adicional.set_index('Proposta')['Descrição da Atividade']
+            
+            # 2. Puxa as descrições da base adicional para os contratos do front
+            novos_status = front['Contrato'].map(mapa_andamento_pendente)
+            
+            # 3. Cria a máscara (filtro) com as suas regras:
+            # - O contrato tem que estar na base adicional (novos_status.notna() garante isso)
+            # - A esteira atual tem que conter ANDAMENTO ou PENDENTE (na=False evita erros com linhas vazias)
+            mask_atualizar = novos_status.notna() & front['Esteira'].str.contains('ANDAMENTO|PENDENTE', na=False)
+            
+            # 4. Substitui a Esteira atual pelo Novo Status apenas nas linhas filtradas pela máscara
+            front.loc[mask_atualizar, 'Esteira'] = novos_status[mask_atualizar]
 
         # 2. Remove da base adicional os contratos que já existem no Front
         base_tratada = base_adicional[~base_adicional[coluna_contrato].isin(contrato_front)].copy()

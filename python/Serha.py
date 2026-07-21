@@ -456,6 +456,8 @@ class SERHA:
         if front_consig is False:
             print("tratamento_funcao: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
+        
+        front_consig = front_consig[~front_consig['OBS'].str.contains('NÃO LANÇAR - ESTEIRA NÃO PERMITIDA')].copy()
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
         if self.rubrica == 'CARTÃO':
@@ -603,59 +605,52 @@ class SERHA:
         '''
 
         print('Iniciando o tratamento dos contratos da averbação...')
-        averbados_puro = averbados_df[['DATA', 'MASP', 'CPF Consignado', 'CPF Ponto e Traço',
-                                       'Nome Consignado', 'ContratoOriginal']].copy()
+        
+        # --- CORREÇÃO 1: PRESERVAR AS COLUNAS DINÂMICAS ---
+        colunas_base = ['DATA', 'MASP', 'CPF Consignado', 'CPF Ponto e Traço', 'Nome Consignado', 'ContratoOriginal']
+        # Pega as colunas base + qualquer coluna que comece com "Contrato " (como Contrato 1, Contrato 2)
+        colunas_para_manter = [col for col in averbados_df.columns if col in colunas_base or str(col).startswith('Contrato ')]
+        
+        averbados_puro = averbados_df[colunas_para_manter].copy()
+        # --------------------------------------------------
 
         front_feito = front_base.copy()
-
         front_feito['Contrato'] = front_feito['Contrato'].astype(str)
-
-        # print(f'Contratos da averbação:\n{averbados_puro['Contrato']}')
 
         def extrair_contratos_com_referencia(df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:
             print("Iniciando o processo de extração de contratos...")
 
-            # Função de limpeza (pode ser definida aqui ou fora)
             def limpar_contrato(texto: str) -> str:
                 if not isinstance(texto, str):
                     texto = str(texto)
                     texto = texto.replace(" ", "")
-                return re.sub(r'[^0-9a-zA-Z]', '', texto)  # Mantém letras e números
+                return re.sub(r'[^0-9a-zA-Z]', '', texto)
 
-            # --- Passo 1: Criar o mapa de referência (sem alterações) ---
             df_limpo['Contrato'] = df_limpo['Contrato'].astype(str).str.strip()
             df_limpo['CCB'] = df_limpo['CCB'].astype(str).str.strip()
             print("Criando mapa de referência CPF -> Contratos...")
             cpf_contratos = df_limpo.groupby('CPF')['Contrato'].apply(list).to_dict()
             cpf_operacao = df_limpo.groupby('CPF')['CCB'].apply(list).to_dict()
-            # print(f'Mapa contratos:\n{cpf_contratos}')
 
-            # --- Passo 2: Definir a função que será aplicada em cada linha (LÓGICA ALTERADA) ---
             def encontrar_contratos_na_linha(row):
                 cpf = row['CPF Ponto e Traço']
                 texto_contratos_sujo = str(row['ContratoOriginal'])
 
-                # Garante que as listas existam
                 contratos_validos_para_cpf = cpf_contratos.get(cpf, [])
                 operacoes_validas_para_cpf = cpf_operacao.get(cpf, [])
 
                 if not contratos_validos_para_cpf:
                     return []
 
-                # 1. DIVIDIR: Mesma lógica de limpeza
                 partes_sujas = [p for p in re.split(r'[/,;\s]+', texto_contratos_sujo) if p]
 
                 if not partes_sujas:
                     return []
 
                 encontrados_nesta_linha = []
-
-                # Listas de controle
                 contratos_disponiveis = list(contratos_validos_para_cpf)
                 operacoes_disponiveis = list(operacoes_validas_para_cpf)
 
-                # --- MUDANÇA: LIMIAR ALTO ---
-                # Agora podemos exigir quase perfeição porque mudamos o método de comparação
                 LIMIAR_SEGURO = 90
 
                 for parte in partes_sujas:
@@ -664,14 +659,11 @@ class SERHA:
                         continue
 
                     melhor_match_para_parte = None
-                    maior_score_ponderado = 0  # Mudamos o nome para deixar claro
+                    maior_score_ponderado = 0
 
                     for i, contrato_valido in enumerate(contratos_disponiveis):
-
-                        # Pega a operação correspondente (se existir)
                         operacao_valida = operacoes_disponiveis[i] if i < len(operacoes_disponiveis) else ""
 
-                        # Vamos testar os dois alvos separadamente
                         alvos = [
                             (contrato_valido, 'CONTRATO'),
                             (operacao_valida, 'OPERACAO')
@@ -683,7 +675,6 @@ class SERHA:
                             alvo_limpo = limpar_contrato(alvo_texto)
                             score_base = 0
 
-                            # --- SUA LÓGICA NOVA (PERFEITA) ---
                             if alvo_limpo.endswith(parte_limpa):
                                 score_base = 100
                             else:
@@ -694,58 +685,83 @@ class SERHA:
                                     score_ratio = fuzz.ratio(parte_limpa, alvo_limpo)
                                     if score_ratio >= LIMIAR_SEGURO:
                                         score_base = score_ratio
-                            # ----------------------------------
 
-                            # --- A CORREÇÃO DO DESEMPATE AQUI ---
-
-                            # Se o score for bom (acima do limiar), calculamos o "Score Ponderado"
                             if score_base >= LIMIAR_SEGURO:
-
                                 score_final = score_base
-
-                                # Damos um BÔNUS se o match foi no CONTRATO
-                                # Isso garante que 100 (Contrato) ganhe de 100 (Operação)
                                 if tipo_alvo == 'CONTRATO':
-                                    score_final += 1  # O "pulo do gato"
+                                    score_final += 1
 
-                                # Verifica se esse é o melhor match desta parte suja até agora
                                 if score_final > maior_score_ponderado:
                                     maior_score_ponderado = score_final
-                                    # IMPORTANTE: Independente se o match foi na operação ou contrato,
-                                    # nós SEMPRE salvamos o 'contrato_valido' como o resultado.
                                     melhor_match_para_parte = contrato_valido
 
                     if melhor_match_para_parte:
                         encontrados_nesta_linha.append(melhor_match_para_parte)
-
-                        # Remove das listas para não duplicar na mesma linha
                         if melhor_match_para_parte in contratos_disponiveis:
                             index_remocao = contratos_disponiveis.index(melhor_match_para_parte)
                             del contratos_disponiveis[index_remocao]
 
                 return encontrados_nesta_linha
 
-            # --- Passo 3: Aplicar a função e criar as novas colunas (sem alterações) ---
             print("Analisando a Planilha A e extraindo os contratos...")
             df_sujo['ContratoOriginal'] = df_sujo['ContratoOriginal'].astype(str).str.replace('nan', '')
 
-
             lista_de_contratos_encontrados = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
 
-            df_contratos_novos = pd.DataFrame(lista_de_contratos_encontrados.tolist(), index=df_sujo.index)
-            df_contratos_novos.columns = [f'Contrato {i + 1}' for i in df_contratos_novos.columns]
+            # =======================================================================
+            # NOVA TRAVA: PADRONIZAÇÃO DE TIPAGEM PARA STRING 
+            # (Evita que o Pandas ache que 55170 número é diferente de '55170' texto)
+            # =======================================================================
+            colunas_existentes_iniciais = [col for col in df_sujo.columns if str(col).startswith('Contrato ') and col != 'ContratoOriginal']
+            for col in colunas_existentes_iniciais:
+                # 1. Transforma em string e limpa '.0' de possíveis números float
+                df_sujo[col] = df_sujo[col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                # 2. Transforma "lixos" de texto (que antes eram valores nulos) em células vazias reais
+                df_sujo[col] = df_sujo[col].replace(['nan', 'None', '<NA>', '<na>'], '')
 
-            df_resultado = pd.concat([df_sujo, df_contratos_novos], axis=1)
+
+            # --- CORREÇÃO 2: MESCLAR OS CONTRATOS ENCONTRADOS NAS COLUNAS EXISTENTES ---
+            for idx, novos_contratos in zip(df_sujo.index, lista_de_contratos_encontrados):
+                if not novos_contratos:
+                    continue # Se a lógica fuzzy não achou nada novo, segue a vida
+                
+                # Atualiza as colunas existentes a cada iteração (pois podemos criar novas)
+                colunas_existentes = [col for col in df_sujo.columns if str(col).startswith('Contrato ') and col != 'ContratoOriginal']
+                
+                for contrato_encontrado in novos_contratos:
+                    # Trava contra duplicidade: agora a comparação entre textos é 100% perfeita
+                    if colunas_existentes and contrato_encontrado in df_sujo.loc[idx, colunas_existentes].values:
+                        continue
+                    
+                    alocado = False
+                    # Procura a primeira vaga vazia nas colunas existentes
+                    for col in colunas_existentes:
+                        valor_celula = str(df_sujo.at[idx, col]).strip().lower()
+                        # Agora checamos também por string vazia ('')
+                        if pd.isna(df_sujo.at[idx, col]) or valor_celula in ['', 'nan', 'none', '<na>']:
+                            df_sujo.at[idx, col] = contrato_encontrado
+                            alocado = True
+                            break
+                    
+                    # Se todas estiverem ocupadas (ou se não existia nenhuma), cria a próxima
+                    if not alocado:
+                        prox_num = len(colunas_existentes) + 1
+                        nova_col = f'Contrato {prox_num}'
+                        # Já criamos a coluna preenchida com vazio ('') para manter a tipagem de texto
+                        df_sujo[nova_col] = ''
+                        colunas_existentes.append(nova_col) 
+                        df_sujo.at[idx, nova_col] = contrato_encontrado
 
             print("Processo concluído com sucesso!")
+            
             try:
-                df_resultado.to_excel(os.path.join(self.caminho, f"Relatório Averbados Contratos tratados {self.convenio} {self.rubrica}.xlsx"), index=False)
+                # Agora salvamos o df_sujo, que contém a mescla de tudo
+                df_sujo.to_excel(os.path.join(self.caminho, f"Relatório Averbados Contratos tratados {self.convenio} {self.rubrica}.xlsx"), index=False)
             except Exception as e:
                 print(f"DEBUG: ERRO AO SALVAR RELATÓRIO AVERBADO CONTRATOS TRATADOS: {e}")
-            return df_resultado
+            
+            return df_sujo
 
-
-        # Chama a função principal com os dataframes preparados
         df_codigos_tratados = extrair_contratos_com_referencia(averbados_puro, front_feito)
         return df_codigos_tratados
     
@@ -1137,6 +1153,31 @@ class SERHA:
             cpfs_existentes = trabalhado_mes_passado['CPF Consignado'].unique()
             novas_linhas = []
 
+            # --- INÍCIO DO DEBUG ---
+            cpf_alvo = '88365247615'      # Coloque o CPF do cliente (apenas números)
+            contrato_alvo = '302517263'   # Coloque o número do contrato exato
+
+            print(f"--- INVESTIGANDO CONTRATO {contrato_alvo} ---")
+
+            # 1. O contrato sobreviveu ao filtro de "Cartão"?
+            passou_no_filtro = front_ben_filter['Contrato'].astype(str).str.contains(contrato_alvo).any()
+            print(f"1. Passou no filtro (não estava na lista de bloqueio)? {passou_no_filtro}")
+
+            if passou_no_filtro:
+                # 2. Como o Pandas está enxergando o CPF no Front vs no Trabalhado?
+                cpf_no_front = front_ben_filter.loc[front_ben_filter['Contrato'].astype(str).str.contains(contrato_alvo), 'CPF Consignado'].values[0]
+                
+                print(f"2. CPF no Front Filtrado: '{cpf_no_front}' (Tamanho: {len(str(cpf_no_front))})")
+                print(f"3. CPF alvo existe na base antiga? {cpf_alvo in cpfs_existentes}")
+                
+                # 3. Se os CPFs batem, o código achou que o contrato já estava preenchido?
+                if cpf_alvo in cpfs_existentes:
+                    idx_alvo = trabalhado_mes_passado.index[trabalhado_mes_passado['CPF Consignado'] == cpf_alvo].tolist()[0]
+                    contratos_atuais_alvo = trabalhado_mes_passado.loc[idx_alvo, cols_contrato_existentes].astype(str).values
+                    print(f"4. Contratos que o Pandas achou nessa linha: {contratos_atuais_alvo}")
+                    print(f"5. Ele achou que o contrato já existia? {contrato_alvo in contratos_atuais_alvo}")
+            # --- FIM DO DEBUG ---
+
             for _, row in novos_por_cpf.iterrows():
                 cpf = row['CPF Consignado']
                 lista_contratos_novos = row['Contrato']
@@ -1158,15 +1199,22 @@ class SERHA:
                             if pd.isna(trabalhado_mes_passado.at[idx, col]) or valor_celula in ['', 'nan', 'none']:
                                 trabalhado_mes_passado.at[idx, col] = novo_contrato
                                 alocado = True
+                                # A ARMADILHA:
+                                if novo_contrato == '302517263':
+                                    print(f"BINGO! Contrato {novo_contrato} foi escrito na coluna '{col}' (Índice da linha: {idx})")
+                                    
                                 break
                         
-                        # Se todas estiverem ocupadas, cria uma nova (Ex: Contrato 3)
+                        # Se todas estiverem ocupadas, cria uma nova
                         if not alocado:
                             prox_num = len(cols_contrato_existentes) + 1
                             nova_col = f'Contrato {prox_num}'
                             trabalhado_mes_passado[nova_col] = np.nan
                             cols_contrato_existentes.append(nova_col)
                             trabalhado_mes_passado.at[idx, nova_col] = novo_contrato
+                            
+                            if novo_contrato == '302517263':
+                                print(f"BINGO! Criamos a coluna '{nova_col}' e o contrato {novo_contrato} foi escrito nela! (Índice da linha: {idx})")
                 
                 # (Passos 3, 4 e 5) Para CPFs NOVOS: Criar a linha com mapeamento completo
                 else:
@@ -1221,7 +1269,20 @@ class SERHA:
 
         # Vamos separar só os NaN
         # Aqui é feito o tratamento dos números de contrato
+        # --- TESTE DE SOBREVIVÊNCIA ---
+        filtro_antes = trabalhado_mes_atual['Contrato 2'].astype(str).str.contains('302517263')
+        print(f"1. O contrato existe ANTES do trata_contratos? {filtro_antes.any()}")
+
+        # A linha que já existe no seu código:
         trabalhado_mes_atual_tratado = self.trata_contratos(trabalhado_mes_atual, front)
+
+        # Verificação logo após a função:
+        if 'Contrato 2' in trabalhado_mes_atual_tratado.columns:
+            filtro_depois = trabalhado_mes_atual_tratado['Contrato 2'].astype(str).str.contains('302517263')
+            print(f"2. O contrato existe DEPOIS do trata_contratos? {filtro_depois.any()}")
+        else:
+            print("2. A coluna 'Contrato 2' SUMIU depois do trata_contratos!")
+        # ------------------------------
 
         # Só por precaução transforma os Codigos Credbase de novo em string
         front_tudo['Contrato'] = front_tudo['Contrato'].astype(str)
