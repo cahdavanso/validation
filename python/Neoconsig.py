@@ -175,7 +175,9 @@ class NEOCONSIG:
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci)
         
         # Adiciona só as esteiras que podem ser lançadas
-        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(self.condicoes_1)].copy()
+        front_consig_esteiras = front_consig.copy()
+
+        front_consig_esteiras.loc[~front_consig_esteiras['Esteira'].isin(self.condicoes_1), 'OBS'] = 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'
 
         # 1. Altera o tipo da coluna para 'object' para que ela possa receber textos sem quebrar
         front_consig_esteiras['Tipo Conciliação'] = front_consig_esteiras['Tipo Conciliação'].astype(object)
@@ -308,6 +310,8 @@ class NEOCONSIG:
         if front_consig is False:
             print("tratamento_front: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
+        
+        front_consig = front_consig[front_consig['Esteira'].isin(self.condicoes_1)].copy()
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
         front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)].copy()

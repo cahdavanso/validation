@@ -3,6 +3,7 @@ import zipfile
 import numpy as np
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
+from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
 import re
 from thefuzz import fuzz
 from datetime import datetime
@@ -13,7 +14,7 @@ import openpyxl
 
 
 class ZETRA:
-    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, funcao=None, historico=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, andamento_funcao, funcao=None, historico=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
 
         self.caminho = caminho
 
@@ -35,6 +36,8 @@ class ZETRA:
 
         self.historico = historico if historico is not None else None
 
+        self.andamento_funcao = andamento_funcao
+
         conciliacao_falso = pd.DataFrame(
             columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25', 'RECEBIDO GERAL'])
         conciliacao_falso['CONTRATOS'] = 123
@@ -53,6 +56,25 @@ class ZETRA:
         self.orbital = orbital if orbital is not None else None
 
         self.condicoes_1 = load_esteiras()
+
+        # 1. Instancia a classe
+        unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
+            front=self.front, 
+            convenio=self.convenio, 
+            funcao=self.funcao, 
+            andamento_funcao=self.andamento_funcao
+        )
+
+        # 2. Chama a primeira unificação (Função pura)
+        # Isso vai processar e preencher com verificar_ccb=True
+        front_meio_caminho = unificador.unifica_front_funcao()
+
+        # 3. Atualiza o front interno da classe para que a segunda unificação use os dados já combinados
+        unificador.front = front_meio_caminho
+
+        # 4. Chama a segunda unificação (Andamento Função)
+        # Isso vai processar a segunda base com verificar_ccb=False
+        self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
 
         # --- TABELA DE CONFIGURAÇÃO (Baseada na sua imagem) ---
         # 0 significa que o campo não existe ou deve ser ignorado
@@ -265,7 +287,7 @@ class ZETRA:
         return front_unif
 
     def tratamento_front_preliminar(self):
-        front_consig = self.unifica_front_funcao()
+        front_consig = self.front_final_consig
 
         if "OBS" in front_consig.columns:
             front_consig = front_consig.drop(columns=['OBS'])
@@ -308,8 +330,9 @@ class ZETRA:
             front_consig.insert(19, 'Tipo Conciliação', tipo_conci)
         front_consig['Tipo Conciliação'] = front_consig['Tipo Conciliação'].astype(str)
 
-        # Adiciona só as esteiras que podem ser lançadas
-        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(self.condicoes_1)].copy()
+        front_consig_esteiras = front_consig.copy()
+
+        front_consig_esteiras.loc[~front_consig_esteiras['Esteira'].isin(self.condicoes_1), 'OBS'] = 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'
 
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
@@ -410,7 +433,7 @@ class ZETRA:
             print(f'Convenio está em PREF. BELO HORIZONTE? {self.convenio in ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']}')
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         else:
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO', na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
 
         # Marcar liquidados em StatusContrato
         front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
@@ -429,51 +452,6 @@ class ZETRA:
         # --------------------------------------------------------------------------------------------- #
         return front_consig_validado_termino
         
-
-    def trata_conciliacao(self):
-        print(f'trata_conciliacao foi acionado')
-        conciliacao_tratado = self.conciliacao
-        # Converte para lista de colunas
-
-
-        # Encontra o índice da primeira ocorrência de "CONTRATO" e altera
-        # print(f'primeira coluna de conciliação {conciliacao_tratado.columns[0]}')
-        conciliacao_tratado.rename(columns={conciliacao_tratado.columns[0]: 'CONTRATOS'}, inplace=True)
-
-        cols = list(conciliacao_tratado.columns)
-        conciliacao_tratado.columns = cols
-        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype(str)
-        conciliacao_tratado = conciliacao_tratado.drop_duplicates(subset='CONTRATOS')
-        # Atualiza o DataFrame com novos nomes
-
-
-        conciliacao_tratado = conciliacao_tratado
-
-        # 1. Selecionar colunas com "d8" no nome e somar por linha (axis=1)
-        # "D8 " precisa ficar com espaço para que a coluna "CONVENIO D8" não atrapalhe na hora da soma
-        colunas_d8 = conciliacao_tratado.filter(like='D8 ').columns
-        colunas_inad = conciliacao_tratado.filter(like='INAD ').columns
-        for col in colunas_d8:
-            tipos = conciliacao_tratado[col].apply(type).value_counts()
-            '''print(f"Coluna {col}:")
-            print(tipos)
-            print()'''
-        conciliacao_tratado[colunas_d8] = conciliacao_tratado[colunas_d8].apply(pd.to_numeric, errors='coerce')
-        conciliacao_tratado[colunas_inad] = conciliacao_tratado[colunas_inad].apply(pd.to_numeric, errors='coerce')
-
-        soma_d8 = conciliacao_tratado.filter(like='D8 ').sum(axis=1)
-        inad_d8 = conciliacao_tratado.filter(like='INAD ').sum(axis=1)
-
-        super_saldo = soma_d8 + inad_d8
-
-        # 2. Calcular prestação * prazo
-        prestacao_vezes_prazo = conciliacao_tratado['PRESTAÇÃO'] * conciliacao_tratado['PRAZO']
-
-        # 3. Calcular o resultado final
-        conciliacao_tratado['Pago'] = super_saldo - prestacao_vezes_prazo
-        conciliacao_tratado['Saldo'] = conciliacao_tratado['Pago'] + conciliacao_tratado['RECEBIDO GERAL']
-
-        return conciliacao_tratado
 
     def validacao_termino(self, front):
         print(f'validacao_termino acionado')
@@ -994,6 +972,8 @@ class ZETRA:
     def tratamento_front(self, averbado_trabalhado):
         print('tratamento_front foi acionado.')
         front_consig = self.tratamento_front_preliminar()
+
+        front_consig = front_consig[front_consig['Esteira'].isin(self.condicoes_1)].copy()
 
         if front_consig is False:
             print("tratamento_front: O tratamento preliminar do front falhou. Verifique os erros anteriores.")

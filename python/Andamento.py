@@ -5,6 +5,7 @@ import os
 from python.ESTEIRAS import load_esteiras
 from python.funcoes_comuns import FRONT_TRABALHADO
 import itertools
+import numpy as np
 
 # front_bruto = r"F:\Dados\NOVA ESTRUTURA\LANÇAMENTO CARTÕES\TRABALHANDO\2026\05 - Maio\GUIDO ROBOTO\PAIUI\relatorio_2026-04-16_13-19-47_parte_1.csv"
 # andamento_bruto = r"F:\Dados\NOVA ESTRUTURA\LANÇAMENTO CARTÕES\TRABALHANDO\2026\05 - Maio\GUIDO ROBOTO\PAIUI\ANDAMENTO UNIFICADO GOV PI.csv"
@@ -105,8 +106,36 @@ class ANDAMENTO:
         # --------------------------
 
         # Ordenar as esteiras de A-Z
-        front_para_processar = front_para_processar.sort_values(by=['Esteira'], ascending=[True])
+        # Puxa a lista de esteiras prioritárias
+        esteiras_lancar = self.esteiras
+
+        # 1. Ordem de prioridade para o Tipo de Operação
+        ordem = {
+            'CARTAO BENEFICIO': 1,
+            'EMPRESTIMO': 2
+        }
+        front_para_processar['prioridade_operacao'] = front_para_processar['Tipo Operacao'].map(ordem).fillna(3)
+
+        # 2. NOVA LÓGICA: Ordem de prioridade para a Esteira
+        # Se a 'Esteira' atual estiver dentro da lista 'esteiras_lancar', recebe 1. Senão, recebe 2.
+
+        front_para_processar['prioridade_esteira'] = np.where(front_para_processar['Esteira'].isin(esteiras_lancar), 1, 2)
+
+        # 3. Ordenação combinada
+        # Ele vai ordenar primeiro pelo Tipo Operação, depois vai puxar as esteiras_lancar para cima, 
+        # e por último vai desempatar por ordem alfabética da própria coluna 'Esteira'
+        front_para_processar = front_para_processar.sort_values(
+            by=['prioridade_esteira', 'prioridade_operacao', 'Esteira'],
+            ascending=[True, True, True]
+        )
         
+        front_para_processar.to_excel(os.path.join(self.caminho, f'FRONT DO ANDAMENTO COM AS PRIORIDADES {self.convenio}.xlsx'), index=False)
+
+        if front_para_processar['Prestacao'].dtype != 'float64':
+            front_para_processar['Prestacao'] = front_para_processar['Prestacao'].astype(str).str.replace('.', '').str.replace(',', '.')
+            front_para_processar['Prestacao'] = pd.to_numeric(front_para_processar['Prestacao'], errors='coerce')
+            
+
 
         # Criamos cópias para evitar SettingWithCopyWarning
         # self.andamento = self.andamento[self.andamento['Prazo Total'] != 1].copy()
@@ -140,7 +169,7 @@ class ANDAMENTO:
         # andam_file_simples = self.extrair_contratos_simples(andam_referencia_prazos, front_para_processar)
             
         
-        front_trabalhado_funcao = FRONT_TRABALHADO(front=front, convenio=self.convenio)
+        front_trabalhado_funcao = FRONT_TRABALHADO(front=front, convenio=self.convenio, caminho=self.caminho)
 
         front_trabalhado_puro = front_trabalhado_funcao.tratamento_front()
 
@@ -207,28 +236,6 @@ class ANDAMENTO:
         else:
             df_front = df_front_puro
 
-        # Puxa a lista de esteiras prioritárias
-        esteiras_lancar = self.esteiras
-
-        # 1. Ordem de prioridade para o Tipo de Operação
-        ordem = {
-            'CARTAO BENEFICIO': 1,
-            'EMPRESTIMO': 2
-        }
-        df_front['prioridade_operacao'] = df_front['Tipo Operacao'].map(ordem).fillna(3)
-
-        # 2. NOVA LÓGICA: Ordem de prioridade para a Esteira
-        # Se a 'Esteira' atual estiver dentro da lista 'esteiras_lancar', recebe 1. Senão, recebe 2.
-        import numpy as np # Garanta que o numpy está importado no topo do seu script
-        df_front['prioridade_esteira'] = np.where(df_front['Esteira'].isin(esteiras_lancar), 1, 2)
-
-        # 3. Ordenação combinada
-        # Ele vai ordenar primeiro pelo Tipo Operação, depois vai puxar as esteiras_lancar para cima, 
-        # e por último vai desempatar por ordem alfabética da própria coluna 'Esteira'
-        df_front = df_front.sort_values(
-            by=['prioridade_operacao', 'prioridade_esteira', 'Esteira'],
-            ascending=[True, True, True]
-        )
         
         for df in [df_andamento, df_front]:
             df['CPF'] = df['CPF'].astype(str).str.strip()
@@ -263,6 +270,13 @@ class ANDAMENTO:
             if cpf not in dict_front:
                 dict_front[cpf] = []
             dict_front[cpf].append((row['Contrato'], row['Prestacao']))
+
+        # INJEÇÃO DE DEBUG AQUI:
+        cpf_teste = '505.029.723-00' # Coloque o CPF que está puxando errado
+        if cpf_teste in dict_front:
+            print(f"DEBUG - Opções para o CPF {cpf_teste}: {dict_front[cpf_teste]}")
+        else:
+            print(f"DEBUG - CPF {cpf_teste} não tem contratos disponíveis no Front.")
 
         # 5. Busca com Tolerância (0.10)
         vazios = df_andamento[df_andamento[col_destino].isna() | (df_andamento[col_destino] == "")].copy()
@@ -306,32 +320,9 @@ class ANDAMENTO:
         tolerancia = 1 if tolerancia_bool else 0
 
         if front_so_ativos is not None:
-            df_front = df_front_puro
-        else:
             df_front = front_so_ativos
-
-        # Puxa a lista de esteiras prioritárias
-        esteiras_lancar = self.esteiras
-
-        # 1. Ordem de prioridade para o Tipo de Operação
-        ordem = {
-            'CARTAO BENEFICIO': 1,
-            'EMPRESTIMO': 2
-        }
-        df_front['prioridade_operacao'] = df_front['Tipo Operacao'].map(ordem).fillna(3)
-
-        # 2. NOVA LÓGICA: Ordem de prioridade para a Esteira
-        # Se a 'Esteira' atual estiver dentro da lista 'esteiras_lancar', recebe 1. Senão, recebe 2.
-        import numpy as np # Garanta que o numpy está importado no topo do seu script
-        df_front['prioridade_esteira'] = np.where(df_front['Esteira'].isin(esteiras_lancar), 1, 2)
-
-        # 3. Ordenação combinada
-        # Ele vai ordenar primeiro pelo Tipo Operação, depois vai puxar as esteiras_lancar para cima, 
-        # e por último vai desempatar por ordem alfabética da própria coluna 'Esteira'
-        df_front = df_front.sort_values(
-            by=['prioridade_operacao', 'prioridade_esteira', 'Esteira'],
-            ascending=[True, True, True]
-        )
+        else:
+            df_front = df_front_puro
 
         # df_front = df_front.drop(columns='prioridade')
         
@@ -357,12 +348,18 @@ class ANDAMENTO:
 
         match_count = 0
 
+        '''if df_front['Prestacao'].dtype != 'float64':
+                df_front['Prestacao'] = df_front['Prestacao'].astype(str).str.replace('.', '').str.replace(',', '.')
+                df_front['Prestacao'] = pd.to_numeric(df_front['Prestacao'], errors='coerce')'''
+            
+
         for cpf in cpfs_com_pendencia:
             # 1. Pega os contratos do Front disponíveis para este CPF
             front_cpf = df_front[
                 (df_front['CPF'] == cpf) & 
                 (~df_front['Contrato'].astype(str).isin(contratos_ja_usados))
             ]
+
             
             if front_cpf.empty:
                 continue
@@ -477,22 +474,6 @@ class ANDAMENTO:
 
         print('PROCESSAR CONTRATOS OTIMIZADO ATIVADO')
 
-        # Ordena por prioridade o Tipo Operacao
-        # Criar ordem de prioridade
-        ordem = {
-            'CARTAO BENEFICIO': 1,
-            'EMPRESTIMO': 2
-        }
-
-        df_front['prioridade'] = df_front['Tipo Operacao'].map(ordem).fillna(3)
-
-        df_front = df_front.sort_values(
-            by=['prioridade', 'Esteira'],
-            ascending=[True, True]
-        )
-
-        df_front = df_front.drop(columns='prioridade')
-        # print(f'Ordem dos contratos no cpf 065.999.663-49:\n{df_front["Contrato"][df_front['CPF'] == '065.999.663-49']}')
 
         for df in [df_andamento, df_front]:
             # Garante colunas numéricas

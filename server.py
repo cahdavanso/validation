@@ -543,6 +543,7 @@ async def validar_planilhas(
             convenio=convenio,
             front=front_df,
             funcao=funcao_df,
+            andamento_funcao=xao_df,
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
             extra_judicial=extra_judicial_df,

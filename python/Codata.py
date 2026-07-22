@@ -240,14 +240,9 @@ class CODATA:
 
 
         # ------------------------------------ ESTEIRAS REMOVIDAS ------------------------------------- #
-        front_consig_esteiras_removidas = front_consig[~front_consig['Esteira'].isin(esteiras_permitidas)].copy()
-        try:
-            front_consig_esteiras_removidas.to_excel(os.path.join(self.caminho, f'FRONT ESTEIRAS REMOVIDAS GOV PB {self.consignataria}.xlsx'), index=False)
-        except Exception as e:
-            print(f"Erro ao salvar o arquivo de esteiras removidas: {e}")
+        front_consig_esteiras = front_consig.copy()
 
-        # Adiciona só as esteiras que podem ser lançadas
-        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+        front_consig_esteiras.loc[~front_consig_esteiras['Esteira'].isin(esteiras_permitidas), 'OBS'] = 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'
 
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
@@ -321,6 +316,9 @@ class CODATA:
     def tratamento_front(self):
         front_consig = self.tratamento_front_preliminar()
         # print(f'Colunas de front_consig: {front_consig.columns}')
+
+        esteiras_permitidas = load_esteiras()
+        front_consig= front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
 
         if front_consig is False:
             print("tratamento_front: O tratamento preliminar do front falhou. Verifique os erros anteriores.")

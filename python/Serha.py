@@ -178,24 +178,6 @@ class SERHA:
         return front_unif
 
     def tratamento_front_preliminar(self):
-        # 1. Instancia a classe
-        unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
-            front=self.front_unificados, 
-            convenio=self.convenio, 
-            funcao=self.funcao, 
-            andamento_funcao=self.andamento_funcao
-        )
-
-        # 2. Chama a primeira unificação (Função pura)
-        # Isso vai processar e preencher com verificar_ccb=True
-        front_meio_caminho = unificador.unifica_front_funcao()
-
-        # 3. Atualiza o front interno da classe para que a segunda unificação use os dados já combinados
-        unificador.front = front_meio_caminho
-
-        # 4. Chama a segunda unificação (Andamento Função)
-        # Isso vai processar a segunda base com verificar_ccb=False
-        front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
 
         # O seu resultado final
         front_consig = self.front_final_consig

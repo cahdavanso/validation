@@ -635,9 +635,11 @@ class TRATA_CONTRATOS:
     
 
 class FRONT_TRABALHADO:
-    def __init__ (self, front, convenio):
+    def __init__ (self, front, convenio, caminho):
         self.tratamento_front_preliminar = front
         self.convenio = convenio
+        self.caminho = caminho
+        self.condicoes_1 = load_esteiras()
 
     def tratamento_front(self):
         front_consig = self.tratamento_front_preliminar
@@ -647,6 +649,9 @@ class FRONT_TRABALHADO:
         if front_consig is False:
             print("DEBUG: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
+        
+        # Adiciona só as esteiras que podem ser lançadas
+        front_consig = front_consig[front_consig['Esteira'].isin(self.condicoes_1)].copy()
 
         # Separar o que não é cartão de crédito da conciliação
         # front_consig_nao_cartao = front_consig[~front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito', na=False)].copy()
@@ -675,6 +680,17 @@ class FRONT_TRABALHADO:
 
         # ----------------------------------------- TIRA LIQUIDADOS ----------------------------------------- #
         front_consig_trabalhado = front_consig_trabalhado[~front_consig_trabalhado['Status'].str.contains('Liquidado|CANCELADO', na=False)].copy()
-        print(f'Comprimento de front_consig_trabalhado pós liquidados: {len(front_consig_trabalhado)}')
+        print(f'Comprimento de front_consig_trabalhado pós liquidados: {len(front_consig_trabalhado)}\n')
+
+        print(f'Contratos em 505.029.723-00:\n{front_consig_trabalhado.loc[front_consig_trabalhado['CPF'] == '505.029.723-00', 'Contrato']}\n')
+
+        print('DEBUG: Esteiras finais do front trabalhado')
+        try:
+            front_consig_trabalhado.to_excel(
+                os.path.join(self.caminho, f"FRONT PARA ANDAMENTO {self.convenio}.xlsx"),
+                index=False, 
+            )
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR FRONT TRABALHADO: {e}")
 
         return front_consig_trabalhado
