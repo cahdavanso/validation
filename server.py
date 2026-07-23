@@ -19,6 +19,7 @@ from time import sleep
 import re
 from typing import List, Optional
 import uvicorn
+import shutil
 
 # Importa as classes de validação
 from python.Consigfacil import CONSIGFACIL 
@@ -391,7 +392,7 @@ async def validar_planilhas(
     
     # Define um caminho fixo no servidor (seguro para nuvem)
     # Removemos o "if output_path" porque o servidor não acessa o PC do usuário
-    PASTA_BASE = os.path.join(os.getcwd(), "output_data")
+    PASTA_BASE = os.path.join(os.getcwd(), "output_data_v2")
     
     # --- NOVA LÓGICA DE LIMPEZA ---
     if os.path.exists(PASTA_BASE):

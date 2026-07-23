@@ -8,6 +8,7 @@ from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.Andamento import ANDAMENTO
 from python.TrataOrbital import TRATA_ORBITAL
 from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
+from python.Tratador_Front_Base import TratadorFrontBase
 import os
 import logging
 import chardet
@@ -80,6 +81,9 @@ class CONSIGFACIL:
         # 5. Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
 
+        # Esteiras
+        self.esteiras_permitidas = load_esteiras()
+
         # 1. Instancia a classe
         unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
             front=self.front, 
@@ -98,11 +102,45 @@ class CONSIGFACIL:
         # 4. Chama a segunda unificação (Andamento Função)
         # Isso vai processar a segunda base com verificar_ccb=False
         self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
-        self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio}.xlsx"), index=False)
+        self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
 
         # --- GATILHO: Inicia a lógica original automaticamente ---
         logging.info("Iniciando lógica original do Consigfacil...")
-        self.front_trabalhado = self.tratamento_front()
+
+
+        # forma experimental de fazer o front trabalhado
+        # =======================================================================================================================================================
+        # =======================================================================================================================================================
+        instancia_front = TratadorFrontBase(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio, caminho=self.caminho, orbital=self.orbital,
+                                            condicoes_1=self.esteiras_permitidas, kobraki=self.kobraki, tacs=self.tacs, extra_judicial=self.extra_judicial)
+
+        # Criação do Front Semi Trabalhado
+        self.front_semi_trabalhado = instancia_front.tratamento_front_preliminar_base()
+        print(f"DEBUG: Tentando salvar FRONT SEMI TRABALHADO em: {self.caminho}")
+        try:
+            self.front_semi_trabalhado.to_excel(os.path.join(self.caminho, f"FRONT SEMI TRABALHADO {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
+            print("DEBUG: Arquivo salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR: {e}")
+
+        # Criação do Front Semi Trabalhado
+        self.front_trabalhado_sem_obs = self.front_semi_trabalhado[self.front_semi_trabalhado["OBS"].isin([pd.NA, np.nan, ''])]
+
+        self.front_trabalhado = self.verificacao_peculio_front(self.front_trabalhado_sem_obs)
+
+        print('DEBUG: Esteiras finais do front trabalhado')
+        try:
+            self.front_trabalhado.to_excel(
+                os.path.join(self.caminho, f"FRONT TRABALHADO {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"),
+                index=False, 
+            )
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR FRONT TRABALHADO: {e}")
+
+        # =======================================================================================================================================================
+        # =======================================================================================================================================================
+        
+        # self.front_trabalhado = self.tratamento_front()
         self.averbados_func()
 
 
@@ -207,9 +245,6 @@ class CONSIGFACIL:
         front_consig.insert(24, 'OBS', '', True)
 
         print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
-
-        # Esteiras
-        esteiras_permitidas = load_esteiras()
         
         
         # Vamos renomear a primeira coluna da conciliação
@@ -234,7 +269,7 @@ class CONSIGFACIL:
         # Adiciona só as esteiras que podem ser lançadas
         front_consig_esteiras = front_consig.copy()
 
-        front_consig_esteiras.loc[~front_consig_esteiras['Esteira'].isin(esteiras_permitidas), 'OBS'] = 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'
+        front_consig_esteiras.loc[~front_consig_esteiras['Esteira'].isin(self.esteiras_permitidas), 'OBS'] = 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'
 
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
@@ -333,7 +368,7 @@ class CONSIGFACIL:
         '''else:
             front_consig_validado_termino = front_consig_validado_termino[(front_consig_validado_termino['PRAZO'].isna()) | (front_consig_validado_termino['PRAZO'] == '') | (front_consig_validado_termino['PRAZO'] == 1) | (front_consig_validado_termino['PRAZO'] == 0)]'''
         
-        front_com_prazo.to_excel(fr'{self.caminho}\FRONT COM PRAZOS PORQUE EU SOU MUITO BURRO.xlsx', index=False)
+        front_com_prazo.to_excel(fr'{self.caminho}\FRONT COM PRAZOS PORQUE EU SOU MUITO BURRO.xlsx {datetime.now().strftime("%m-%Y")}', index=False)
         # front_consig_validado_termino.to_excel(fr'{self.caminho}\front_consig_validado_termino.xlsx', index=False)
         front_consig_validado_termino.insert(22, 'Novo Tipo Operacao', 'CARTAO DE CREDITO')
         # print(f'O que está escrito na linha com contrato 512377\n{front_consig_validado_termino.loc[front_consig_validado_termino['Contrato'] == 512377, 'Novo Tipo Operacao']}')
@@ -348,7 +383,7 @@ class CONSIGFACIL:
         # Dentro do seu validador (ex: python/Consigfacil.py)
         print(f"DEBUG: Tentando salvar FRONT SEMI TRABALHADO em: {self.caminho}")
         try:
-            front_consig_validado_termino.to_excel(os.path.join(self.caminho, f"FRONT SEMI TRABALHADO {self.convenio}.xlsx"), index=False)
+            front_consig_validado_termino.to_excel(os.path.join(self.caminho, f"FRONT SEMI TRABALHADO {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
             print("DEBUG: Arquivo salvo com sucesso!")
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR: {e}")
@@ -418,7 +453,7 @@ class CONSIGFACIL:
         print('DEBUG: Esteiras finais do front trabalhado')
         try:
             front_consig_trabalhado.to_excel(
-                os.path.join(self.caminho, f"FRONT TRABALHADO {self.convenio}.xlsx"),
+                os.path.join(self.caminho, f"FRONT TRABALHADO {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"),
                 index=False, 
             )
         except Exception as e:
@@ -440,7 +475,7 @@ class CONSIGFACIL:
 
         print('DEBUG: Colunas da conciliação tratada')
         try:
-            conciliacao_tratado.to_excel(os.path.join(self.caminho, f"Conciliacao_TESTE.xlsx"), index=False)
+            conciliacao_tratado.to_excel(os.path.join(self.caminho, f"Conciliacao_TESTE {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR Conciliacao_TESTE.xlsx: {e}")
 
@@ -484,7 +519,7 @@ class CONSIGFACIL:
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
 
         try:
-            orbital_final.to_excel(os.path.join(self.caminho, f"ORBITAL TRABALHADO {self.convenio}.xlsx"), index=False)
+            orbital_final.to_excel(os.path.join(self.caminho, f"ORBITAL TRABALHADO {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
             print(f"DEBUG: ORBITAL TRABALHADO {self.convenio} salvo com sucesso!")
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR ORBITAL TRABALHADO {self.convenio}: {e}")
@@ -512,7 +547,9 @@ class CONSIGFACIL:
         front['CONTSE GERAL'] = front['CPF'].map(contagem_geral).fillna(0)
 
         # 3. Garantir que 'Valor a lançar' é numérico para poder somar
-        front['Valor a lançar'] = pd.to_numeric(front['Valor a lançar'], errors='coerce').fillna(0)
+        if front['Valor a lançar'].dtype != "float64":
+            front['Valor a lançar'] = front['Valor a lançar'].astype(str).str.replace(".", "").str.replace(",", ".")
+            front['Valor a lançar'] = pd.to_numeric(front['Valor a lançar'], errors='coerce').fillna(0)
 
         # 4. Aplicar a lógica com parênteses corretos
         # Se HP > 0 E Geral > 0 E HP == Geral (Ou seja, ele é 100% HP nos averbados)
@@ -732,12 +769,12 @@ class CONSIGFACIL:
         
 
         try:
-            front_preliminar.to_excel(os.path.join(self.caminho, f'FRONT COM MATRICULAS TRATADAS {self.convenio}.xlsx'), index=False)
+            front_preliminar.to_excel(os.path.join(self.caminho, f'FRONT COM MATRICULAS TRATADAS {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx'), index=False)
         except Exception as e:
             print(f'DEBUG: ERRO AO SALVAR FRONT COM MATRICULAS TRATADAS: {e}')
 
         print('DEBUG: Averbados após cálculo vetorizado:')
         try:
-            averbado_finalizado.to_excel(os.path.join(self.caminho, f"AVERBADO TRABALHADO {self.convenio}.xlsx"), index=False)
+            averbado_finalizado.to_excel(os.path.join(self.caminho, f"AVERBADO TRABALHADO {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR AVERBADOS TRABALHADO: {e}")

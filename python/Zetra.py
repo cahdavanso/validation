@@ -4,6 +4,7 @@ import numpy as np
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
+from python.TrataOrbital import TRATA_ORBITAL
 import re
 from thefuzz import fuzz
 from datetime import datetime
@@ -746,7 +747,8 @@ class ZETRA:
         data = self.unifica_historico_averb()
         front = self.tratamento_front_preliminar()
         consig = self.consignataria
-        orbital_tratado = self.orbital_tratado(self.orbital, front)
+        orbital_instancia = TRATA_ORBITAL(orbital=self.orbital, front=front, convenio=self.convenio, caminho=self.caminho)
+        orbital_tratado = orbital_instancia.orbital_tratado()
         convenio = self.convenio
 
         '''if self.convenio == 'GOV. PARANÁ':
@@ -1031,7 +1033,7 @@ class ZETRA:
         # --------------------------------------------------------------------------------------------------------------
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        if self.convenio in ['PREF. GOIÂNIA', 'PREF. DUQUE DE CAXIAS', 'PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']:
+        if self.convenio in ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']:
             front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)].copy()
         else:
             front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()

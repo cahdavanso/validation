@@ -105,6 +105,8 @@ class ANDAMENTO:
             return front
         # --------------------------
 
+        bancos_nao_lancar = ["OUTROS", "FUTURO"]
+
         # Ordenar as esteiras de A-Z
         # Puxa a lista de esteiras prioritárias
         esteiras_lancar = self.esteiras
@@ -121,12 +123,15 @@ class ANDAMENTO:
 
         front_para_processar['prioridade_esteira'] = np.where(front_para_processar['Esteira'].isin(esteiras_lancar), 1, 2)
 
+        # 2.1 NOVA LÓGICA: Oridem de prioridade por Consignataria
+        front_para_processar['prioridade_banco'] = np.where(front_para_processar['Consignataria'].isin(bancos_nao_lancar), 2, 1)
+
         # 3. Ordenação combinada
-        # Ele vai ordenar primeiro pelo Tipo Operação, depois vai puxar as esteiras_lancar para cima, 
+        # Ele vai ordenar primeiro pela Esteira, depois vai puxar as prioridade_operacao para cima, 
         # e por último vai desempatar por ordem alfabética da própria coluna 'Esteira'
         front_para_processar = front_para_processar.sort_values(
-            by=['prioridade_esteira', 'prioridade_operacao', 'Esteira'],
-            ascending=[True, True, True]
+            by=['prioridade_esteira', 'prioridade_banco', 'prioridade_operacao', 'Esteira'],
+            ascending=[True, True, True, True]
         )
         
         front_para_processar.to_excel(os.path.join(self.caminho, f'FRONT DO ANDAMENTO COM AS PRIORIDADES {self.convenio}.xlsx'), index=False)
@@ -169,7 +174,7 @@ class ANDAMENTO:
         # andam_file_simples = self.extrair_contratos_simples(andam_referencia_prazos, front_para_processar)
             
         
-        front_trabalhado_funcao = FRONT_TRABALHADO(front=front, convenio=self.convenio, caminho=self.caminho)
+        front_trabalhado_funcao = FRONT_TRABALHADO(front=front_para_processar, convenio=self.convenio, caminho=self.caminho)
 
         front_trabalhado_puro = front_trabalhado_funcao.tratamento_front()
 
@@ -199,6 +204,26 @@ class ANDAMENTO:
                     id_contrato = row.get(col)
                     if pd.notna(id_contrato):
                         contrato_para_prazo[str(id_contrato).strip()] = prazo
+
+        # =================================================================
+        # EXCEÇÃO MANUAL - Código 504130
+        # =================================================================
+        print("Aplicando exceção manual para o Código 504130...")
+        
+        # 1. Cria a máscara para encontrar a linha correta 
+        # (usamos .astype(str) por precaução caso a coluna esteja misturada)
+        mascara_excecao = andam_file['Código'].astype(str) == '504130'
+
+        # 2. Identifica automaticamente todas as colunas de Contrato Editado e Metodo
+        colunas_para_limpar = [col for col in andam_file.columns if str(col).startswith('Contrato Editado') or str(col).startswith('Metodo')]
+
+        # 3. Zera todas essas colunas apenas na linha da nossa máscara
+        andam_file.loc[mascara_excecao, colunas_para_limpar] = ''
+
+        # 4. Insere o contrato correto na primeira coluna (como STRING para evitar o bug do .0)
+        # Se a coluna 'Contrato Editado 1' não existir por algum motivo, isso também a criará
+        andam_file.loc[mascara_excecao, 'Contrato Editado 1'] = '471152'
+        # =================================================================
 
         # Aplica o mapeamento APENAS no que foi processado
         front_para_processar['PRAZO'] = front_para_processar['Contrato'].astype(str).str.strip().map(contrato_para_prazo)
