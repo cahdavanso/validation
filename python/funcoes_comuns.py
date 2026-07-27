@@ -31,7 +31,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
                                     'GOV. MINAS GERAIS - CBMMG': ['MG CBMMG', 'MG-CBMMG CC DG', 'MG CBMMG CB DG', 'MG-CBMMG CC'],
                                     'GOV. MINAS GERAIS - IPSEMG': ['GOV MG - IPSEMG', 'MG IPSEMG CC DG', 'MG IPSEMG CB DG'],
                                     'GOV. MINAS GERAIS - IPSM': ['GOV MG - IPSM', 'MG IPSM CC DG', 'MG IPSM CB DG'],
-                                    'GOV. MINAS GERAIS - PMMG': ['GOV MG - PMMG', 'MG - PMMG CC DG', 'MG PMMG CB DG', 'MG PMMG SEG', 'PMMG CB DG SEG', 'PMMG CC DG SEG', 'PMMG CC DG CPL', 'PMMG CB DG CPL'],
+                                    'GOV. MINAS GERAIS - PMMG': ['GOV MG - PMMG', 'MG - PMMG CC DG', 'MG PMMG CB DG', 'MG PMMG SEG', 'PMMG CB DG SEG', 'PMMG CC DG SEG', 'PMMG CC DG CPL', 'PMMG CB DG CPL', 'GOV MG PMMG'],
                                     'GOV. MINAS GERAIS - SEPLAG': ['MG SEPLAG', 'MG SEPLAG CC', 'MG SEPLAG CC DG', 'MG SEPLAG CB DG', 'SEPL CC DG SEG', 'SEPL CB DG SEG', 'SEPL CC DG CPL', 'SEPL CB DG CPL'],
                                     'GOV. PARANÁ': ['GOV PARANA', 'GOV PR CPL', 'GOV PR DG', 'GOV PARANA SEG', 'GOV PR DG SEG', 'GOV PR DG CPL'],
                                     'GOV. PARAÍBA': ['GOV PB INSPFEM', 'GOV PARAIBA BD', 'GOV PARAIBA', 'UNIV. EST PB', 'GOV PBPREV', 'PBPREV', 'UEPB BD', 'INSPFEM S FL'],

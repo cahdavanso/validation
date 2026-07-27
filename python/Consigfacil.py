@@ -111,7 +111,7 @@ class CONSIGFACIL:
         # forma experimental de fazer o front trabalhado
         # =======================================================================================================================================================
         # =======================================================================================================================================================
-        instancia_front = TratadorFrontBase(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio, caminho=self.caminho, orbital=self.orbital,
+        '''instancia_front = TratadorFrontBase(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio, caminho=self.caminho, orbital=self.orbital,
                                             condicoes_1=self.esteiras_permitidas, kobraki=self.kobraki, tacs=self.tacs, extra_judicial=self.extra_judicial)
 
         # Criação do Front Semi Trabalhado
@@ -135,12 +135,12 @@ class CONSIGFACIL:
                 index=False, 
             )
         except Exception as e:
-            print(f"DEBUG: ERRO AO SALVAR FRONT TRABALHADO: {e}")
+            print(f"DEBUG: ERRO AO SALVAR FRONT TRABALHADO: {e}")'''
 
         # =======================================================================================================================================================
         # =======================================================================================================================================================
         
-        # self.front_trabalhado = self.tratamento_front()
+        self.front_trabalhado = self.tratamento_front()
         self.averbados_func()
 
 
@@ -368,7 +368,7 @@ class CONSIGFACIL:
         '''else:
             front_consig_validado_termino = front_consig_validado_termino[(front_consig_validado_termino['PRAZO'].isna()) | (front_consig_validado_termino['PRAZO'] == '') | (front_consig_validado_termino['PRAZO'] == 1) | (front_consig_validado_termino['PRAZO'] == 0)]'''
         
-        front_com_prazo.to_excel(fr'{self.caminho}\FRONT COM PRAZOS PORQUE EU SOU MUITO BURRO.xlsx {datetime.now().strftime("%m-%Y")}', index=False)
+        front_com_prazo.to_excel(fr'{self.caminho}\FRONT COM PRAZOS PORQUE EU SOU MUITO BURRO {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
         # front_consig_validado_termino.to_excel(fr'{self.caminho}\front_consig_validado_termino.xlsx', index=False)
         front_consig_validado_termino.insert(22, 'Novo Tipo Operacao', 'CARTAO DE CREDITO')
         # print(f'O que está escrito na linha com contrato 512377\n{front_consig_validado_termino.loc[front_consig_validado_termino['Contrato'] == 512377, 'Novo Tipo Operacao']}')

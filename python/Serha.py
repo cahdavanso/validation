@@ -277,7 +277,8 @@ class SERHA:
         front_consig.insert(19, 'Tipo Conciliação', tipo_conci, True)
 
         # Adiciona só as esteiras que podem ser lançadas
-        front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+        # front_consig_esteiras = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+        front_consig_esteiras = front_consig.copy()
 
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
@@ -286,7 +287,7 @@ class SERHA:
         # --- ETAPA 1: Garantir que as chaves são do mesmo tipo (Texto) ---
         # Isso evita o erro clássico onde um lado é número e o outro é texto
         if orbital is not None:
-            front_consig['Contrato'] = front_consig['Contrato'].astype(str).str.strip()
+            front_consig_esteiras['Contrato'] = front_consig_esteiras['Contrato'].astype(str).str.strip()
             # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
 
             if "VALOR DESCONTO" in orbital.columns:
@@ -311,12 +312,12 @@ class SERHA:
             # Transforma a Orbital em uma série onde Índice = Contrato e Valor = Desconto
             mapa_orbital = orbital.set_index('CONTRATO')['VALID DESCONTO FINAL']
             # --- ETAPA 3: Definir quem vai ser alterado ---
-            filtro_esteira = front_consig['Esteira'] == '99 CARTAO UTILIZADO'
+            filtro_esteira = front_consig_esteiras['Esteira'] == '99 CARTAO UTILIZADO'
 
             # --- ETAPA 4: Fazer a mágica (Buscar valores) ---
             # .loc[filtro, coluna] -> Seleciona só as linhas da esteira certa
             # .map(mapa_orbital)   -> Faz o "PROCV" buscando no dicionário criado
-            valores_encontrados = front_consig.loc[filtro_esteira, 'Contrato'].map(mapa_orbital)
+            valores_encontrados = front_consig_esteiras.loc[filtro_esteira, 'Contrato'].map(mapa_orbital)
 
             # --- ETAPA 5: Tratar quem não foi achado ---
             # Se o contrato não existe na Orbital, o map devolve NaN.
@@ -325,9 +326,9 @@ class SERHA:
 
             # --- ETAPA 6: Gravar no DataFrame original ---
             valores_encontrados_str = valores_encontrados # .astype(str)
-            front_consig.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
+            front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_encontrados_str 
 
-        front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
+        # front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
 
 
         # ------------------------------------ ESTEIRAS REMOVIDAS ------------------------------------- #
@@ -345,7 +346,7 @@ class SERHA:
         # --------------------------------------------- ORBITAL --------------------------------------------- #
         # --- ETAPA 1: Garantir que as chaves são do mesmo tipo (Texto) ---
         # Isso evita o erro clássico onde um lado é número e o outro é texto
-        if orbital is not None:
+        """if orbital is not None:
             front_consig_esteiras['Contrato'] = front_consig_esteiras['Contrato'].astype(str).str.strip()
             # orbital.rename(columns={'id_contr_banco': 'Numero de Contrato'}, inplace=True)
 
@@ -382,7 +383,7 @@ class SERHA:
 
             # Atribui diretamente
             front_consig_esteiras.loc[filtro_esteira, 'Prestacao'] = valores_para_inserir
-            front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_para_inserir
+            front_consig_esteiras.loc[filtro_esteira, 'Valor a lançar'] = valores_para_inserir"""
 
 
         # ------------------------------- ALTERA O TIPO SE FOR SEPLAG --------------------------------- #
@@ -438,8 +439,11 @@ class SERHA:
         if front_consig is False:
             print("tratamento_funcao: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
+
+        esteiras_permitidas = self.esteiras_permitidas
+        # Adiciona só as esteiras que podem ser lançadas
+        front_consig = front_consig[front_consig['Esteira'].isin(esteiras_permitidas)].copy()
         
-        front_consig = front_consig[~front_consig['OBS'].str.contains('NÃO LANÇAR - ESTEIRA NÃO PERMITIDA')].copy()
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
         if self.rubrica == 'CARTÃO':
@@ -1252,8 +1256,8 @@ class SERHA:
         # Vamos separar só os NaN
         # Aqui é feito o tratamento dos números de contrato
         # --- TESTE DE SOBREVIVÊNCIA ---
-        filtro_antes = trabalhado_mes_atual['Contrato 2'].astype(str).str.contains('302517263')
-        print(f"1. O contrato existe ANTES do trata_contratos? {filtro_antes.any()}")
+        '''filtro_antes = trabalhado_mes_atual['Contrato 2'].astype(str).str.contains('302517263')
+        print(f"1. O contrato existe ANTES do trata_contratos? {filtro_antes.any()}")'''
 
         # A linha que já existe no seu código:
         trabalhado_mes_atual_tratado = self.trata_contratos(trabalhado_mes_atual, front)
