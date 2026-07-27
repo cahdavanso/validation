@@ -274,6 +274,8 @@ class NEOCONSIG:
             front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'CAPITAL CONSIG') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
         elif self.consignataria == 'CLICKBANK':
             front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'CLICKBANK') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
+        elif self.consignataria == 'BEM CARTÕES':
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'BEM CARTÕES') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
         else:
             print('Consignatária inválida.')
             return
@@ -351,6 +353,8 @@ class NEOCONSIG:
             front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CAPITAL CONSIG', na=False)].copy()
         elif self.consignataria == 'CLICKBANK':
             front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CLICKBANK', na=False)].copy()
+        elif self.consignataria == 'BEM CARTÕES':
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('BEM CARTÕES', na=False)].copy()
         else:
             print('Consignatária inválida.')
             return

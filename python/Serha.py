@@ -1,7 +1,7 @@
-from thefuzz import fuzz
 import pandas as pd
 import openpyxl
 import numpy as np
+from thefuzz import fuzz
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.TrataOrbital import TRATA_ORBITAL
@@ -550,7 +550,7 @@ class SERHA:
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
         # cred['Codigo_Credbase'] = cred['Codigo_Credbase'].astype(str)
 
-        conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
+        # conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('Int64')
 
         print('DEBUG: Colunas da conciliação tratada')
         try:
@@ -570,6 +570,7 @@ class SERHA:
             front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace(',', '.', regex=False)
         except AttributeError as e:
             print(f"Prestacao não está como string. Erro: {e}\n Valores em Prestacao: \n{front_copy['Prestacao']}\n")
+
 
         front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
 
@@ -622,6 +623,25 @@ class SERHA:
                 cpf = row['CPF Ponto e Traço']
                 texto_contratos_sujo = str(row['ContratoOriginal'])
 
+                # ==========================================
+                # INÍCIO DO BLOCO DE DEBUG 
+                # ==========================================
+                if str(cpf).startswith('420.365'):
+                    print(f"\n--- INICIANDO DEBUG PARA O CPF COMEÇADO EM 420.365.936-15 ---")
+                    print(f"1. Valor do CPF na Averbação: '{cpf}' (Tipo: {type(cpf).__name__})")
+                    print(f"2. Texto Sujo Extraído: '{texto_contratos_sujo}' (Tipo: {type(texto_contratos_sujo).__name__})")
+                    
+                    # Checagem direta no dicionário de contratos
+                    if cpf in cpf_contratos:
+                        print(f"3. SUCESSO: CPF encontrado no dicionário! Contratos disponíveis no Front: {cpf_contratos[cpf]}")
+                    else:
+                        print(f"3. FALHA: O CPF '{cpf}' não deu match com nenhuma chave em cpf_contratos.")
+                        # Mostra 3 exemplos de como os CPFs estão formatados no dicionário para comparação visual
+                        print(f"   -> Exemplo de formato esperado no dicionário: {list(cpf_contratos.keys())[:3]}")
+                # ==========================================
+                # FIM DO BLOCO DE DEBUG
+                # ==========================================
+
                 contratos_validos_para_cpf = cpf_contratos.get(cpf, [])
                 operacoes_validas_para_cpf = cpf_operacao.get(cpf, [])
 
@@ -644,6 +664,14 @@ class SERHA:
                     if not parte_limpa or len(parte_limpa) < 3:
                         continue
 
+                    # ==========================================
+                    # DEBUG: INÍCIO DA AVALIAÇÃO DA PARTE
+                    # ==========================================
+                    # is_debug_cpf = str(cpf).startswith('420.365')
+                    is_debug_cpf = False
+                    if is_debug_cpf:
+                        print(f"\n--- AVALIANDO A PARTE: '{parte_limpa}' ---")
+
                     melhor_match_para_parte = None
                     maior_score_ponderado = 0
 
@@ -660,32 +688,52 @@ class SERHA:
 
                             alvo_limpo = limpar_contrato(alvo_texto)
                             score_base = 0
+                            metodo = ""
 
                             if alvo_limpo.endswith(parte_limpa):
-                                score_base = 100
+                                score_base = 200
+                                metodo = "Endswith"
                             else:
                                 score_partial = fuzz.partial_ratio(parte_limpa, alvo_limpo)
                                 if score_partial >= LIMIAR_SEGURO:
                                     score_base = score_partial
+                                    metodo = "Partial Ratio"
                                 else:
                                     score_ratio = fuzz.ratio(parte_limpa, alvo_limpo)
                                     if score_ratio >= LIMIAR_SEGURO:
                                         score_base = score_ratio
+                                        metodo = "Ratio (Completo)"
 
                             if score_base >= LIMIAR_SEGURO:
                                 score_final = score_base
                                 if tipo_alvo == 'CONTRATO':
                                     score_final += 1
 
+                                # ==========================================
+                                # DEBUG: MOSTRAR NOTAS DA COMPARAÇÃO
+                                # ==========================================
+                                if is_debug_cpf:
+                                    print(f"Alvo: {alvo_limpo:15} | Tipo: {tipo_alvo:8} | Score: {score_final} | Método: {metodo}")
+
                                 if score_final > maior_score_ponderado:
                                     maior_score_ponderado = score_final
                                     melhor_match_para_parte = contrato_valido
 
                     if melhor_match_para_parte:
+                        if is_debug_cpf:
+                            print(f"=> VENCEDOR PARA '{parte_limpa}': {melhor_match_para_parte} (Score Final: {maior_score_ponderado})")
+                            
                         encontrados_nesta_linha.append(melhor_match_para_parte)
                         if melhor_match_para_parte in contratos_disponiveis:
                             index_remocao = contratos_disponiveis.index(melhor_match_para_parte)
                             del contratos_disponiveis[index_remocao]
+
+                            # <-- CORREÇÃO 2: Remove a operação no mesmo índice para manter a sincronia
+                            if index_remocao < len(operacoes_disponiveis):
+                                del operacoes_disponiveis[index_remocao]
+                    else:
+                        if is_debug_cpf:
+                            print(f"=> NENHUM VENCEDOR PARA '{parte_limpa}' (Maior score não atingiu limite)")
 
                 return encontrados_nesta_linha
 
@@ -780,6 +828,8 @@ class SERHA:
         :return:
         '''
 
+        print(f'Esta função trata_orbital foi chamada')
+
         if orbital is None:
             print(f'Arquivo de Orbitall não inserido')
             return None
@@ -791,6 +841,9 @@ class SERHA:
 
         try:
             # Versão otimizada
+            if 'contrato' in orbital.columns or 'Contrato':
+                orbital.rename(columns={'contrato': 'CONTRATO', 'Contrato': 'CONTRATO'}, inplace=True)
+
             orbital_colunas_corretas = orbital.loc[
                 orbital['DESCRIÇÃO DO EMPREG'].str.contains(autarquia, case=False, na=False),
                 ['CONTRATO', 'nome_mutuario', 'num_cpf_mutuario', 'VALID DESCONTO FINAL']
@@ -798,7 +851,7 @@ class SERHA:
 
             orbital_colunas_corretas.columns = ['Proposta', 'Cliente', 'CPF/CNPJ', 'VALOR DESCONTO']
         except Exception as e:
-            print('Exception do tratamento das colunas de orbital')
+            print(f'Exception do tratamento das colunas de orbital\n{e}')
             pass
 
 
@@ -1324,6 +1377,8 @@ class SERHA:
         # trabalhado_mes_atual_tratado['TABELA 1'] = trabalhado_mes_atual_tratado['Contrato 1'].map(front_unico.set_index('Contrato')['Tipo Conciliação'])
         trabalhado_mes_atual_tratado['TABELA 1'] = trabalhado_mes_atual_tratado['Contrato 1'].map(front_unico.set_index('Contrato')['Tipo Operacao'])
 
+        front_trabalhado = front_trabalhado.loc[front_trabalhado['OBS'] != 'NÃO LANÇAR - ORBITAL']
+
         # PUXA VALOR A LANÇAR
         for col in colunas_contrato:
             # Ex: "Contrato 1".split(' ') -> ["Contrato", "1"] -> [1] == "1"
@@ -1334,7 +1389,8 @@ class SERHA:
                 col_parcela = f'Parcela {numero}'
 
                 # Puxa as esteiras
-                front_trabalhado['Contrato'] = front_trabalhado['Contrato'].astype(str)
+                # Vamos evitar de deixar Orbital junto no Front, porque ele está somando os valores no
+                front_trabalhado['Contrato'] = front_trabalhado.loc[front_trabalhado['OBS'] != 'NÃO LANÇAR - ORBITAL', 'Contrato'].astype(str)
                 # Tira duplicata de contrato só por precaução
                 front_trabalhado = front_trabalhado.drop_duplicates(subset='Contrato', keep='first')
                 trabalhado_mes_atual_tratado[col_parcela] = trabalhado_mes_atual_tratado[col].map(
@@ -1390,9 +1446,10 @@ class SERHA:
         # Orbitall
 
         if self.orbital is not None:
-            # prepara_orbital = self.trata_orbital(front, trabalhado_mes_atual_tratado, self.orbital)
-            prepara_orbital = TRATA_ORBITAL(orbital=self.orbital, front=front, convenio=self.convenio, caminho=self.caminho, averbado_final=trabalhado_mes_atual_tratado, rubrica=self.rubrica)
-            orbital = prepara_orbital.orbital_tratado()
+            prepara_orbital = self.trata_orbital(front, trabalhado_mes_atual_tratado, self.orbital)
+            # prepara_orbital = TRATA_ORBITAL(orbital=self.orbital, front=front, convenio=self.convenio, caminho=self.caminho, averbado_final=trabalhado_mes_atual_tratado, rubrica=self.rubrica)
+            # orbital = prepara_orbital.orbital_tratado()
+            orbital = prepara_orbital
             # Vou tentar fazer somase de orbital
             somase_orbital = orbital.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum().to_dict()
 
