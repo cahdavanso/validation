@@ -4,6 +4,7 @@ from datetime import datetime
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.TrataOrbital import TRATA_ORBITAL
+from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
 import openpyxl
 import numpy as np
 import os
@@ -11,7 +12,7 @@ import re
 
 
 class CONSIGLOG:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, andamento_funcao, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
         self.averbados = portal_file_list
 
 
@@ -21,6 +22,8 @@ class CONSIGLOG:
 
         # Funcao
         self.funcao = funcao if funcao is not None else None
+
+        self.andamento_funcao = andamento_funcao if andamento_funcao is not None else None
 
         self.kobraki = kobraki
 
@@ -49,6 +52,26 @@ class CONSIGLOG:
         self.caminho = caminho
 
         self.consignataria = consignataria
+
+        # 1. Instancia a classe
+        unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
+            front=self.front, 
+            convenio=self.convenio, 
+            funcao=self.funcao, 
+            andamento_funcao=self.andamento_funcao
+        )
+
+        # 2. Chama a primeira unificação (Função pura)
+        # Isso vai processar e preencher com verificar_ccb=True
+        front_meio_caminho = unificador.unifica_front_funcao()
+
+        # 3. Atualiza o front interno da classe para que a segunda unificação use os dados já combinados
+        unificador.front = front_meio_caminho
+
+        # 4. Chama a segunda unificação (Andamento Função)
+        # Isso vai processar a segunda base com verificar_ccb=False
+        self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
+        self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio}.xlsx"), index=False)
 
         self.condicoes_1 = load_esteiras()
 
@@ -126,7 +149,7 @@ class CONSIGLOG:
 
 
     def tratamento_front_preliminar(self):
-        front_consig = self.unifica_front_funcao()
+        front_consig = self.front_final_consig
 
         conciliacao = self.conciliacao.copy()
 

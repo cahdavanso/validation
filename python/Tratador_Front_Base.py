@@ -116,7 +116,7 @@ class TratadorFrontBase:
             
         # Liquidados
         if 'Status' in df.columns:
-            df.loc[(df['Status'].str.contains('Liquidado|CANCELADO', na=False) & (df['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
+            df.loc[df['Status'].str.contains('Liquidado|CANCELADO', na=False), 'OBS'] = 'NÃO LANÇAR - LIQUIDADO'
             
         return df
     
@@ -217,12 +217,16 @@ class TratadorFrontBase:
 
         # Chama as funções específicas que a classe filha definir
         df = self.aplicar_regras_especificas(df)
+
+        nome_convenio = self.convenio if self.convenio is not None else ''
+        consignataria = self.consignataria if self.consignataria is not None else ''
+        df.to_excel(os.path.join(self.caminho, f"FRONT SEMI TRABALHADO {nome_convenio} {consignataria} {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
         
         return df
     
 # 1. Defina as Expressões Regulares no topo do arquivo para padronizar e evitar erros de digitação
-REGEX_CARTAO_COMPLETO = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO BENEFICIO'
-REGEX_CARTAO_SIMPLES = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO'
+REGEX_CARTAO_COMPLETO = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO|CARTAO BENEFICIO'
+REGEX_CARTAO_SIMPLES = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO'
 REGEX_BENEFICIO = 'CARTAO BENEFICIO'
 
 
@@ -259,11 +263,14 @@ class TratadorZetra(TratadorFrontBase):
 class TratadorSerhaInfoconsig(TratadorFrontBase):
     """Classe unificada para Serha e Infoconsig, pois as regras são idênticas"""
     def aplicar_regras_especificas(self, df):
-        if self.rubrica == 'CARTÃO':
-            df.loc[(~df['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False) & (df['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
-            df.loc[(~df['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False) & (df['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        if self.rubrica == 'CARTÃO' and self.convenio in ['PREF. PIRACICABA', 'PREV. PIRACICABA IPASP', 'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA']:
+            df.loc[(~df['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTAO CONSIGNADO|CARTAO BENEFICIO', na=False) & (df['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            pass
+        elif self.rubrica == 'CARTÃO':
+            df.loc[(~df['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTAO CONSIGNADO', na=False) & (df['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         else:
-            df.loc[(~df['Tipo Operacao'].str.contains(REGEX_BENEFICIO, na=False) & (df['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
+            # df.loc[(~df['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False) & (df['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
+            df.loc[(~df['Tipo Operacao'].str.contains('CARTAO BENEFICIO', na=False) & (df['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
 
         return df
 
@@ -281,7 +288,7 @@ class TratadorValidacaoSimples(TratadorFrontBase):
 class TratadorNeoconsig(TratadorFrontBase):
     def aplicar_regras_especificas(self, df):
         # A diferença do Neoconsig é que ele avalia o "Tipo Conciliação" em vez do "Tipo Operacao"
-        df.loc[(~df['Tipo Conciliação'].str.contains(REGEX_CARTAO_COMPLETO, na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        df.loc[(~df['Tipo Operacao'].str.contains(REGEX_CARTAO_COMPLETO, na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         return df
 
 class TratadorSigrh(TratadorFrontBase):

@@ -38,7 +38,7 @@ class TRATA_ORBITAL:
             return self.orbital
 
         empregador_dict = {
-                            'PREF. PIRACICABA': ['PREF PIRACICABA'], 
+                            'PREF. PIRACICABA': ['PREF PIRACICABA', 'PM PIRACICABA'], 
                             'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA': ['PM PIRA SEMAE'],
                             'PREV. PIRACICABA IPASP': ['PREF PIRA IPASP'],
                             'GOV. PARAÍBA': ['GOV PB INSPFEM', 'INSPFEM S FL'],

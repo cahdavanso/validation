@@ -1446,10 +1446,10 @@ class SERHA:
         # Orbitall
 
         if self.orbital is not None:
-            prepara_orbital = self.trata_orbital(front, trabalhado_mes_atual_tratado, self.orbital)
-            # prepara_orbital = TRATA_ORBITAL(orbital=self.orbital, front=front, convenio=self.convenio, caminho=self.caminho, averbado_final=trabalhado_mes_atual_tratado, rubrica=self.rubrica)
-            # orbital = prepara_orbital.orbital_tratado()
-            orbital = prepara_orbital
+            # prepara_orbital = self.trata_orbital(front, trabalhado_mes_atual_tratado, self.orbital)
+            prepara_orbital = TRATA_ORBITAL(orbital=self.orbital, front=front, convenio=self.convenio, caminho=self.caminho, averbado_final=trabalhado_mes_atual_tratado, rubrica=self.rubrica)
+            orbital = prepara_orbital.orbital_tratado()
+            # orbital = prepara_orbital
             # Vou tentar fazer somase de orbital
             somase_orbital = orbital.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum().to_dict()
 

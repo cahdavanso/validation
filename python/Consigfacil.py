@@ -8,7 +8,7 @@ from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.Andamento import ANDAMENTO
 from python.TrataOrbital import TRATA_ORBITAL
 from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
-from python.Tratador_Front_Base import TratadorFrontBase
+from python.Tratador_Front_Base import TratadorConsigfacil
 import os
 import logging
 import chardet

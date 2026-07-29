@@ -252,8 +252,7 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
                 df_temp = pd.read_csv(file_obj, sep=';', encoding='latin1')
                 if len(df_temp) > 3:
                     df = df_temp.iloc[:-3]
-            elif conv in QUANTUM_CONVENIO and 'averbados' in name:
-                df = pd.read_csv(file_obj, sep=';', encoding='latin1', header=1)
+
             elif conv in INFOCONSIG_CONVENIO and 'averbados' in name:
                 df = pd.read_csv(
                         file_obj, 
@@ -501,6 +500,7 @@ async def validar_planilhas(
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
             extra_judicial=extra_judicial_df,
+            andamento_funcao=xao_df,
             funcao=funcao_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
@@ -518,6 +518,7 @@ async def validar_planilhas(
             extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
+            andamento_funcao=xao_df,
             funcao=funcao_df,
             orbital=orbital_df
         )
@@ -534,6 +535,7 @@ async def validar_planilhas(
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
             rubrica=rubrica,
+            andamento_funcao=xao_df,
             funcao=funcao_df,
             orbital=orbital_df
         )
@@ -623,6 +625,7 @@ async def validar_planilhas(
             conciliacao=conciliacao_df,
             kobraki=kobraki_df,
             extra_judicial=extra_judicial_df,
+            andamento_funcao=xao_df,
             funcao=funcao_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
@@ -640,6 +643,7 @@ async def validar_planilhas(
             extra_judicial=extra_judicial_df,
             tacs=tacs_df,
             caminho=CAMINHO_SAIDA,
+            andamento_funcao=xao_df,
             funcao=funcao_df,
             orbital=orbital_df
         )

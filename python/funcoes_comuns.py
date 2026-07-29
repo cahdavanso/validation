@@ -7,9 +7,10 @@ import os
 
 
 class UNIFICA_FRONT_FUNC_ESTEIRAS:
-    def __init__(self, front, convenio, funcao=None, andamento_funcao=None):
+    def __init__(self, front, convenio, consignataria=None, funcao=None, andamento_funcao=None):
         self.front = front
         self.convenio = convenio
+        self.consignataria = consignataria if consignataria is not None else None
         self.funcao = funcao
         self.andamento_funcao = andamento_funcao
         self.condicoes_1 = load_esteiras()
@@ -22,7 +23,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
 
         self.mapeamento_convenio = {
                                     'GOV. ALAGOAS': ['GOV AL CC', 'GOV AL EMP', 'GOV AL CB'],
-                                    'GOV. ALAGOAS - TJAL': 'TJ AL CC',
+                                    'GOV. ALAGOAS - TJAL': ['TJ AL CC'],
                                     'GOV. CEARÁ': ['GOV CEARA DG', 'GOV CEARÁ'],
                                     'GOV. ESPÍRITO SANTO': ['GOV ES CB', 'GOV ES CB DG'],
                                     'GOV. GOIÁS': ['GOV GOIAS', 'GOV GO CPL', 'GOV GOIAS SEG'],
@@ -30,7 +31,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
                                     'GOV. MATO GROSSO': ['GOV MT PL CAPIT', 'GOV MT CT'],
                                     'GOV. MINAS GERAIS - CBMMG': ['MG CBMMG', 'MG-CBMMG CC DG', 'MG CBMMG CB DG', 'MG-CBMMG CC'],
                                     'GOV. MINAS GERAIS - IPSEMG': ['GOV MG - IPSEMG', 'MG IPSEMG CC DG', 'MG IPSEMG CB DG'],
-                                    'GOV. MINAS GERAIS - IPSM': ['GOV MG - IPSM', 'MG IPSM CC DG', 'MG IPSM CB DG'],
+                                    'GOV. MINAS GERAIS - IPSM': ['GOV MG - IPSM', 'MG IPSM CC DG', 'MG IPSM CB DG', 'GOV MG IPSM'],
                                     'GOV. MINAS GERAIS - PMMG': ['GOV MG - PMMG', 'MG - PMMG CC DG', 'MG PMMG CB DG', 'MG PMMG SEG', 'PMMG CB DG SEG', 'PMMG CC DG SEG', 'PMMG CC DG CPL', 'PMMG CB DG CPL', 'GOV MG PMMG'],
                                     'GOV. MINAS GERAIS - SEPLAG': ['MG SEPLAG', 'MG SEPLAG CC', 'MG SEPLAG CC DG', 'MG SEPLAG CB DG', 'SEPL CC DG SEG', 'SEPL CB DG SEG', 'SEPL CC DG CPL', 'SEPL CB DG CPL'],
                                     'GOV. PARANÁ': ['GOV PARANA', 'GOV PR CPL', 'GOV PR DG', 'GOV PARANA SEG', 'GOV PR DG SEG', 'GOV PR DG CPL'],
@@ -41,74 +42,74 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
                                     'GOV. RIO GRANDE DO NORTE': ['GOV RN', 'GOV RN CC '],
                                     'GOV. SANTA CATARINA': ['GOV S. CATARINA', 'GOV SC SEG', 'GOV SC CPL', 'GOV SC S FL', 'GOV SC CAP', 'GOV SC DG', 'GOV SC DG SEG'],
                                     'GOV. SÃO PAULO': ['GOV SPPREV', 'GOV SÃO PAULO'],
-                                    'GOV. TOCANTINS': 'GOV TOCANTINS',
-                                    'GOV. TOCANTINS e IGEPREV': 'IGEPREV',
+                                    'GOV. TOCANTINS': ['GOV TOCANTINS'],
+                                    'GOV. TOCANTINS e IGEPREV': ['IGEPREV'],
                                     'INSS': ['INSS BENEFICIO', 'INSS RMC', 'INSS RMC SEG', 'INSS BENEF SEG', 'INSS RMC S FL', 'INSS BEN S FL', 'INSS BENEF CPL', 'INSS RMC CPL'],
-                                    'PREF. ALAGOINHAS': 'PM ALAGOINHAS',
+                                    'PREF. ALAGOINHAS': ['PM ALAGOINHAS'],
                                     'PREF. ANAJATUBA': ['PM ANAJ EMP', 'PM ANAJATUBA CC', 'PM ANAJATUBA CB'],
                                     'PREF. ANANINDEUA': ['PM ANANIN CC', 'PM ANANINDEUA', 'PM ANANIN CB', 'PM ANANIN CB DG'],
                                     'PREF. ARACAJU': ['PM ARACAJU', 'PM ARACAJU CB', 'PM ARACAJU CC'],
-                                    'PREF. ARAGUAÍNA': 'PM ARAGUAINA',
-                                    'PREF. ARAPONGAS': 'PM ARAPONGAS CC',
-                                    'PREF. ARAUCÁRIA': 'PM ARAUC EMP',
-                                    'PREF. AÇAILÂNDIA': 'PM ACAILANDIA',
+                                    'PREF. ARAGUAÍNA': ['PM ARAGUAINA'],
+                                    'PREF. ARAPONGAS': ['PM ARAPONGAS CC'],
+                                    'PREF. ARAUCÁRIA': ['PM ARAUC EMP'],
+                                    'PREF. AÇAILÂNDIA': ['PM ACAILANDIA'],
                                     'PREF. BARBACENA': ['PM BARB CC', 'PM BARB EMP'],
-                                    'PREF. BAURU': 'PM DE BAURU',
+                                    'PREF. BAURU': ['PM DE BAURU'],
                                     'PREF. BELO HORIZONTE': ['PM BH CB', 'PM BH CC'],
                                     'PREF. CAJAMAR': ['PM CAJAMAR CC', 'PM CAJAMAR', 'PM CAJAMAR SEG', 'PM CAJAMAR CPL', 'PM CAJAMAR DG'],
                                     'PREF. CAMPINA GRANDE': ['CAMPINA G-IPSEM', 'C.G IPSEM DG'],
                                     'PREF. CAMPINAS': ['PM CAMPINAS', 'PM CAMPINAS DG'],
                                     'PREF. CAMPO GRANDE': ['PM CAMPO GRANDE', 'IMPCG '],
                                     'PREF. CONTAGEM': ['PM CONTAGEM', 'PREVICON', 'TRANSCON'],
-                                    'PREF. DUQUE DE CAXIAS': 'PM DUQUE CAXIAS',
-                                    'PREF. DUQUE DE CAXIAS - IMPDC': 'PM DC - IPMDC',
-                                    'PREF. ESTÂNCIA VELHA': 'PM EST. VLH EMP',
+                                    'PREF. DUQUE DE CAXIAS': ['PM DUQUE CAXIAS'],
+                                    'PREF. DUQUE DE CAXIAS - IMPDC': ['PM DC - IPMDC'],
+                                    'PREF. ESTÂNCIA VELHA': ['PM EST. VLH EMP'],
                                     'PREF. FLORIANÓPOLIS': ['PM FLORIPA CB', 'PM FLORIPA CC', 'PM FLORIPA', 'PM FLORIAN EMP'],
                                     'PREF. GOIÂNIA': ['PM GOIANIA SEG', 'PM GOIÂNIA'],
-                                    'PREF. GRAVATAÍ': 'PM GRAVATAÍ',
+                                    'PREF. GRAVATAÍ': ['PM GRAVATAÍ'],
                                     'PREF. GUARULHOS': ['PM GRU CB', 'PM GRU CC', 'PM GRU EMP'],
                                     'PREF. IMPERATRIZ': ['PM IMPTRZ', 'PM IMPTRZ CB', 'PM IMPTRZ CC'],
                                     'PREF. ITU': ['PM DE ITU', 'PM DE ITU CC', 'PM DE ITU CB'],
-                                    'PREF. JOÃO PESSOA': 'PM JOAO PESSOA',
-                                    'PREF. JUAZEIRO DO NORTE': 'PM JUAZEIRO N',
+                                    'PREF. JOÃO PESSOA': ['PM JOAO PESSOA'],
+                                    'PREF. JUAZEIRO DO NORTE': ['PM JUAZEIRO N'],
                                     'PREF. JUÍZ DE FORA': ['PM JUÍZ DE FORA', 'PM JUIZ DE F CC', 'PM JFPREV CC'],
-                                    'PREF. MACAÉ': 'PM MACAE',
-                                    'PREF. MAZAGÃO': 'PM MAZAGAO',
+                                    'PREF. MACAÉ': ['PM MACAE'],
+                                    'PREF. MAZAGÃO': ['PM MAZAGAO'],
                                     'PREF. NATAL': ['PM NATAL CB', 'PM NATAL CC', 'PM NATAL CB DG'],
-                                    'PREF. NITERÓI': 'PM DE NITEROI',
+                                    'PREF. NITERÓI': ['PM DE NITEROI'],
                                     'PREF. PALMAS': ['PM PALMAS ADTO', 'PM PALMAS EMP', 'PM PALMAS CC'],
-                                    'PREF. PAÇO DO LUMIAR': 'PM P LUMIAR',
+                                    'PREF. PAÇO DO LUMIAR': ['PM P LUMIAR'],
                                     'PREF. PICOS': ['PM PICOS', 'PM PICOS S FL', 'PM PICOS DG'],
                                     'PREF. PIRACICABA': ['PM PIRACICABA', 'PM PIRA SEG'],
-                                    'PREF. PIRACICABA IPASP': 'PM PIRA IPASP',
+                                    'PREF. PIRACICABA IPASP': ['PM PIRA IPASP'],
                                     'PREF. PLANALTINA': ['PM PLANALTINA', 'PREVPLAN'],
                                     'PREF. PORTO VELHO': ['PM PORTO VELHO', 'PM PORTO V IPAM'],
-                                    'PREF. QUIJINGUE': 'PM DE QUIJINGUE',
-                                    'PREF. RECIFE': 'PM RECIFE',
+                                    'PREF. QUIJINGUE': ['PM DE QUIJINGUE'],
+                                    'PREF. RECIFE': ['PM RECIFE'],
                                     'PREF. RIBEIRÃO PRETO': ['PM RIB. PRETO', 'PM RIB PRETO'],
-                                    'PREF. RIO DE JANEIRO': 'PM RJ',
-                                    'PREF. SANTA LUZIA': 'PM SANTA LUZIA',
+                                    'PREF. RIO DE JANEIRO': ['PM RJ'],
+                                    'PREF. SANTA LUZIA': ['PM SANTA LUZIA'],
                                     'PREF. SANTA RITA': ['PM ST RITA CB', 'PM ST RITA ADTO', 'PM ST RITA CC', 'PM SANTA MARIA', 'IPREV S RT ADTO', 'IPREV S RTA CC', 'PM STA RITA EMP', 'IPREV S RTA EMP'],
-                                    'PREF. SANTOS': 'PM SANTOS',
-                                    'PREF. SAPUCAIA': 'PM SAPUCAIA',
-                                    'PREF. SOBRAL': 'PM SOBRAL',
+                                    'PREF. SANTOS': ['PM SANTOS'],
+                                    'PREF. SAPUCAIA': ['PM SAPUCAIA'],
+                                    'PREF. SOBRAL': ['PM SOBRAL'],
                                     'PREF. SOROCABA': ['PM SOROCABA CB', 'PM SOROCABA SEG'],
-                                    'PREF. SUZANO': 'PM SUZANO',
-                                    'PREF. SÃO GONÇALO': 'PM SÃO GONÇALO',
-                                    'PREF. SÃO JOSÉ DE RIBAMAR': 'PM S JOSE RIB',
-                                    'PREF. SÃO JOSÉ DO RIO PRETO': 'PM SJ RIO PRETO',
-                                    'PREF. SÃO LUÍS': 'PM SÃO LUÍS',
+                                    'PREF. SUZANO': ['PM SUZANO'],
+                                    'PREF. SÃO GONÇALO': ['PM SÃO GONÇALO'],
+                                    'PREF. SÃO JOSÉ DE RIBAMAR': ['PM S JOSE RIB'],
+                                    'PREF. SÃO JOSÉ DO RIO PRETO': ['PM SJ RIO PRETO'],
+                                    'PREF. SÃO LUÍS': ['PM SÃO LUÍS'],
                                     'PREF. SÃO PAULO': ['PM SP IPREM', 'PM SAO PAULO'],
                                     'PREF. TAUBATÉ': ['PM TAUBATÉ', 'PM TAUBATÉ CB', 'TAUBATÉ CB DG', 'PM TAUBATE', 'PM TAUBATE CB'],
-                                    'PREF. TERESINA': 'PM TERESINA',
+                                    'PREF. TERESINA': ['PM TERESINA'],
                                     'PREF. TUTÓIA': ['PM TUTÓIA CC', 'PM TUTÓIA EMP', 'PM TUTÓIA CB'],
                                     'PREF. UBERABA': ['PM UBERABA CB', 'PM UBERABA EMP', 'PM UBERABA CC'],
-                                    'PREF. VENÂNCIO AIRES': 'PM VE AIRES EMP',
-                                    'PREF. VÁRZEA GRANDE': 'PM VARZEA G',
-                                    'PREF. ÁGUAS LINDAS DE GOIÁS': 'PM ÁGUAS LINDAS',
+                                    'PREF. VENÂNCIO AIRES': ['PM VE AIRES EMP'],
+                                    'PREF. VÁRZEA GRANDE': ['PM VARZEA G'],
+                                    'PREF. ÁGUAS LINDAS DE GOIÁS': ['PM ÁGUAS LINDAS'],
                                     'PREV. PIRACICABA IPASP': ['IPASP', 'IPASP DG'],
-                                    'PREVIPALMAS': 'PM PALMAS PREV',
-                                    'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA': 'PM PIRA SEMAE',
+                                    'PREVIPALMAS': ['PM PALMAS PREV'],
+                                    'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA': ['PM PIRA SEMAE'],
                                 }
         
         #  Separar no andamento do função somente o convenio que vamos juntar
@@ -175,21 +176,27 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
 
         # 1. Transforma em INTEGRADO apenas se o parâmetro permitir (chamada pela self.funcao)
         if atualizar_esteira_integrado:
-            front.loc[front['Contrato'].isin(contratos_base) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE')), 'Esteira'] = 'INTEGRADO'
+            # Isolamos a condição na variável mask_integrado antes de aplicar
+            mask_integrado = front['Contrato'].isin(contratos_base) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE', na=False))
+
+            # Aplica a alteração
+            front.loc[mask_integrado, 'Esteira'] = 'INTEGRADO'
 
         if 'Descrição da Atividade' in base_adicional.columns:
-            # 1. Cria o "dicionário" de busca {Proposta: Descrição da Atividade}
-            mapa_andamento_pendente = base_adicional.set_index('Proposta')['Descrição da Atividade']
+            # 1. Padroniza as chaves de busca para texto puro (evitando divergência entre int/str)
+            chaves_base = base_adicional['Proposta'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+            chaves_front = front['Contrato'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+
+            # 2. Cria o "dicionário" de busca vinculando as chaves padronizadas à Descrição
+            mapa_andamento_pendente = base_adicional.set_index(chaves_base)['Descrição da Atividade']
             
-            # 2. Puxa as descrições da base adicional para os contratos do front
-            novos_status = front['Contrato'].map(mapa_andamento_pendente)
+            # 3. Puxa as descrições da base adicional para os contratos do front (agora ambos são strings)
+            novos_status = chaves_front.map(mapa_andamento_pendente)
             
-            # 3. Cria a máscara (filtro) com as suas regras:
-            # - O contrato tem que estar na base adicional (novos_status.notna() garante isso)
-            # - A esteira atual tem que conter ANDAMENTO ou PENDENTE (na=False evita erros com linhas vazias)
+            # 4. Cria a máscara (filtro) com as suas regras
             mask_atualizar = novos_status.notna() & front['Esteira'].str.contains('ANDAMENTO|PENDENTE', na=False)
             
-            # 4. Substitui a Esteira atual pelo Novo Status apenas nas linhas filtradas pela máscara
+            # 5. Substitui a Esteira atual pelo Novo Status apenas nas linhas filtradas pela máscara
             front.loc[mask_atualizar, 'Esteira'] = novos_status[mask_atualizar]
 
         # 2. Remove da base adicional os contratos que já existem no Front
@@ -203,8 +210,6 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         # 4. Filtra e renomeia as colunas usando o mapeamento fornecido
         base_ajustada = base_tratada[list(mapeamento.keys())].rename(columns=mapeamento)
 
-        # DEBUG: Verifica o contrato 301120431 na base já ajustada (buscando pela coluna certa: 'Contrato')
-        print(f'Contrato 301120431 está na base ainda?\n{base_ajustada.loc[base_ajustada["Contrato"] == 301120431, "Contrato"]}')
 
         # 5. Junta o Front com a Base Tratada
         front_unif = pd.concat([front, base_ajustada], ignore_index=True)
@@ -225,7 +230,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         front_unif.loc[mask_orbital, 'Orbital'] = "SIM"
         front_unif.loc[front_unif['Orbital'] == '', 'Orbital'] = "NAO"
 
-        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG")
+        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG") if self.consignataria is None else front_unif['Consignataria'].fillna(self.consignataria)
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
         front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
@@ -301,15 +306,20 @@ class TRATA_CONTRATOS:
                     if not parte_limpa or len(parte_limpa) < 3:
                         continue
 
+                    # ==========================================
+                    # DEBUG: INÍCIO DA AVALIAÇÃO DA PARTE
+                    # ==========================================
+                    # is_debug_cpf = str(cpf).startswith('420.365')
+                    is_debug_cpf = False
+                    if is_debug_cpf:
+                        print(f"\n--- AVALIANDO A PARTE: '{parte_limpa}' ---")
+
                     melhor_match_para_parte = None
-                    maior_score_ponderado = 0  # Mudamos o nome para deixar claro
+                    maior_score_ponderado = 0
 
                     for i, contrato_valido in enumerate(contratos_disponiveis):
-
-                        # Pega a operação correspondente (se existir)
                         operacao_valida = operacoes_disponiveis[i] if i < len(operacoes_disponiveis) else ""
 
-                        # Vamos testar os dois alvos separadamente
                         alvos = [
                             (contrato_valido, 'CONTRATO'),
                             (operacao_valida, 'OPERACAO')
@@ -320,46 +330,52 @@ class TRATA_CONTRATOS:
 
                             alvo_limpo = limpar_contrato(alvo_texto)
                             score_base = 0
+                            metodo = ""
 
-                            # --- SUA LÓGICA NOVA (PERFEITA) ---
                             if alvo_limpo.endswith(parte_limpa):
-                                score_base = 100
+                                score_base = 200
+                                metodo = "Endswith"
                             else:
                                 score_partial = fuzz.partial_ratio(parte_limpa, alvo_limpo)
                                 if score_partial >= LIMIAR_SEGURO:
                                     score_base = score_partial
+                                    metodo = "Partial Ratio"
                                 else:
                                     score_ratio = fuzz.ratio(parte_limpa, alvo_limpo)
                                     if score_ratio >= LIMIAR_SEGURO:
                                         score_base = score_ratio
-                            # ----------------------------------
+                                        metodo = "Ratio (Completo)"
 
-                            # --- A CORREÇÃO DO DESEMPATE AQUI ---
-
-                            # Se o score for bom (acima do limiar), calculamos o "Score Ponderado"
                             if score_base >= LIMIAR_SEGURO:
-
                                 score_final = score_base
-
-                                # Damos um BÔNUS se o match foi no CONTRATO
-                                # Isso garante que 100 (Contrato) ganhe de 100 (Operação)
                                 if tipo_alvo == 'CONTRATO':
-                                    score_final += 1  # O "pulo do gato"
+                                    score_final += 1
 
-                                # Verifica se esse é o melhor match desta parte suja até agora
+                                # ==========================================
+                                # DEBUG: MOSTRAR NOTAS DA COMPARAÇÃO
+                                # ==========================================
+                                if is_debug_cpf:
+                                    print(f"Alvo: {alvo_limpo:15} | Tipo: {tipo_alvo:8} | Score: {score_final} | Método: {metodo}")
+
                                 if score_final > maior_score_ponderado:
                                     maior_score_ponderado = score_final
-                                    # IMPORTANTE: Independente se o match foi na operação ou contrato,
-                                    # nós SEMPRE salvamos o 'contrato_valido' como o resultado.
                                     melhor_match_para_parte = contrato_valido
 
                     if melhor_match_para_parte:
+                        if is_debug_cpf:
+                            print(f"=> VENCEDOR PARA '{parte_limpa}': {melhor_match_para_parte} (Score Final: {maior_score_ponderado})")
+                            
                         encontrados_nesta_linha.append(melhor_match_para_parte)
-
-                        # Remove das listas para não duplicar na mesma linha
                         if melhor_match_para_parte in contratos_disponiveis:
                             index_remocao = contratos_disponiveis.index(melhor_match_para_parte)
                             del contratos_disponiveis[index_remocao]
+
+                            # <-- CORREÇÃO 2: Remove a operação no mesmo índice para manter a sincronia
+                            if index_remocao < len(operacoes_disponiveis):
+                                del operacoes_disponiveis[index_remocao]
+                    else:
+                        if is_debug_cpf:
+                            print(f"=> NENHUM VENCEDOR PARA '{parte_limpa}' (Maior score não atingiu limite)")
 
                 return encontrados_nesta_linha
 

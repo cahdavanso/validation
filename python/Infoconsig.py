@@ -4,6 +4,8 @@ from datetime import datetime
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.TrataOrbital import TRATA_ORBITAL
+from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
+from python.Tratador_Front_Base import TratadorSerhaInfoconsig
 import openpyxl
 import numpy as np
 import os
@@ -11,7 +13,7 @@ import re
 
 
 class INFOCONSIG:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, rubrica, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, rubrica, andamento_funcao, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
         self.averbados = portal_file_list
         for i in range(len(self.averbados)):
             linha_valores = self.averbados.iloc[i].astype(str).tolist()
@@ -39,6 +41,8 @@ class INFOCONSIG:
 
         # Funcao
         self.funcao = funcao if funcao is not None else None
+
+        self.andamento_funcao = andamento_funcao if andamento_funcao is not None else None
 
         self.kobraki = kobraki if kobraki is not None else None
 
@@ -68,6 +72,32 @@ class INFOCONSIG:
         self.consignataria = consignataria
 
         self.condicoes_1 = load_esteiras()
+
+        # 1. Instancia a classe
+        unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
+            front=self.front, 
+            convenio=self.convenio, 
+            funcao=self.funcao, 
+            andamento_funcao=self.andamento_funcao
+        )
+
+        # 2. Chama a primeira unificação (Função pura)
+        # Isso vai processar e preencher com verificar_ccb=True
+        front_meio_caminho = unificador.unifica_front_funcao()
+
+        # 3. Atualiza o front interno da classe para que a segunda unificação use os dados já combinados
+        unificador.front = front_meio_caminho
+
+        # 4. Chama a segunda unificação (Andamento Função)
+        # Isso vai processar a segunda base com verificar_ccb=False
+        self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
+        self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio}.xlsx"), index=False)
+
+        front_semi_trabalhado_preliminar = TratadorSerhaInfoconsig(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
+                                                                     caminho=self.caminho, condicoes_1=self.condicoes_1, consignataria=self.consignataria,
+                                                                     kobraki=self.kobraki, tacs=tacs, rubrica=self.rubrica)
+        self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
+        self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
 
 
         self.arquivo_lancamento()
@@ -143,7 +173,7 @@ class INFOCONSIG:
             return front_unif
 
     def tratamento_front_preliminar(self):
-        front_consig = self.unifica_front_funcao()
+        front_consig = self.front_final_consig
         # Criar uma lista com todos os nomes de colunas
         cols = front_consig.columns
 
@@ -318,10 +348,13 @@ class INFOCONSIG:
         # Marca tudo que é orbital
         front_consig_validado_termino.loc[(front_consig_validado_termino['Orbital'].str.contains('SIM', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - ORBITAL'
 
-        if self.rubrica == 'CARTÃO':
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
-            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        if self.rubrica == 'CARTÃO' and self.convenio in ['PREF. PIRACICABA', 'PREV. PIRACICABA IPASP', 'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA']:
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTAO CONSIGNADO|CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTAO CONSIGNADO|CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
             pass
+        elif self.rubrica == 'CARTÃO':
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTAO CONSIGNADO|', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+            front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTAO CONSIGNADO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         else:
             # front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
             front_consig_validado_termino.loc[(~front_consig_validado_termino['Tipo Operacao'].str.contains('CARTAO BENEFICIO', na=False) & (front_consig_validado_termino['OBS'] == '')), 'OBS'] = 'NÃO LANÇAR - NÃO BENEFÍCIO'
@@ -352,8 +385,8 @@ class INFOCONSIG:
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
         if self.rubrica == 'CARTÃO':
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
-            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO', na=False)].copy()
+            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTAO CONSIGNADO|CARTAO BENEFICIO', na=False)].copy()
+            front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTAO CONSIGNADO|CARTAO BENEFICIO', na=False)].copy()
         else:
             # front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('CARTAO BENEFICIO', na=False)].copy()
             front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('CARTAO BENEFICIO', na=False)].copy()
@@ -488,10 +521,10 @@ class INFOCONSIG:
 
             # --- Passo 2: Definir a função que será aplicada em cada linha (LÓGICA ALTERADA) ---
             def encontrar_contratos_na_linha(row):
-                cpf = row['CPF_Formatado']
+                cpf = row['CPF']
                 texto_contratos_sujo = str(row['Nr Doc / Contrato']).strip()
             
-                cpf = row['CPF_Formatado']
+                cpf = row['CPF']
                 texto_contratos_sujo = str(row['Nr Doc / Contrato'])
 
                 # Garante que as listas existam
@@ -655,7 +688,7 @@ class INFOCONSIG:
                 data_averbados.loc[mascara_esteira_valida, 'Soma_Calculada'] += (valores_validos + 20)
 
         # 3. Aplica a comparação final com o Valor Prestação (Teto)
-        data_averbados['Lançar'] = np.minimum(data_averbados['Soma_Calculada'], data_averbados['Margem Reservada'])
+        data_averbados['Lançar'] = np.minimum(data_averbados['Soma_Calculada'], data_averbados['Valor da Parcela'])
 
         # (Opcional) Remove a coluna temporária se não precisar mais
         data_averbados = data_averbados.drop(columns=['Soma_Calculada'])
@@ -729,7 +762,7 @@ class INFOCONSIG:
         # Primeiro, tentamos o match exato (valor igual)
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_exact, 
-            left_on=['CPF_Formatado', 'Margem Reservada'], 
+            left_on=['CPF', 'Valor da Parcela'], 
             right_on=['CPF', 'Prestacao'], 
             how='left'
         )
@@ -741,7 +774,7 @@ class INFOCONSIG:
         # Segundo merge: Caso de +20 reais
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_plus20, 
-            left_on=['CPF_Formatado', 'Margem Reservada'], 
+            left_on=['CPF', 'Valor da Parcela'], 
             right_on=['CPF', 'Prestacao_Ajustada'], 
             how='left', 
             suffixes=('', '_20')
@@ -753,7 +786,7 @@ class INFOCONSIG:
         # Terceiro merge: Caso de +40 reais
         averbado_contratos_faltantes = averbado_contratos_faltantes.merge(
             front_semi_plus40, 
-            left_on=['CPF_Formatado', 'Margem Reservada'], 
+            left_on=['CPF', 'Valor da Parcela'], 
             right_on=['CPF', 'Prestacao_Ajustada'], 
             how='left', 
             suffixes=('', '_40')
@@ -771,7 +804,7 @@ class INFOCONSIG:
     def trata_averbacao(self):
         # PUXA OS ARQUIVOS À SEREM TRATADOS
         data = self.averbados
-        front = self.tratamento_front_preliminar()
+        front = self.front_semi_trabalhado
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
         if self.orbital is not None:
             preparando_orbital = TRATA_ORBITAL(self.orbital, front, self.convenio, self.caminho)
@@ -785,7 +818,7 @@ class INFOCONSIG:
             print("trata_averbacao_1: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
 
-        print(f'Contrato 301268942 no front em trata_averbacao: {front.loc[front["Contrato"] == "301268942", "Prestacao"]}\n')
+        print(f'CPF 102.948.874-66 no front em trata_averbacao:\n{front.loc[front["CPF"] == "102.948.874-66", "Prestacao"]}\n')
 
         consig = self.consignataria
         # convenio = self.convenio
@@ -798,16 +831,16 @@ class INFOCONSIG:
             data_averbados_bruto = data_averbados_bruto[data_averbados_bruto['Tipo de Solicitacao'].str.contains('Compra')]
 
         # Passo 1: Garantir que a coluna é do tipo string
-        cpf_str = data_averbados_bruto['CPF'].astype(str)
+        '''cpf_str = data_averbados_bruto['CPF'].astype(str)
         cpf_str_ajustado = cpf_str.str.zfill(11)
-        cpf_formatado = cpf_str_ajustado.str.slice(0, 3) + '.' + \
+        CPF = cpf_str_ajustado.str.slice(0, 3) + '.' + \
                               cpf_str_ajustado.str.slice(3, 6) + '.' + \
                               cpf_str_ajustado.str.slice(6, 9) + '-' + \
                               cpf_str_ajustado.str.slice(9, 11)
 
-        data_averbados_bruto.insert(10, 'CPF_Formatado', cpf_formatado, True)
+        data_averbados_bruto.insert(10, 'CPF', CPF, True)'''
 
-        semi_front = self.tratamento_front_preliminar()
+        semi_front = self.front_semi_trabalhado
         if semi_front is False:
             print("trata_averbacao_2: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
@@ -816,7 +849,7 @@ class INFOCONSIG:
         if orbital_tratado is not None:
             mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
             data_averbados_bruto['ORBITAL'] = ''
-            data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF_Formatado'].map(mask_orbital)
+            data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF'].map(mask_orbital)
 
         def distribuicao_valores(averbado_trabalhado, front_trabalhar, orbital=None):
             # IMPORTANTE: Garanta que as colunas de valores são numéricas, não texto.
@@ -829,7 +862,7 @@ class INFOCONSIG:
 
             # Transforma vazios no OBS em aspas vazias
             front_preliminar['OBS'] = front_preliminar['OBS'].fillna('')
-            front_preliminar = front_preliminar[front_preliminar['OBS'] == '']
+            front_preliminar = front_preliminar[front_preliminar['OBS'].isin([''])]
 
             soma_series_averb = front_preliminar.groupby('CPF')['Valor a lançar'].sum()
             if orbital is not None:
@@ -839,25 +872,25 @@ class INFOCONSIG:
 
                 # 4. Combina tudo em um único dataframe
                 soma_total = (
-                    soma_series_averb
-                    .add(somase_orbital, fill_value=0)
+                    soma_series_averb.add(somase_orbital, fill_value=0)
                 )
+                # soma_total = (soma_series_averb)
                 # soma_total_cpf = (soma_condicional_dict_averb_cpf.add(somase_orbital, fill_value=0))
 
-                averbado_novo['SOMASE FRONT'] = averbado_novo['CPF_Formatado'].map(soma_total)
-                print(f'SOMASE FRONT:\n{averbado_novo['SOMASE FRONT']}')
+                averbado_novo['SOMASE FRONT'] = averbado_novo['CPF'].map(soma_total)
+                print(f'SOMASE FRONT 102.948.874-66:\n{averbado_novo.loc[averbado_novo['CPF'] == '102.948.874-66', 'SOMASE FRONT']}')
             else:
-                averbado_novo['SOMASE FRONT'] = averbado_novo['CPF_Formatado'].map(soma_series_averb)
+                averbado_novo['SOMASE FRONT'] = averbado_novo['CPF'].map(soma_series_averb)
                 averbado_novo['SOMASE FRONT'] = pd.to_numeric(averbado_novo['SOMASE FRONT'], errors='coerce').fillna(0)
 
             # 2. Agora o .add() vai funcionar, pois soma_series_averb ainda é um objeto Pandas
             # Supondo que mask_orbital também seja uma Series de CPFs e valores
             # soma_total = soma_series_averb.add(mask_orbital, fill_value=0)
 
-            if averbado_novo['Margem Reservada'].dtype != 'float64':
-                averbado_novo['Margem Reservada'] = averbado_novo['Margem Reservada'].astype(str).str.replace(".", "")
-                averbado_novo['Margem Reservada'] = averbado_novo['Margem Reservada'].astype(str).str.replace(",", ".")
-                averbado_novo['Margem Reservada'] = pd.to_numeric(averbado_novo['Margem Reservada'], errors='coerce').fillna(0)
+            if averbado_novo['Valor da Parcela'].dtype != 'float64':
+                averbado_novo['Valor da Parcela'] = averbado_novo['Valor da Parcela'].astype(str).str.replace(".", "")
+                averbado_novo['Valor da Parcela'] = averbado_novo['Valor da Parcela'].astype(str).str.replace(",", ".")
+                averbado_novo['Valor da Parcela'] = pd.to_numeric(averbado_novo['Valor da Parcela'], errors='coerce').fillna(0)
 
             
 
@@ -867,22 +900,23 @@ class INFOCONSIG:
 
             # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
             # Esta é a "mágica" que substitui a necessidade de um loop.
-            averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF')['Margem Reservada'].cumsum()
+            averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF')['Valor da Parcela'].cumsum()
             
 
             # 2. Calcula o valor que JÁ FOI ALOCADO para as linhas ANTERIORES.
             # É a soma acumulada até a linha atual, menos o valor da própria linha.
-            alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Margem Reservada']
+            alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Valor da Parcela']
             averbado_novo['ALOCADO ANTERIORMENTE'] = alocado_anteriormente
 
             # 3. Calcula o saldo restante do SOMASE ANTES de processar a linha atual.
-            saldo_restante = averbado_novo['SOMASE FRONT'] - alocado_anteriormente
+            saldo_restante = averbado_novo['SOMASE FRONT'] - averbado_novo['ALOCADO ANTERIORMENTE']
             averbado_novo['SALDO RESTANTE'] = saldo_restante
+            averbado_novo['SALDO RESTANTE'] = averbado_novo['SALDO RESTANTE'].fillna(0)
             print(f'Saldo restante:\n{averbado_novo['SALDO RESTANTE']}')
 
             # 4. O valor a lançar é o MÍNIMO entre o que a reserva da linha pede e o saldo que ainda temos.
             # Usamos .clip(0) para garantir que o saldo não seja negativo (se já estourou, é 0).
-            valor_a_lancar = np.minimum(averbado_novo['Margem Reservada'], saldo_restante.clip(0))
+            valor_a_lancar = np.minimum(averbado_novo['Valor da Parcela'], saldo_restante.clip(0))
 
             # 5. Atribui o resultado final arredondado às colunas.
             averbado_novo['Lançar'] = valor_a_lancar.round(2)
@@ -988,7 +1022,7 @@ class INFOCONSIG:
             # Condição de Operações Liquidadas, se a linha estiver preenchida vai lançar 0
 
         # --- 2.5 Puxa as liminares ---
-        data_averbados["LIMINAR"] = data_averbados['CPF_Formatado'].map(tutela.set_index('CPF')['Acao Judicial'].to_dict())
+        data_averbados["LIMINAR"] = data_averbados['CPF'].map(tutela.set_index('CPF')['Acao Judicial'].to_dict())
         condicao_liminar = data_averbados['LIMINAR'] == 1
 
         # --- 3. Soma todos os valores encontrados (forma eficiente) ---
@@ -1012,20 +1046,20 @@ class INFOCONSIG:
         # --- 4. Cálculo da Diferença e Formatação Final ---
 
         # Garante que a coluna de Valor Prestacao é numérica antes do cálculo
-        if data_averbados['Margem Reservada'].dtype != 'float64':
-            data_averbados['Margem Reservada'] = data_averbados['Margem Reservada'].astype(str).str.replace(".", "")
-            data_averbados['Margem Reservada'] = data_averbados['Margem Reservada'].astype(str).str.replace(",", ".")
-            data_averbados['Margem Reservada'] = pd.to_numeric(data_averbados['Margem Reservada'], errors='coerce').fillna(0)
+        if data_averbados['Valor da Parcela'].dtype != 'float64':
+            data_averbados['Valor da Parcela'] = data_averbados['Valor da Parcela'].astype(str).str.replace(".", "")
+            data_averbados['Valor da Parcela'] = data_averbados['Valor da Parcela'].astype(str).str.replace(",", ".")
+            data_averbados['Valor da Parcela'] = pd.to_numeric(data_averbados['Valor da Parcela'], errors='coerce').fillna(0)
 
         # data_averbados['Soma Total'] = data_averbados['Soma Total'].fillna(0)
-        data_averbados['Diff'] = data_averbados['Soma Total'] - data_averbados['Margem Reservada']
+        data_averbados['Diff'] = data_averbados['Soma Total'] - data_averbados['Valor da Parcela']
         data_averbados['Diff'] = data_averbados['Diff'].round(2)
 
         # --- 5. Cria a coluna Lançar ---
         if consig == 'HOJE PREVIDÊNCIA PRIVADA':
             data_averbados = self.adiciona_peculio(data_averbados)
         else:
-            data_averbados['Lançar'] = np.minimum(data_averbados['Soma Total'], data_averbados['Margem Reservada'])
+            data_averbados['Lançar'] = np.minimum(data_averbados['Soma Total'], data_averbados['Valor da Parcela'])
             data_averbados.loc[condicao_liminar, 'Lançar'] = 0
 
         # print("Cálculos de Soma Total e Diferença finalizados.")
@@ -1035,15 +1069,16 @@ class INFOCONSIG:
     def arquivo_lancamento(self):
         # Cria o novo DataFrame
         data_averbados = self.trata_averbacao()
-        front_trabalhado = self.tratamento_front()
+        front_trabalhado = self.front_trabalhado
         temp = data_averbados[data_averbados['Lançar'] != 0]
+        print(f'Colunas de data_averbados: {data_averbados.columns}')
         colunas_alancar = ['Servidor', 'CPF', 'MatrÃ­cula', 'Lançar']
         a_lancar = pd.DataFrame(temp[colunas_alancar])
         a_lancar = a_lancar.rename(columns={'Lançar': 'VALOR DO DESCONTO', 'Servidor': 'Nome', 'MatrÃ­cula': 'MATRICULA'})
 
 
         # Calcule a SOMASE para cada categoria no Averbacoes Trabalhadas
-        somas_por_categoria = data_averbados.groupby('CPF_Formatado')['Lançar'].transform('sum')
+        somas_por_categoria = data_averbados.groupby('CPF')['Lançar'].transform('sum')
         data_averbados['SOMASE LANCAMENTO'] = somas_por_categoria
         data_averbados['SOMASE LANCAMENTO'] = data_averbados['SOMASE LANCAMENTO'].astype(float)
 
@@ -1053,7 +1088,7 @@ class INFOCONSIG:
             data_averbados['SOMASE FRONT'] = ''
 
             soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
-            data_averbados['SOMASE FRONT'] = data_averbados['CPF_Formatado'].map(soma_condicional_dict_averb)
+            data_averbados['SOMASE FRONT'] = data_averbados['CPF'].map(soma_condicional_dict_averb)
 
             
             data_averbados['SOMASE FRONT'] = data_averbados['SOMASE FRONT'].map('{:.2f}'.format).astype(float)
@@ -1070,7 +1105,7 @@ class INFOCONSIG:
         front_trabalhado.insert(18, 'DIFF', '', True)
 
         # Somase Averb no Front Trabalhado
-        soma_condicional_dict_front = data_averbados.groupby('CPF_Formatado')['Lançar'].sum().to_dict()
+        soma_condicional_dict_front = data_averbados.groupby('CPF')['Lançar'].sum().to_dict()
         front_trabalhado['SOMASE AVERB'] = front_trabalhado['CPF'].map(soma_condicional_dict_front)
         front_trabalhado['DIFF'] = front_trabalhado['SOMASE FRONT'] - front_trabalhado['SOMASE AVERB'].astype(
             float)
@@ -1095,13 +1130,12 @@ class INFOCONSIG:
 
         # SOMASE Interno (Averbados)
         # transform('sum') já mantém o índice alinhado, perfeito.
-        data_averbados['SOMASE LANCAMENTO'] = data_averbados.groupby('CPF_Formatado')['Lançar'].transform('sum').round(2)
+        data_averbados['SOMASE LANCAMENTO'] = data_averbados.groupby('CPF')['Lançar'].transform('sum').round(2)
 
         # SOMASE Externo (Vem do Front)
-        soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
+        # soma_condicional_dict_averb = front_trabalhado.groupby('CPF')['Valor a lançar'].sum().to_dict()
 
-        # Mapeia e já preenche com 0 quem não for encontrado (fillna)
-        data_averbados['SOMASE FRONT'] = data_averbados['CPF_Formatado'].map(soma_condicional_dict_averb).fillna(0).round(2)
+        data_averbados['SOMASE FRONT'] = data_averbados['SOMASE FRONT'].map('{:.2f}'.format).astype(float)
 
         # Cálculo do DIFF
         data_averbados['DIFF'] = data_averbados['SOMASE FRONT'] - data_averbados['SOMASE LANCAMENTO']
@@ -1128,10 +1162,10 @@ class INFOCONSIG:
             front_trabalhado['SOMASE FRONT'] = front_somase
 
         # SOMASE Externo (Vem do Averbados)
-        soma_condicional_dict_front = data_averbados.groupby('CPF_Formatado')['Lançar'].sum().to_dict()
+        soma_condicional_dict_front = data_averbados.groupby('CPF')['Lançar'].sum().to_dict()
 
         # Cria a coluna SOMASE AVERB mapeando e preenchendo vazios com 0
-        # Nota: Certifique-se que front_trabalhado['CPF'] e data_averbados['CPF_Formatado'] são idênticos (pontos/traços)
+        # Nota: Certifique-se que front_trabalhado['CPF'] e data_averbados['CPF'] são idênticos (pontos/traços)
         front_trabalhado['SOMASE AVERB'] = front_trabalhado['CPF'].map(soma_condicional_dict_front).fillna(0).round(2)
         # Cálculo do DIFF
         front_trabalhado['DIFF'] = front_trabalhado['SOMASE FRONT'] - front_trabalhado['SOMASE AVERB']
