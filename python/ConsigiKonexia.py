@@ -62,7 +62,8 @@ class CONSIGI_KONEXIA:
             convenio=self.convenio, 
             consignataria=self.consignataria,
             funcao=self.funcao, 
-            andamento_funcao=self.andamento_funcao
+            andamento_funcao=self.andamento_funcao,
+            caminho=self.caminho
         )
 
         # 2. Chama a primeira unificação (Função pura)
@@ -94,7 +95,7 @@ class CONSIGI_KONEXIA:
         front = self.front_semi_trabalhado
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         if front is False:
@@ -108,8 +109,11 @@ class CONSIGI_KONEXIA:
 
         # PEGA APENAS AS COLUNAS NECESSÁRIAS DO ARQUIVO BRUTO
         # colunas = ['A D E', 'SERVIDOR', 'MATRÍCULA', 'CPF', 'VALOR DA PARCELA', 'NRO CONTRATO']
-        colunas = ['CONSIGNATÁRIA', 'PRODUTO','SERVIDOR', 'MATRÍCULA', 'CPF', 'VALOR DA PARCELA', 'NRO CONTRATO']
+        colunas = ['ID', 'CONSIGNATÁRIA', 'PRODUTO', 'FUNCIONÁRIO', 'SERVIDOR', 'MATRÍCULA', 'CPF', 'VALOR DA PARCELA', 'NRO CONTRATO']
         data_averbados_bruto = data[colunas]
+
+        # Remove Suporte
+        data_averbados_bruto = data_averbados_bruto[data_averbados_bruto['FUNCIONÁRIO'] != 'Suporte']
 
         '''data_averbados_bruto['NRO CONTRATO'] = data_averbados_bruto['NRO CONTRATO'].fillna('')
         data_averbados_bruto = data_averbados_bruto[data_averbados_bruto['NRO CONTRATO'] != '']

@@ -78,7 +78,7 @@ class INFOCONSIG:
             front=self.front, 
             convenio=self.convenio, 
             funcao=self.funcao, 
-            andamento_funcao=self.andamento_funcao
+            andamento_funcao=self.andamento_funcao, caminho=self.caminho
         )
 
         # 2. Chama a primeira unificação (Função pura)
@@ -441,7 +441,7 @@ class INFOCONSIG:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Front trabalhado são do mesmo tipo
@@ -811,7 +811,7 @@ class INFOCONSIG:
             orbital_tratado = preparando_orbital.orbital_tratado()
         convenio = self.convenio
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         if front is False:
@@ -941,7 +941,7 @@ class INFOCONSIG:
 
         data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO

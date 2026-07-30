@@ -82,7 +82,7 @@ class SAFECONSIG:
             front=self.front, 
             convenio=self.convenio, 
             funcao=self.funcao, 
-            andamento_funcao=self.andamento_funcao
+            andamento_funcao=self.andamento_funcao, caminho=self.caminho
         )
 
         # 2. Chama a primeira unificação (Função pura)
@@ -99,7 +99,7 @@ class SAFECONSIG:
 
         self.front_semi_trabalhado = self.tratamento_front_preliminar()
         self.front_trabalhado = self.tratamento_front()
-        prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         self.conciliacao_tratada = prepara_conciliacao.trata_conciliacao()
         
         self.averbados_func()
@@ -306,7 +306,7 @@ class SAFECONSIG:
         # TRAVA DE SEGURANÇA: Remove qualquer coluna duplicada que tenha vindo dos merges anteriores
         front_copy = front.loc[:, ~front.columns.duplicated()].copy()
         
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo

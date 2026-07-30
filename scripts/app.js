@@ -6,14 +6,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Grupos de Convênios
     const CONVENIOS_CODATA = ["GOV. PARAÍBA"];
     const CONVENIOS_INSS = ["INSS"];
-    const CONVENIOS_CONSIGFACIL = [
-        "GOV. MARANHÃO", "GOV. MATO GROSSO","GOV. PERNAMBUCO","GOV. PIAUÍ", "PREF. BAYEUX", "PREF. CAJAMAR",
-        "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. PORTO VELHO",
-        "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
-        "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
-        "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RIO GRANDE DO NORTE", "PREF. NATAL",
-        "PREF. TUTÓIA"
-    ];
+    const CONVENIOS_CONSIGFACIL = ["GOV. MARANHÃO", "GOV. MATO GROSSO","GOV. PERNAMBUCO","GOV. PIAUÍ", "PREF. BAYEUX", "PREF. CAJAMAR",
+                                   "PREF. CAMPINA GRANDE", "PREF. CAMPO GRANDE", "PREF. CUIABÁ", "PREF. PORTO VELHO",
+                                   "PREF. IMPERATRIZ MA", "PREF. ITU", "PREF. JOÃO PESSOA", "PREF. JUAZEIRO DO NORTE",
+                                   "PREF. MARABÁ", "PREF. NITERÓI", "PREF. PAÇO DO LUMIAR", "PREF. PALMAS", "PREF. RECIFE",
+                                   "PREF. SANTA RITA", "PREF. TERESINA", "CÂMARA DE TERESÓPOLIS", "GOV. RIO GRANDE DO NORTE", "PREF. NATAL",
+                                   "PREF. TUTÓIA"
+                                  ];
     const CONVENIOS_SERHA = ["GOV. MINAS GERAIS - IPSM", "GOV. MINAS GERAIS - CBMMG", "GOV. MINAS GERAIS - PMMG", 
                              "GOV. MINAS GERAIS - SEPLAG", "GOV. MINAS GERAIS - IPSEMG"];
 

@@ -291,7 +291,7 @@ class INSS:
 
         # Marca saldo positivo
         # conciliacao_tatado = self.trata_conciliacao()
-        prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = prepara_conciliacao.trata_conciliacao()
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'] # .astype('Int64')
         front_consig['Saldo'] = front_consig['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo'].to_dict())

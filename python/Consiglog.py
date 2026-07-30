@@ -58,7 +58,7 @@ class CONSIGLOG:
             front=self.front, 
             convenio=self.convenio, 
             funcao=self.funcao, 
-            andamento_funcao=self.andamento_funcao
+            andamento_funcao=self.andamento_funcao, caminho=self.caminho
         )
 
         # 2. Chama a primeira unificação (Função pura)
@@ -391,7 +391,7 @@ class CONSIGLOG:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Front trabalhado são do mesmo tipo
@@ -733,7 +733,7 @@ class CONSIGLOG:
         front = self.tratamento_front_preliminar()
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         if front is False:

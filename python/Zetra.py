@@ -63,7 +63,7 @@ class ZETRA:
             front=self.front, 
             convenio=self.convenio, 
             funcao=self.funcao, 
-            andamento_funcao=self.andamento_funcao
+            andamento_funcao=self.andamento_funcao, caminho=self.caminho
         )
 
         # 2. Chama a primeira unificação (Função pura)
@@ -459,7 +459,7 @@ class ZETRA:
         if self.conciliacao is None:
             return front
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'].astype('float64')
@@ -834,7 +834,7 @@ class ZETRA:
 
         semi_front = front[front['Esteira'].isin(self.condicoes_1)]
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO

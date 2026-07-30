@@ -7,13 +7,14 @@ import os
 
 
 class UNIFICA_FRONT_FUNC_ESTEIRAS:
-    def __init__(self, front, convenio, consignataria=None, funcao=None, andamento_funcao=None):
+    def __init__(self, front, convenio, consignataria=None, funcao=None, andamento_funcao=None, caminho=None):
         self.front = front
         self.convenio = convenio
         self.consignataria = consignataria if consignataria is not None else None
         self.funcao = funcao
         self.andamento_funcao = andamento_funcao
         self.condicoes_1 = load_esteiras()
+        self.caminho = caminho
 
         if self.andamento_funcao is not None:
             print('Tipo da coluna Valor da Parcela antes da conversão:\n', self.andamento_funcao['Valor da Parcela'].dtype)
@@ -114,6 +115,12 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         
         #  Separar no andamento do função somente o convenio que vamos juntar
         if self.andamento_funcao is not None:
+            colunas = ['Proposta', 'Operação', 'CPF/CNPJ', 'MatrÍcula', 'Cliente', 'Quantidade de Parcelas', 'Data Base', 'Valor da Parcela', 'Descrição do Produto',
+                                   'Descrição da Atividade', 'Descrição EMPREGADOR']
+            
+            # Vai receber só essas colunas
+            andamento_funcao_excel = andamento_funcao[colunas]
+            andamento_funcao_excel.to_excel(os.path.join(self.caminho, f'ESTEIRAS DO FUNÇÃO COM MENOS COLUNAS.xlsx'), index=False)
             print(f'Andamento do função filtrado para o convenio antes da seleção de empregador {self.convenio}:\n{self.andamento_funcao.head()}')
             self.andamento_funcao = self.andamento_funcao[self.andamento_funcao['Descrição EMPREGADOR'].isin(self.mapeamento_convenio.get(self.convenio, []))]
             print(f'Andamento do função filtrado para o convenio {self.convenio}:\n{self.andamento_funcao.head()}')
@@ -532,7 +539,7 @@ class TRATA_CONTRATOS:
         # Como deve ficar:
         front['Contrato'] = front['Contrato'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-        # teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        # teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         teste_conciliacao = self.conciliacao_tratada
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
@@ -588,6 +595,10 @@ class TRATA_CONTRATOS:
         for i, nome_coluna_contrato in enumerate(colunas_com_contratos, start=1):
             # print(f"Processando coluna '{nome_coluna_contrato}'...")
 
+            data_averbados[f'OBS {i}'] = data_averbados[nome_coluna_contrato].map(
+                front.set_index('Contrato')['OBS'].to_dict()
+            )
+
             # Cria a coluna de Esteira correspondente
             data_averbados[f'Esteira_{i}'] = data_averbados[nome_coluna_contrato].map(
                 front.set_index('Contrato')['Esteira'].to_dict()
@@ -599,7 +610,7 @@ class TRATA_CONTRATOS:
             )
 
             # Puxa os valores de saldo da conciliação
-            data_averbados[f'Saldo {i}'] = data_averbados[nome_coluna_contrato].map(
+            """data_averbados[f'Saldo {i}'] = data_averbados[nome_coluna_contrato].map(
                 semi_front.set_index('Contrato')['Saldo'].to_dict()
             )
 
@@ -609,22 +620,33 @@ class TRATA_CONTRATOS:
                 oper_liq.set_index('Nº OPERAÇÃO EDITADO')['Contrato'].to_dict()
             )
 
-            print(f'Verificar qual é o saldo do contrato "302298345": {data_averbados.loc[data_averbados[f"Contrato Editado {i}"] == "302298345", f"Saldo {i}"]}')
+            # --- 2.5 Puxa as liminares ---
+            data_averbados[f"LIMINAR {i}"] = data_averbados[nome_coluna_contrato].map(
+                semi_front.set_index('Contrato')['Acao Judicial'].to_dict()
+            )
+            data_averbados.loc[data_averbados[f"LIMINAR {i}"] != 1, f'LIMINAR {i}'] = ''
+
+            # --- 3 Puxa os extrajudiciais ---
+            data_averbados[f"EXTRA JUDICIAL {i}"] = data_averbados[nome_coluna_contrato].map(
+                semi_front.set_index('Contrato')['OBS'].to_dict()
+            )
+            data_averbados.loc[data_averbados[f"EXTRA JUDICIAL {i}"] != 'EXTRA JUDICIAL', f'EXTRA JUDICIAL {i}'] = ''"""
+
+            # print(f'Verificar qual é o saldo do contrato "302298345": {data_averbados.loc[data_averbados[f"Contrato Editado {i}"] == "302298345", f"Saldo {i}"]}')
 
             # --- PASSO 2: PREPARAÇÃO E LIMPEZA DE DADOS ---
             # Agora que todas as colunas foram criadas, garantimos que sejam numéricas para os cálculos.
             if data_averbados[f'Valor_Unif_{i}'].dtype != 'float64':
                 data_averbados[f'Valor_Unif_{i}'] = data_averbados[f'Valor_Unif_{i}'].astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
-                data_averbados[f'Valor_Unif_{i}'] = pd.to_numeric(data_averbados[f'Valor_Unif_{i}'],
-                                                                errors='coerce').fillna(0)
-            if data_averbados[f'Saldo {i}'].dtype != 'float64':
+                data_averbados[f'Valor_Unif_{i}'] = pd.to_numeric(data_averbados[f'Valor_Unif_{i}'], errors='coerce').fillna(0)
+            '''if data_averbados[f'Saldo {i}'].dtype != 'float64':
                 data_averbados[f'Saldo {i}'] = data_averbados[f'Saldo {i}'].astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
-                data_averbados[f'Saldo {i}'] = pd.to_numeric(data_averbados[f'Saldo {i}'], errors='coerce').fillna(-np.inf)
+                data_averbados[f'Saldo {i}'] = pd.to_numeric(data_averbados[f'Saldo {i}'], errors='coerce').fillna(-np.inf)'''
 
             # --- PASSO 3: CONSTRUIR AS CONDIÇÕES E APLICAR A LÓGICA ---
 
             # Condição 1: Encontra todas as linhas onde o Saldo (já limpo) é >= 0
-            condicao_saldo_positivo = data_averbados[f'Saldo {i}'] >= -1
+            """condicao_saldo_positivo = data_averbados[f'Saldo {i}'] >= -1
 
             # Condição 2: Encontra onde um contrato liquidado foi efetivamente encontrado (FORMA CORRIGIDA E ROBUSTA)
             # .notna() garante que só pegamos as linhas onde o map retornou um valor, e não NaN.
@@ -632,16 +654,27 @@ class TRATA_CONTRATOS:
             condicao_op_liq = data_averbados[f'OP LIQ {i}'] != ''
             condicao_esteira = ~data_averbados[f'Esteira_{i}'].isin(self.condicoes_1)
 
+            # --- 2.5 Puxa as liminares ---
+            data_averbados[f"LIMINAR {i}"] = data_averbados[f"LIMINAR {i}"].fillna('')
+            condicao_liminar = data_averbados[f'LIMINAR {i}'] == 1
+
+            # --- 3 Extra judicial ---
+            data_averbados[f"EXTRA JUDICIAL {i}"] = data_averbados[f"EXTRA JUDICIAL {i}"].fillna('')
+            condicao_extra_judicial = data_averbados[f'EXTRA JUDICIAL {i}'] == 'EXTRA JUDICIAL'"""
+
+            # --- 4 OBS ---
+            data_averbados[f'OBS {i}'] = data_averbados[f'OBS {i}'].fillna('')
+            condicao_obs = data_averbados[f'OBS {i}'] != ''
+
             # Ação: Nessas linhas, define o 'Valor_Unif' correspondente como 0
             # O operador | significa OU (se uma condição OU a outra for verdadeira)
-            data_averbados.loc[(condicao_saldo_positivo | condicao_op_liq | condicao_esteira), f'Valor_Unif_{i}'] = 0
+            # data_averbados.loc[(condicao_saldo_positivo | condicao_op_liq | condicao_esteira | condicao_liminar | condicao_extra_judicial), f'Valor_Unif_{i}'] = 0
+            data_averbados.loc[condicao_obs, f'Valor_Unif_{i}'] = 0
             # --- FIM DA NOVA LÓGICA ---
 
             # Condição de Operações Liquidadas, se a linha estiver preenchida vai lançar 0
 
-        # --- 2.5 Puxa as liminares ---
-        data_averbados["LIMINAR"] = data_averbados['CPF_temp'].map(tutela.set_index('CPF')['Acao Judicial'].to_dict())
-        condicao_liminar = data_averbados['LIMINAR'] == "SIM"
+        
 
         # Vamos remover a coluna CPF_temp
         data_averbados.drop(columns=['CPF_temp'], inplace=True)

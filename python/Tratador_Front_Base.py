@@ -105,6 +105,19 @@ class TratadorFrontBase:
         print(f'tipo de OBS antes de marcar OBS: {df["OBS"].dtype}')
         df.loc[df['Saldo'] > -0.01, 'OBS'] = 'NÃO LANÇAR - SALDO POSITIVO'
 
+        if self.extra_judicial is not None:
+            # 1. Garante que as colunas das duas bases sejam tratadas como string para comparação exata
+            contratos_df = df['Contrato'].astype(str)
+            contratos_extra = self.extra_judicial['CONTRATO'].astype(str)
+            
+            # 2. Cria a máscara booleana (True se o contrato do df estiver na lista da extra_judicial)
+            mask_extra_judicial = contratos_df.isin(contratos_extra)
+            
+            # 3. Aplica o valor 'EXTRA JUDICIAL' na coluna 'OBS' usando o .loc corretamente
+            df.loc[mask_extra_judicial, 'OBS'] = 'EXTRA JUDICIAL'
+
+            df['OBS'] = df['OBS'].fillna('')
+
         # Ação Judicial e Óbito
         if 'Acao Judicial' in df.columns:
             df['Acao Judicial'] = df['Acao Judicial'].replace({'SIM': 1, 'NAO': 0, 'NÃO': 0})
@@ -122,7 +135,7 @@ class TratadorFrontBase:
     
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
@@ -225,8 +238,8 @@ class TratadorFrontBase:
         return df
     
 # 1. Defina as Expressões Regulares no topo do arquivo para padronizar e evitar erros de digitação
-REGEX_CARTAO_COMPLETO = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO|CARTAO BENEFICIO'
-REGEX_CARTAO_SIMPLES = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO'
+REGEX_CARTAO_COMPLETO = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO|CARTAO CONSIGNAD|CARTAO BENEFICIO'
+REGEX_CARTAO_SIMPLES = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO|CARTAO CONSIGNAD'
 REGEX_BENEFICIO = 'CARTAO BENEFICIO'
 
 

@@ -541,7 +541,7 @@ class SERHA:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
         if conciliacao_tratado is False:
             print("validacao_termino_front: O tratamento da conciliação falhou. Verifique os erros anteriores.")

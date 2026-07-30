@@ -2,11 +2,10 @@ import pandas as pd
 import numpy as np
 
 class TRATA_CONCILIACAO:
-    def __init__(self, conciliacao, kobraki=None, tacs=None, extra_judicial=None):
+    def __init__(self, conciliacao, kobraki=None, tacs=None):
         self.conciliacao = conciliacao
         self.kobraki = kobraki if kobraki is not None else None
         self.tacs = tacs if tacs is not None else None
-        self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
         self.conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL', ' RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
         self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
@@ -36,12 +35,6 @@ class TRATA_CONCILIACAO:
         kobraki_tratado = self.kobraki
         tacs_tratado = self.tacs
 
-        extra_judicial_tratado = self.extra_judicial
-        if extra_judicial_tratado is not None:
-            if extra_judicial_tratado['VALOR RECEBIDO'].dtype != 'float64' and extra_judicial_tratado is not None:
-                    extra_judicial_tratado['VALOR RECEBIDO'] = extra_judicial_tratado['VALOR RECEBIDO'].astype(str).str.replace("R$ ", "").str.replace(".", "")
-                    extra_judicial_tratado['VALOR RECEBIDO'] = extra_judicial_tratado['VALOR RECEBIDO'].str.replace(",", ".")
-                    extra_judicial_tratado['VALOR RECEBIDO'] = pd.to_numeric(extra_judicial_tratado['VALOR RECEBIDO'], errors="coerce")
 
         conciliacao_tratado = self.conciliacao
         # Converte para lista de colunas
@@ -115,19 +108,6 @@ class TRATA_CONCILIACAO:
         else:
             conciliacao_tratado['TACS'] = 0.0
 
-
-        # --- BLOCO EXTRA JUDICIAL ---
-        if extra_judicial_tratado is not None:
-            if precisa_converter:
-                extra_judicial_tratado['CONTRATO'] = extra_judicial_tratado['CONTRATO'].astype(str)
-                
-            somase_extra = extra_judicial_tratado.groupby('CONTRATO')['VALOR RECEBIDO'].sum()
-            conciliacao_tratado['EXTRA JUDICIAL'] = conciliacao_tratado['CONTRATOS'].map(somase_extra).fillna(0)
-            
-            # Acumula o valor no total
-            conciliacao_tratado['TOTAL RECEBIDO'] += conciliacao_tratado['EXTRA JUDICIAL']
-        else:
-            conciliacao_tratado['EXTRA JUDICIAL'] = 0.0
 
         # 2. Calcular prestação * prazo
         # Garante que cada linha tenha um índice único de 0 até o final
