@@ -18,75 +18,20 @@ import numpy as np
 
 
 class ANDAMENTO:
-    def __init__(self, front, convenio, caminho, andamento=None, funcao=None):
+    def __init__(self, front, convenio, caminho, andamento=None):
         self.front = front
         self.andamento = andamento
         self.convenio = convenio
         self.caminho = caminho
         self.esteiras = load_esteiras()
-        self.funcao = funcao
+        # self.funcao = funcao
 
-    def unifica_front_funcao(self):
-        front = self.front
-        funcao = self.funcao
-
-        if funcao is None:
-            print('\nDEBUG class ANDAMENTO -> funcao unifica_fron_funcao -> Arquivo "Função" é nulo, retornando "front" sem tratamento\n')
-            return front
-        # tipos dos contratos de cada dataframe
-        '''print('Tipo da coluna Contrato do Front', front['Contrato'].dtype)
-        print('Tipo da coluna NR_PROP do Funcao', funcao['NR_PROP'].dtype)'''
-
-        contrato_front = front['Contrato']
-        ccb_tratado = front['CCB'].astype(str).str.slice(0, 9).fillna(0).astype('float64')
-
-        ccb_tratado = ccb_tratado.astype('int64')
-
-        # Tira os contratos do Front que já existem no Função
-        funcao = funcao[(~funcao['NR_PROP'].isin(contrato_front)) & (~funcao["ORIGEM_3"].str.contains("IV PROMOTORA"))].copy()
-
-        # Tira os contratos CCB do Front que também existem no Função
-        funcao = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
-
-        # Juntar Funcao com Front
-        # 1. Defina o mapeamento de nomes (De: Para)
-        mapeamento = {
-            'NR_PROP': 'Contrato',
-            'CPF': 'CPF',
-            'MATRICULA': 'Matricula',
-            'CLIENTE': 'Nome',
-            'PARC': 'Prazo',
-            'VLR_PARC': 'Prestacao',
-            'PRODUTO': 'Tipo Operacao',
-            'ORIGEM_4': 'Convenio'
-        }
-
-        # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
-        # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
-        funcao_ajustado = funcao[list(mapeamento.keys())].rename(columns=mapeamento)
-
-        # 3. Use o concat para unir os dois DataFrames
-        # O ignore_index=True serve para gerar um novo índice sequencial no DF final
-        front_unif = pd.concat([front, funcao_ajustado], ignore_index=True)
-
-        # Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
-        front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
-        front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
-        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG ")
-        front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
-        front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
-        front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
-
-        print('front unif finalzin:\n', front_unif.tail())
-
-        # front_unif.to_excel(rf"{self.caminho}\Teste_front.xlsx", index=False)
-
-        return front_unif
     
     def andamento_func_front(self):
         front = self.front
         # 1. VALIDAÇÃO E TRATAMENTO INICIAL
         if self.andamento is None:
+            print(f'Andamento não existe ou está vazio. Retornando Front sem tratamento.')
             return front
 
         # --- NOVO FILTRO DE OBS ---
@@ -102,6 +47,7 @@ class ANDAMENTO:
 
         # Se não houver nada para processar, já retorna o original
         if front_para_processar.empty:
+            print('Não há nada para processar, retornando o front original')
             return front
         # --------------------------
 

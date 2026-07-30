@@ -664,7 +664,7 @@ class TRATA_CONTRATOS:
 
             # --- 4 OBS ---
             data_averbados[f'OBS {i}'] = data_averbados[f'OBS {i}'].fillna('')
-            condicao_obs = data_averbados[f'OBS {i}'] != ''
+            condicao_obs = (data_averbados[f'OBS {i}'] != '') & (data_averbados[f'OBS {i}'] != 'NÃO LANÇAR - NÃO CARTÃO')
 
             # Ação: Nessas linhas, define o 'Valor_Unif' correspondente como 0
             # O operador | significa OU (se uma condição OU a outra for verdadeira)

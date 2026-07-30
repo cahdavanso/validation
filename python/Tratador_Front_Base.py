@@ -3,9 +3,10 @@ import numpy as np
 import os
 from datetime import datetime
 from python.trata_conciliacao import TRATA_CONCILIACAO
+from python.Andamento import ANDAMENTO
 
 class TratadorFrontBase:
-    def __init__(self, front, conciliacao, convenio, caminho, orbital=None, condicoes_1=None, consignataria=None, rubrica=None, kobraki=None, tacs=None, extra_judicial=None):
+    def __init__(self, front, conciliacao, convenio, caminho, orbital=None, condicoes_1=None, consignataria=None, rubrica=None, kobraki=None, tacs=None, extra_judicial=None, andamento=None):
         self.front = front.copy()
         self.conciliacao = conciliacao.copy()
         self.orbital = orbital
@@ -17,6 +18,7 @@ class TratadorFrontBase:
         self.kobraki = kobraki
         self.tacs = tacs
         self.extra_judicial = extra_judicial
+        self.andamento = andamento
 
     def preparar_colunas(self, df):
         """Insere as colunas padrão que todos os convênios utilizam"""
@@ -247,12 +249,19 @@ class TratadorConsigfacil(TratadorFrontBase):
     def aplicar_regras_especificas(self, df):
         if self.convenio not in ['PREF. PALMAS']:
             df.loc[df['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
-            
+
+        print(f'TratadorConsigfacil ativado')
+
+        # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
+        objeto_andamento = ANDAMENTO(df, self.convenio, self.caminho, self.andamento) # if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
+        df = objeto_andamento.andamento_func_front()
+        # df['PRAZO'] = df['Contrato'].astype(str).map(df.set_index('Contrato')['PRAZO'])
+        df['Contrato'] = df['Contrato'].astype('int64')
         # CORREÇÃO: Sem o "df = " antes do loc. E trocado pd.na por pd.NA (maiúsculo)
         if self.convenio in ['GOV. MARANHÃO']:
             df.loc[~df['PRAZO'].isin([pd.NA, np.nan, '', 1]), 'OBS'] = 'NÃO LANÇAR - PRAZO'
         else:
-            df.loc[df['PRAZO'].isin([pd.NA, np.nan, '']), 'OBS'] = 'NÃO LANÇAR - PRAZO'
+            df.loc[~df['PRAZO'].isin([pd.NA, np.nan, '']), 'OBS'] = 'NÃO LANÇAR - PRAZO'
             
         return df
 

@@ -82,7 +82,7 @@ class CONSIGFACIL:
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
 
         # Esteiras
-        self.esteiras_permitidas = load_esteiras()
+        self.condicoes_1 = load_esteiras()
 
         # 1. Instancia a classe
         unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
@@ -104,6 +104,22 @@ class CONSIGFACIL:
         self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
         self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
 
+        front_semi_trabalhado_preliminar = TratadorConsigfacil(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
+                                                               caminho=self.caminho, condicoes_1=self.condicoes_1, kobraki=self.kobraki, tacs=tacs, andamento=self.andamento)
+        self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
+        self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
+
+
+        # Salvando Front Trabalhado
+        print('DEBUG: Esteiras finais do front trabalhado')
+        try:
+            self.front_trabalhado.to_excel(
+                os.path.join(self.caminho, f"FRONT TRABALHADO {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"),
+                index=False, 
+            )
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR FRONT TRABALHADO: {e}")
+
         # --- GATILHO: Inicia a lógica original automaticamente ---
         logging.info("Iniciando lógica original do Consigfacil...")
 
@@ -112,7 +128,7 @@ class CONSIGFACIL:
         # =======================================================================================================================================================
         # =======================================================================================================================================================
         '''instancia_front = TratadorFrontBase(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio, caminho=self.caminho, orbital=self.orbital,
-                                            condicoes_1=self.esteiras_permitidas, kobraki=self.kobraki, tacs=self.tacs, extra_judicial=self.extra_judicial)
+                                            condicoes_1=self.condicoes_1, kobraki=self.kobraki, tacs=self.tacs, extra_judicial=self.extra_judicial)
 
         # Criação do Front Semi Trabalhado
         self.front_semi_trabalhado = instancia_front.tratamento_front_preliminar_base()
@@ -140,7 +156,7 @@ class CONSIGFACIL:
         # =======================================================================================================================================================
         # =======================================================================================================================================================
         
-        self.front_trabalhado = self.tratamento_front()
+        self.front_trabalhado = self.front_trabalhado
         self.averbados_func()
 
 
@@ -269,7 +285,7 @@ class CONSIGFACIL:
         # Adiciona só as esteiras que podem ser lançadas
         front_consig_esteiras = front_consig.copy()
 
-        front_consig_esteiras.loc[~front_consig_esteiras['Esteira'].isin(self.esteiras_permitidas), 'OBS'] = 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'
+        front_consig_esteiras.loc[~front_consig_esteiras['Esteira'].isin(self.condicoes_1), 'OBS'] = 'NÃO LANÇAR - ESTEIRA NÃO PERMITIDA'
 
         # Trata coluna de Tipo da Conciliação
         front_consig_esteiras.loc[front_consig_esteiras['Tipo Conciliação'].isin([np.nan, '', ' - ']), 'Tipo Conciliação'] = front_consig_esteiras['Tipo Operacao']
@@ -392,7 +408,8 @@ class CONSIGFACIL:
         return front_consig_validado_termino
         
     def tratamento_front(self):
-        front_consig = self.tratamento_front_preliminar()
+        # front_consig = self.tratamento_front_preliminar()
+        front_consig = self.front_semi_trabalhado
         print(f'Comprimento de front_consig: {len(front_consig)}')
 
         # Adiciona só as esteiras que podem ser lançadas
