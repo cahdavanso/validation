@@ -1461,7 +1461,7 @@ class SERHA:
             # print(f'VALOR SOMASE DE 867.972.636-20\n{somase_orbital['867.972.636-20']}')
 
             # 2. Filtra todas as colunas que começam com "Parcela "
-            colunas_parcelas = trabalhado_mes_atual_tratado.filter(like='Parcela ')
+            colunas_parcelas = trabalhado_mes_atual_tratado.filter(like='Valor_Unif')
 
             # NOVO PASSO: Adiciona a coluna 'ORBITAL' ao DataFrame de colunas para soma
             colunas_para_somar = colunas_parcelas.copy()  # Cria uma cópia para garantir a segurança
@@ -1476,7 +1476,7 @@ class SERHA:
         else:
             # Valor a lançar
             # 1. Filtra todas as colunas que começam com "Parcela "
-            colunas_parcelas = trabalhado_mes_atual_tratado.filter(like='Parcela ')
+            colunas_parcelas = trabalhado_mes_atual_tratado.filter(like='Valor_Unif')
 
             # 2. Soma essas colunas horizontalmente (axis=1) e cria a nova coluna
             trabalhado_mes_atual_tratado['Valor a Lançar'] = colunas_parcelas.sum(axis=1)

@@ -5,6 +5,8 @@ from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.TrataOrbital import TRATA_ORBITAL
 from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
+from python.funcoes_comuns import TRATA_CONTRATOS
+from python.Tratador_Front_Base import TratadorValidacaoSimples
 import openpyxl
 import numpy as np
 import os
@@ -52,13 +54,14 @@ class CONSIGLOG:
         self.caminho = caminho
 
         self.consignataria = consignataria
-
+        self.condicoes_1 = load_esteiras()
         # 1. Instancia a classe
         unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
             front=self.front, 
             convenio=self.convenio, 
             funcao=self.funcao, 
-            andamento_funcao=self.andamento_funcao, caminho=self.caminho
+            andamento_funcao=self.andamento_funcao, 
+            caminho=self.caminho
         )
 
         # 2. Chama a primeira unificação (Função pura)
@@ -73,79 +76,16 @@ class CONSIGLOG:
         self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
         self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio}.xlsx"), index=False)
 
-        self.condicoes_1 = load_esteiras()
+        front_semi_trabalhado_preliminar = TratadorValidacaoSimples(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
+                                                                     caminho=self.caminho, condicoes_1=self.condicoes_1, consignataria=self.consignataria,
+                                                                     kobraki=self.kobraki, tacs=tacs)
+
+        self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
+        self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
 
 
         self.arquivo_lancamento()
 
-    def unifica_front_funcao(self):
-            front = self.front
-            funcao = self.funcao
-
-            if funcao is None:
-                print('\nFunção está vazio\n')
-                return front
-
-            print(f"colunas de funcao: {funcao.columns}")
-
-            contrato_front = front['Contrato']
-            ccb_tratado = front['CCB'].astype(str).str.slice(0, 9)
-            ccb_tratado = ccb_tratado.astype('int64')
-
-            # Verifica se o que é andamento no front está no função, se tiver transforma em integrado
-            contrato_funcao = funcao['NR_PROP']
-            front.loc[front['Contrato'].isin(contrato_funcao) & (front['Esteira'].str.contains('ANDAMENTO')), 'Esteira'] = 'INTEGRADO'
-
-            # Tira os contratos do Front que já existem no Função
-            funcao = funcao[~funcao['NR_PROP'].isin(contrato_front)].copy()
-
-            # Tira os contratos CCB do Front que também existem no Função
-            funcao_tratado = funcao[~funcao['NR_PROP'].isin(ccb_tratado)].copy()
-
-
-            # Juntar Funcao com Front
-            # 1. Defina o mapeamento de nomes (De: Para)
-            mapeamento = {
-                'NR_PROP': 'Contrato',
-                'CPF': 'CPF',
-                'MATRICULA': 'Matricula',
-                'CLIENTE': 'Nome',
-                'PARC': 'Prazo',
-                'VLR_PARC': 'Prestacao',
-                'PRODUTO': 'Tipo Operacao',
-                'ORIGEM_4': 'Convenio'
-            }
-
-            # 2. Filtre apenas as colunas necessárias de Funcao e renomeie-as
-            # Isso garante que você só traga o que mapeou, evitando colunas extras indesejadas
-            funcao_ajustado = funcao_tratado[list(mapeamento.keys())].rename(columns=mapeamento)
-
-            # 3. Use o concat para unir os dois DataFrames
-            # O ignore_index=True serve para gerar um novo índice sequencial no DF final
-            front_unif = pd.concat([front, funcao_ajustado], ignore_index=True)
-
-            # Coloca Preenche o resto das colunas necessárias com valores genéricos, para não ficarem vazias
-            front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
-            # Coloca SIM onde é orbital no função
-            front_unif.loc[front_unif['Tipo Operacao'].str.contains('CARTÃO PLÁSTICO|CARTÃO PLÁSTICO - RE|CARTAO SEGURO - A VISTA| CARTAO - SEG PARC'), 'Orbital'] = 'SIM'
-
-            # Altera para cartão
-            front_unif['Tipo Operacao'] = front_unif['Tipo Operacao'].fillna('') # -> Só para ter certeza que ele vai preencher corretamente nos vazios
-            front_unif.loc[~front_unif['Tipo Operacao'].str.contains('EMPRESTIMO', na=False) & (front_unif['Operação'] == ''), 'Tipo Operacao'] = 'CARTAO DE CREDITO'
-
-            front_unif['Orbital'] = front_unif['Orbital'].fillna("NAO")
-            front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
-            front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
-            front_unif['Obito'] = front_unif['Obito'].fillna("NAO")
-            front_unif['Consignataria'] = front_unif['Consignataria'].fillna(self.consignataria)
-            
-
-
-            print(f'FRONT UNIFICADO FINALZIN: {front_unif.tail()}')
-
-            front_unif.to_excel(rf"{self.caminho}\Teste_front {self.convenio} {self.consignataria} {datetime.now().strftime("%m-%Y")}.xlsx", index=False)
-
-            return front_unif
 
 
     def tratamento_front_preliminar(self):
@@ -730,7 +670,7 @@ class CONSIGLOG:
     def trata_averbacao(self):
         # PUXA OS ARQUIVOS À SEREM TRATADOS
         data = self.averbados
-        front = self.tratamento_front_preliminar()
+        front = self.front_semi_trabalhado
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
         teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
@@ -796,12 +736,15 @@ class CONSIGLOG:
             print(f'data_averbados_bruto tipo {data_averbados_bruto['Qt Prestacao'].dtype}')
             print(f'\ndata_averbados_bruto unico {data_averbados_bruto['Qt Prestacao'].unique()}')
 
-            data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, front)
+            prepara_data_averbados = TRATA_CONTRATOS(front_semi_trabalhado=self.front_semi_trabalhado, averbados=data_averbados_bruto, convenio=self.convenio,
+                                                     conciliacao_tratada=self.conciliacao, nome_coluna_cpf='C P F', nome_coluna_contrato='Contrato Original',
+                                                     nome_coluna_parcela='Valor Prestacao')
+            data_averbados = prepara_data_averbados.trata_averbacao()
 
             semi_front = front[front['Esteira'].isin(self.condicoes_1)]
             semi_front['Contrato'] = semi_front['Contrato'].astype(str).str.strip()
 
-            conciliacao_tratado = teste_conciliacao.trata_conciliacao()
+            '''conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
             # Operações liquidadas. Tratando NRº OPER EDITADO
             # OP LIQUIDADO
@@ -881,7 +824,7 @@ class CONSIGLOG:
             # --- 2.5 Puxa as liminares ---
             data_averbados["LIMINAR"] = data_averbados['CPF_Formatado'].map(
                 self.front.set_index('CPF')['Acao Judicial'].to_dict())
-            condicao_liminar = data_averbados['LIMINAR'] == 1
+            condicao_liminar = data_averbados['LIMINAR'] == 1'''
 
             # --- 3. Soma todos os valores encontrados (forma eficiente) ---
 
@@ -928,7 +871,7 @@ class CONSIGLOG:
             data_averbados['Soma'] = colunas_para_somar.sum(axis=1)
 
             data_averbados['Lançar'] = np.minimum(data_averbados['Soma'], data_averbados['Valor Prestacao'])
-            data_averbados.loc[condicao_liminar, 'Lançar'] = 0
+            # data_averbados.loc[condicao_liminar, 'Lançar'] = 0
 
             return data_averbados
 
@@ -946,17 +889,22 @@ class CONSIGLOG:
 
         data_averbados_bruto.insert(4, 'CPF_Formatado', cpf_formatado, True)
 
-        semi_front = self.tratamento_front_preliminar()
+        semi_front = self.front_semi_trabalhado
         if semi_front is False:
             print("trata_averbacao_2: O tratamento preliminar do front falhou. Verifique os erros anteriores.")
             return False
+
+        prepara_data_averbados = TRATA_CONTRATOS(front_semi_trabalhado=self.front_semi_trabalhado, averbados=data_averbados_bruto, convenio=self.convenio,
+                                                 conciliacao_tratada=self.conciliacao, nome_coluna_cpf='C P F', nome_coluna_contrato='Contrato Original',
+                                                 nome_coluna_parcela='Valor Prestacao')
+        data_averbados = prepara_data_averbados.trata_averbacao()
         
-        data_averbados_bruto = self.adiciona_contratos_faltando(data_averbados_bruto, semi_front)
+        # data_averbados_bruto = self.adiciona_contratos_faltando(data_averbados_bruto, semi_front)
 
         semi_front['Contrato'] = semi_front['Contrato'].astype(str).str.strip()
 
 
-        data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
+        '''data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
 
         teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
@@ -1040,8 +988,7 @@ class CONSIGLOG:
 
         # --- 2.5 Puxa as liminares ---
         data_averbados["LIMINAR"] = data_averbados['CPF_Formatado'].map(tutela.set_index('CPF')['Acao Judicial'].to_dict())
-        condicao_liminar = data_averbados['LIMINAR'] == 1
-
+        condicao_liminar = data_averbados['LIMINAR'] == 1'''
         # --- 3. Soma todos os valores encontrados (forma eficiente) ---
 
         # Pega a lista de todas as colunas de valor que acabamos de criar
@@ -1067,7 +1014,7 @@ class CONSIGLOG:
             data_averbados = self.adiciona_peculio(data_averbados)
         else:
             data_averbados['Lançar'] = np.minimum(data_averbados['Soma'], data_averbados['Valor Prestacao'])
-            data_averbados.loc[condicao_liminar, 'Lançar'] = 0
+            # data_averbados.loc[condicao_liminar, 'Lançar'] = 0
 
         # print("Cálculos de Soma e Diferença finalizados.")
 
@@ -1076,7 +1023,7 @@ class CONSIGLOG:
     def arquivo_lancamento(self):
         # Cria o novo DataFrame
         data_averbados = self.trata_averbacao()
-        front_trabalhado = self.tratamento_front()
+        front_trabalhado = self.front_trabalhado
         temp = data_averbados[data_averbados['Lançar'] != 0]
         colunas_alancar = ['Servidor', 'C P F', 'Matricula', 'Lançar', 'A D E']
         a_lancar = pd.DataFrame(temp[colunas_alancar])

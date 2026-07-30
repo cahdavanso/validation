@@ -45,7 +45,7 @@ class TRATA_ORBITAL:
                             'GOV. ALAGOAS': ['GOV AL CC', 'GOV AL CB'],
                             'PREF. CAJAMAR': ['PREF CAJAMAR CC'],
                             'GOV. GOIÁS': ['GOV GO CPL', 'GOV GOIAS'],
-                            'PREF. PICOS': ['PREF PICOS', 'PREF PICOS DG'],
+                            'PREF. PICOS': ['PREF PICOS', 'PREF PICOS DG', 'PM PICOS'],
                             'PREF. GUARULHOS': ['PREF GRU CB'],
                             'GOV. PIAUÍ': ['GOV PIAUÍ CC', 'GOV PIAUÍ CB', 'GOV PIAUÍ CB DG'],
                             'GOV. MATO GROSSO': ['GOV MT CB', 'GOV MT PL CAPIT', 'GOVMT CARTOS CB'],

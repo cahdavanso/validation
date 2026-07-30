@@ -37,10 +37,11 @@ from python.Sigrh import SIGRH
 from python.Cip import CIP
 from python.Quantum import QUANTUM
 from python.Safeconsig import SAFECONSIG
+from python.Lineconsig import LINECONSIG
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = True 
+MODO_DESENVOLVIMENTO = False 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -124,6 +125,8 @@ CIP_CONVENIO = ["PREF. SÃO PAULO", "GOV. SÃO PAULO"]
 NEOCONSIG_CONVENIO = ["GOV. GOIÁS", "PREF. SÃO GONÇALO", "PREF. SÃO LUÍS", "PREF. SOROCABA"]
 
 QUANTUM_CONVENIO = ["PREF. SÃO JOSÉ DO RIO PRETO", "PREVIDÊNCIA SÃO JOSÉ DO RIO PRETO", "CÂMARA MUNICIPAL DE TERESÓPOLIS", "PREF. JUÍZ DE FORA"]
+
+LINECONSIG_CONVENIO = ["PREF. PICOS", "PREV. PICOS"]
 
 SAFECONSIG_CONVENIO = ["PREF. TAUBATÉ", "PREF. SANTOS", "GOV. CEARÁ", "GOV. ALAGOAS"]
 
@@ -664,6 +667,22 @@ async def validar_planilhas(
             extra_judicial=extra_judicial_df,
             caminho=CAMINHO_SAIDA,
         )
+    elif convenio in LINECONSIG_CONVENIO:
+            logging.info("Usando validador: LINECONSIGIT")
+            validador = LINECONSIG(
+                portal_file_list=averbados_df, 
+                convenio=convenio,
+                front=front_df,
+                consignataria=consignataria,
+                conciliacao=conciliacao_df,
+                kobraki=kobraki_df,
+                extra_judicial=extra_judicial_df,
+                tacs=tacs_df,
+                caminho=CAMINHO_SAIDA,
+                andamento_funcao=xao_df,
+                funcao=funcao_df,
+                orbital=orbital_df
+            )
 
     elif convenio in CONSIGFACIL_CONVENIOS:
         # Padrão para todos os outros (Consigfacil)

@@ -43,8 +43,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CONVENIOS_SAFECONSIG = ["PREF. TAUBATÉ", "PREF. SANTOS", "GOV. CEARÁ", "GOV. ALAGOAS"];
 
+    const CONVENIOS_LINECONSIG = ["PREF. PICOS", "PREV. PICOS"];
+
     const ALL_CONVENIOS = [...CONVENIOS_CODATA, ...CONVENIOS_INSS, ...CONVENIOS_CONSIGFACIL, ...CONVENIOS_SERHA, ...TO_IGEPREV, ...CONVENIOS_ZETRA, ...CONVENIOS_RF1, 
-        ...CONVENIOS_INFOCONSIG, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_SIGRH, ...CONVENIOS_CONSIGI_KONEXIA, ...CONVENIOS_CIP, ...CONVENIOS_NEOCONSIG, ...CONVENIOS_QUANTUM, ...CONVENIOS_SAFECONSIG].sort();
+        ...CONVENIOS_INFOCONSIG, ...CONVENIOS_CONSIGLOG, ...CONVENIOS_SIGRH, ...CONVENIOS_CONSIGI_KONEXIA, ...CONVENIOS_CIP, ...CONVENIOS_NEOCONSIG, ...CONVENIOS_QUANTUM, ...CONVENIOS_SAFECONSIG,
+        ...CONVENIOS_LINECONSIG].sort();
 
     const FIELDS_CONSIGFACIL = ["FRONT", "FUNCAO", "XAO", "CONCILIACAO", "KOBRAKI", "TACS", "EXTRA-JUDICIAL", "ANDAMENTO", "AVERBADOS", "ORBITAL"];
     const FIELDS_SAFECONSIG = ["FRONT", "FUNCAO", "XAO", "CONCILIACAO", "KOBRAKI", "TACS", "EXTRA-JUDICIAL", "AVERBADOS", "ORBITAL"];
@@ -61,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const FIELDS_CONSIG_KONEXIA = ["FRONT", "FUNCAO", "XAO", "CONCILIACAO", "KOBRAKI", "TACS", "EXTRA-JUDICIAL", "AVERBADOS", "ORBITAL"];
     const FIELDS_NEOCONSIG = ["FRONT", "FUNCAO", "XAO", "CONCILIACAO", "KOBRAKI", "TACS", "EXTRA-JUDICIAL", "AVERBADOS", "ORBITAL"];
     const FIELDS_QUANTUM = ["FRONT", "FUNCAO", "XAO", "CONCILIACAO", "KOBRAKI", "TACS", "EXTRA-JUDICIAL", "AVERBADOS", "ORBITAL"];
+    const FIELDS_LINECONSIG = ["FRONT", "FUNCAO", "XAO", "CONCILIACAO", "KOBRAKI", "TACS", "EXTRA-JUDICIAL", "AVERBADOS", "ORBITAL"];
 
     const fileDataMap = {}; 
     
@@ -278,6 +282,9 @@ document.addEventListener('DOMContentLoaded', () => {
             currentFields = FIELDS_QUANTUM;
         } else if (CONVENIOS_SAFECONSIG.includes(convenio)) {
             currentFields = FIELDS_SAFECONSIG;
+        } else if (CONVENIOS_LINECONSIG.includes(convenio)) {
+            consignatariaArea.classList.remove('hidden');
+            currentFields = FIELDS_LINECONSIG;
         }
 
         uploadForm.classList.remove('hidden');
@@ -380,6 +387,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!selectedConsignataria) valid = false;
         }
         else if (selectedConvenio && CONVENIOS_QUANTUM.includes(selectedConvenio)){
+            if (!selectedConsignataria) valid = false;
+        }
+        else if (selectedConvenio && CONVENIOS_LINECONSIG.includes(selectedConvenio)){
             if (!selectedConsignataria) valid = false;
         }
         submitButton.disabled = !(hasFiles && valid);
