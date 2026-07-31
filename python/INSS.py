@@ -131,10 +131,10 @@ class INSS:
         front_unif['Esteira'] = front_unif['Esteira'].fillna("INTEGRADO")
         # Coloca SIM onde é orbital no função
         front_unif.loc[front_unif['Tipo Operacao'].str.contains('CARTÃO PLÁSTICO|CARTÃO PLÁSTICO - RE|CARTAO SEGURO - A VISTA|CARTAO - SEG PARC|' \
-                                                                '000061 - CARTÃ\x83O PLÃ\x81STICO|CARTÃ\x83O PLÃ\x81STICO - RE'), 'Orbital'] = 'SIM'
+                                                                '000061 - CARTÃ\x83O PLÃ\x81STICO|CARTÃ\x83O PLÃ\x81STICO - RE', na=False), 'Orbital'] = 'SIM'
         
         front_unif.loc[front_unif['Tipo Operacao'].str.contains('000012 - DIG INSS REP LEGAL|000015 - DIG INSS|000106 - CARTÃO TS|' \
-                                                                'CARTÃ\x83O TS|000098 - DIG INSS 30%'), 'Tipo Operacao'] = 'CARTAO TS'
+                                                                'CARTÃ\x83O TS|000098 - DIG INSS 30%', na=False), 'Tipo Operacao'] = 'CARTAO TS'
 
 
         # Altera para cartão
@@ -151,7 +151,7 @@ class INSS:
 
         print(f'FRONT UNIFICADO FINALZIN:\n{front_unif.tail()}')
 
-        front_unif.to_excel(rf"{self.caminho}\Teste_front INSS {"CAPITAL CONSIG"} {datetime.now().strftime("%m-%Y")}.xlsx", index=False)
+        # front_unif.to_excel(rf"{self.caminho}\Teste_front INSS {"CAPITAL CONSIG"} {datetime.now().strftime("%m-%Y")}.xlsx", index=False)
 
         return front_unif
     
@@ -176,19 +176,23 @@ class INSS:
         front_consig.insert(22, 'Valor a lançar', '', True)
         front_consig.insert(23, 'Análise', '', True)
 
-        print(f'Quais contratos estão atrelados ao CPF: 277.507.524-04?\n"{front_consig.loc[front_consig['CPF'] == '277.507.524-04', 'Contrato']}"')
-        print(f'O Contrato 300119744 string está no Front? {'300119744' in front_consig['Contrato'].values}')
-        print(f'O Contrato 300119744 inteiro está no Front? {300119744 in front_consig['Contrato'].values}')
+        print(f'Quais contratos estão atrelados ao CPF: 048.301.738-82?\n"{front_consig.loc[front_consig['CPF'] == '048.301.738-82', 'Contrato']}"')
+        print(f'O Contrato 600121721 string está no Front? {'600121721' in front_consig['Contrato'].values}')
+        print(f'O Contrato 600121721 inteiro está no Front? {600121721 in front_consig['Contrato'].values}')
 
         front_consig['Contrato'] = front_consig['Contrato'].astype('int64')
 
-        print(f'Quais contratos estão atrelados ao CPF: 277.507.524-04? {self.averbados.loc[self.averbados['CPF'] == '277.507.524-04', 'NR_OPER_EDITADO']}')
-        print(f'O Contrato 300119744 string está no Averbados? {'300119744' in self.averbados['NR_OPER_EDITADO'].values}')
-        print(f'O Contrato 300119744 inteiro está no Averbados? {300119744 in self.averbados['NR_OPER_EDITADO'].values}')
+        print(f'Quais contratos estão atrelados ao CPF: 048.301.738-82? {self.averbados.loc[self.averbados['CPF'] == '048.301.738-82', 'NR_OPER_EDITADO']}')
+        print(f'O Contrato 600121721 string está no Averbados? {'600121721' in self.averbados['NR_OPER_EDITADO'].values}')
+        print(f'O Contrato 600121721 inteiro está no Averbados? {600121721 in self.averbados['NR_OPER_EDITADO'].values}')
 
         situacao_averbado_index = self.averbados.set_index('NR_OPER_EDITADO')['SITUAÇÃO'].copy()
         situacao_averbado_map = front_consig['Contrato'].map(situacao_averbado_index.to_dict())
         front_consig.insert(24, 'SITUAÇÃO', situacao_averbado_map, True)
+
+        print(f'Contrato 600121721 está no em self.averbados?\n{600121721 in self.averbados['NR_OPER_EDITADO'].values}')
+        bool_contrato = 600121721 in self.averbados['NR_OPER_EDITADO'].values
+        print(f'Situação do contrato 600121721\n{self.averbados.loc[self.averbados['NR_OPER_EIDTADO'] == 600121721, ['NR_OPER_EDITADO', 'SITUAÇÃO']]}')
 
         valor_reajustado_index = self.averbados.set_index('NR_OPER_EDITADO')['MARGEM REAJUSTADA'].copy()
         valor_reajustado = front_consig['Contrato'].map(valor_reajustado_index.to_dict())
@@ -335,7 +339,21 @@ class INSS:
         # Marcar liquidados em StatusContrato
         front_consig_validado_termino.loc[(front_consig_validado_termino['Status'].str.contains('Liquidado|CANCELADO', na=False)), 'Análise'] = 'NÃO LANÇAR - LIQUIDADO'
         # Marca tudo que é Empréstimo
-        # front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Operacao'].str.contains('EMPRÉSTIMO|EMPRESTIMO', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - EMPRÉSTIMO'
+        front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Operacao'].str.contains('EMPRÉSTIMO|EMPRESTIMO', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - EMPRÉSTIMO'
+
+        # Extra judicial
+        if self.extra_judicial is not None:
+            # 1. Garante que as colunas das duas bases sejam tratadas como string para comparação exata
+            contratos_df = front_consig_validado_termino['Contrato'].astype(str)
+            contratos_extra = self.extra_judicial['CONTRATO'].astype(str)
+            
+            # 2. Cria a máscara booleana (True se o contrato do df estiver na lista da extra_judicial)
+            mask_extra_judicial = contratos_df.isin(contratos_extra)
+            
+            # 3. Aplica o valor 'EXTRA JUDICIAL' na coluna 'OBS' usando o .loc corretamente
+            front_consig_validado_termino.loc[mask_extra_judicial, 'Análise'] = 'EXTRA JUDICIAL'
+
+            front_consig_validado_termino['Análise'] = front_consig_validado_termino['Análise'].fillna('')
 
         # Marca tudo que é Telesaque
         front_consig_validado_termino.loc[(front_consig_validado_termino['Tipo Operacao'].str.contains('CARTÃO TS|CARTAO TS', na=False) & (front_consig_validado_termino['Análise'] == '')), 'Análise'] = 'NÃO LANÇAR - TELESAQUE'

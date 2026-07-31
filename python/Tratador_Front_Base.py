@@ -35,6 +35,50 @@ class TratadorFrontBase:
                 df[col_name] = '' # Limpa caso já exista
         return df
 
+    def estipula_prioridades(self, df):
+
+        bancos_nao_lancar = ["OUTROS", "FUTURO"]
+        
+        # Ordenar as esteiras de A-Z
+        # Puxa a lista de esteiras prioritárias
+        esteiras_lancar = self.condicoes_1
+
+        # 1. Ordem de prioridade para o Tipo de Operação
+        # Mapeia cada variação possível para a sua prioridade
+        ordem = {
+            # Prioridade 1
+            'CARTAO DE CREDITO': 1,
+            'CARTÃO DE CRÉDITO': 1,
+            'CARTAO CONSIGNADO': 1,
+            'CARTÃO CONSIGNADO': 1,
+            'CARTAO CONSIGNAD': 1,
+            
+            # Prioridade 2
+            'CARTAO BENEFICIO': 2,
+            'CARTÃO BENEFICIO': 2,
+            'CARTÃO BENEFÍCIO': 2
+        }
+
+        df['prioridade_operacao'] = df['Tipo Operacao'].map(ordem).fillna(3)
+
+        # 2. NOVA LÓGICA: Ordem de prioridade para a Esteira
+        # Se a 'Esteira' atual estiver dentro da lista 'esteiras_lancar', recebe 1. Senão, recebe 2.
+
+        df['prioridade_esteira'] = np.where(df['Esteira'].isin(esteiras_lancar), 1, 2)
+
+        # 2.1 NOVA LÓGICA: Oridem de prioridade por Consignataria
+        df['prioridade_banco'] = np.where(df['Consignataria'].isin(bancos_nao_lancar), 2, 1)
+
+        # 3. Ordenação combinada
+        # Ele vai ordenar primeiro pela Esteira, depois vai puxar as prioridade_operacao para cima, 
+        # e por último vai desempatar por ordem alfabética da própria coluna 'Esteira'
+        df = df.sort_values(
+            by=['prioridade_esteira', 'prioridade_banco', 'prioridade_operacao', 'Esteira'],
+            ascending=[True, True, True, True]
+        )
+
+        return df
+
     def normalizar_valores_prestacao(self, df):
         """Padroniza a coluna Prestacao para float64 (evitando o bug da vírgula da Orbital)"""
         if 'Prestacao' in df.columns and df['Prestacao'].dtype != "float64":
@@ -188,13 +232,13 @@ class TratadorFrontBase:
         df['Consignataria'] = df['Consignataria'].astype(str).str.replace("CAPITAL CONSIG ", "CAPITAL CONSIG")
         df['Consignataria'] = df['Consignataria'].astype(str).str.replace("CLICKBANK ", "CLICKBANK")
         df['Consignataria'] = df['Consignataria'].astype(str).str.replace("CIASPREV ", "CIASPREV")
-        df['Consignataria'] = df['Consignataria'].astype(str).str.replace("HOJE PREVIDENCIA PRIVADA ", "HOJE PREVIDENCIA PRIVADA")
+        df['Consignataria'] = df['Consignataria'].astype(str).str.replace("HOJE PREVIDÊNCIA PRIVADA ", "HOJE PREVIDÊNCIA PRIVADA")
 
         if self.consignataria is not None:
             if self.consignataria == 'CIASPREV':
                 df.loc[(df['Consignataria'] != 'CIASPREV') & (df['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
-            elif self.consignataria == 'HOJE PREVIDENCIA PRIVADA':
-                df.loc[(df['Consignataria'] != 'HOJE PREVIDENCIA PRIVADA') & (df['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
+            elif self.consignataria == 'HOJE PREVIDÊNCIA PRIVADA':
+                df.loc[(df['Consignataria'] != 'HOJE PREVIDÊNCIA PRIVADA') & (df['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
             elif self.consignataria == 'CAPITAL CONSIG':
                 df.loc[(df['Consignataria'] != 'CAPITAL CONSIG') & (df['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
             elif self.consignataria == 'CLICKBANK':
@@ -225,6 +269,7 @@ class TratadorFrontBase:
         df = self.preparar_colunas(self.front)
         df = self.normalizar_valores_prestacao(df)
         # df = self.cruzar_tipo_conciliacao(df) # -> DESATIVADO ATÉ SEGUNDA ORDEM
+        df = self.estipula_prioridades(df)
         df = self.escolhe_consignataria(df)
         df = self.tratar_orbital_generico(df)
         df = self.aplicar_marcacoes_universais(df)

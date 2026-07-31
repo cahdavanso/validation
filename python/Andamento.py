@@ -43,7 +43,8 @@ class ANDAMENTO:
 
         front['OBS'] = front['OBS'].fillna('')
         front_preenchido = front[front['OBS'] != ''].copy()
-        front_para_processar = front[front['OBS'] == ''].copy()
+        # front_para_processar = front[front['OBS'] == ''].copy()
+        front_para_processar = front.copy()
 
         # Se não houver nada para processar, já retorna o original
         if front_para_processar.empty:
@@ -125,9 +126,11 @@ class ANDAMENTO:
         front_trabalhado_puro = front_trabalhado_funcao.tratamento_front()
 
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
+        # andam_file = self.processar_contrato_simples(andam_referencia_prazos, front_para_processar, tolerancia_bool=False, trabalhados_so_ativos=None)
         andam_file = self.processar_contrato_simples(andam_referencia_prazos, front_para_processar, tolerancia_bool=False, trabalhados_so_ativos=front_trabalhado_puro)
         andam_file = self.processar_contrato_simples(andam_file, front_para_processar, tolerancia_bool=True, trabalhados_so_ativos=None)
-        andam_file = self.associar_por_soma_andamento(andam_file, front_para_processar, tolerancia_bool=False, front_so_ativos=front_trabalhado_puro)
+        
+        andam_file = self.associar_por_soma_andamento(andam_file, front_para_processar, tolerancia_bool=True, front_so_ativos=front_trabalhado_puro)
         andam_file = self.associar_por_soma_andamento(andam_file, front_para_processar, tolerancia_bool=True, front_so_ativos=None)
         andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
         andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar, 'Contrato de Andamento')
@@ -207,6 +210,8 @@ class ANDAMENTO:
         else:
             df_front = df_front_puro
 
+        print(f'Imprime todos os contratos atrelados ao CPF: 671.890.913-00\n{df_front.loc[df_front['CPF'] == '671.890.913-00', 'Contrato']}')
+
         
         for df in [df_andamento, df_front]:
             df['CPF'] = df['CPF'].astype(str).str.strip()
@@ -243,7 +248,7 @@ class ANDAMENTO:
             dict_front[cpf].append((row['Contrato'], row['Prestacao']))
 
         # INJEÇÃO DE DEBUG AQUI:
-        cpf_teste = '505.029.723-00' # Coloque o CPF que está puxando errado
+        cpf_teste = '671.890.913-00' # Coloque o CPF que está puxando errado
         if cpf_teste in dict_front:
             print(f"DEBUG - Opções para o CPF {cpf_teste}: {dict_front[cpf_teste]}")
         else:
@@ -642,8 +647,8 @@ class ANDAMENTO:
         # --- Passo 2: Lógica de Extração com Rastreamento de Método ---
         def encontrar_contratos_na_linha(row):
             cpf = row['CPF'] # -> Pegamos um CPF
-            if '443.xxx.xxx-xx' in row['CPF']:
-                print(f'Como está o contrato sujo do CPF 443.911.370-20: {row[coluna_destino]}')
+            if '671.890.913-00' in row['CPF']:
+                print(f'Como está o contrato sujo do CPF 671.890.913-00 no inicio de encontrar_contratos_na_linha: {row[coluna_destino]}')
             # texto_contratos_sujo = str(row['Contrato de Andamento']).strip() # -> Pegamos contrato
             texto_contratos_sujo = str(row[coluna_destino]).strip() # -> Pegamos contrato
             valor_parcela_suja = round(float(row.get('Valor da Parcela', 0)), 2) # -> Pegamos a parcela
@@ -667,8 +672,8 @@ class ANDAMENTO:
             if not contratos_validos_para_cpf: return [] # -> Se nada for armazenado retorna vazio
 
             # Teste de contrato_sujo
-            if '443.911.370-20' in row['CPF']:
-                print(f'Como está o contrato sujo do CPF 443.911.370-20: {texto_contratos_sujo}')
+            if '671.890.913-00' in row['CPF']:
+                print(f'Como está o contrato sujo do CPF 671.890.913-00: {texto_contratos_sujo}')
 
             partes_sujas = [p for p in re.split(r'[/,;\s]+', texto_contratos_sujo) if p] # -> Aqui é onde eu acho que os contratos que tem barra são separados, 
                                                                                          # minha principal suspeita do porque algumas linhas permanecerem juntas... 

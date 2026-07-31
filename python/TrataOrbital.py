@@ -56,7 +56,7 @@ class TRATA_ORBITAL:
                             'GOV. MINAS GERAIS - SEPLAG': ['MG SEPLAG', 'MG SEPLAG CC DG', 'MG SEPLAG CB DG', 'SEPL CC DG SEG'],
                             'GOV. CEARÁ': ['GOV CEARA DG', 'GOV CEARÁ'],
                             'GOV. MINAS GERAIS - CBMMG': ['MG CBMMG', 'MG CBMMG CB DG'],
-                            'PREF. GOIÂNIA': ['PM GOIANIA SEG', 'PREF GOIÂNIA'],
+                            'PREF. GOIÂNIA': ['PM GOIANIA SEG', 'PREF GOIÂNIA', 'PM GOIÂNIA'],
                             'GOV. PERNAMBUCO': ['GOV PE CC', 'GOV PE CB', 'GOV PE CC DG'],
                             'GOV. SÃO PAULO': ['GOV SÃO PAULO'],
                             'INSS': [
