@@ -181,13 +181,15 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         contrato_front = front['Contrato'].astype('int64')
         contratos_base = base_adicional[coluna_contrato].astype('int64')
 
-        # 1. Transforma em INTEGRADO apenas se o parâmetro permitir (chamada pela self.funcao)
+        # 1. Atualizações específicas de Esteira (chamada pela self.funcao)
         if atualizar_esteira_integrado:
-            # Isolamos a condição na variável mask_integrado antes de aplicar
+            # Regra 1: ANDAMENTO/PENDENTE -> INTEGRADO
             mask_integrado = front['Contrato'].isin(contratos_base) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE', na=False))
-
-            # Aplica a alteração
             front.loc[mask_integrado, 'Esteira'] = 'INTEGRADO'
+
+            # Regra 2: 99 CARTAO UTILIZADO -> 09.0 PAGO
+            mask_pago = front['Contrato'].isin(contratos_base) & (front['Esteira'] == '99 CARTAO UTILIZADO')
+            front.loc[mask_pago, 'Esteira'] = '09.0 PAGO'
 
         if 'Descrição da Atividade' in base_adicional.columns:
             # 1. Padroniza as chaves de busca para texto puro (evitando divergência entre int/str)

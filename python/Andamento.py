@@ -126,7 +126,6 @@ class ANDAMENTO:
         front_trabalhado_puro = front_trabalhado_funcao.tratamento_front()
 
         # 2. PROCESSAMENTO DE CONTRATOS (Usando apenas o front_para_processar)
-        # andam_file = self.processar_contrato_simples(andam_referencia_prazos, front_para_processar, tolerancia_bool=False, trabalhados_so_ativos=None)
         andam_file = self.processar_contrato_simples(andam_referencia_prazos, front_para_processar, tolerancia_bool=False, trabalhados_so_ativos=front_trabalhado_puro)
         andam_file = self.processar_contrato_simples(andam_file, front_para_processar, tolerancia_bool=True, trabalhados_so_ativos=None)
         

@@ -5,6 +5,7 @@ from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
 from python.TrataOrbital import TRATA_ORBITAL
+from python.Tratador_Front_Base import TratadorZetra
 import re
 from thefuzz import fuzz
 from datetime import datetime
@@ -15,7 +16,7 @@ import openpyxl
 
 
 class ZETRA:
-    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, andamento_funcao, funcao=None, historico=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_path, convenio, front, consignataria, caminho, andamento_funcao=None, funcao=None, historico=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
 
         self.caminho = caminho
 
@@ -107,6 +108,12 @@ class ZETRA:
             "PREF. SOBRAL": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 3, "VAL": 10, "PRZ": 3,
                              "COMP": 6, "OP": 1}
         }
+
+        front_semi_trabalhado_preliminar = TratadorZetra(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
+                                                         caminho=self.caminho, condicoes_1=self.condicoes_1, consignataria=self.consignataria,
+                                                         kobraki=self.kobraki, tacs=tacs)
+        self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
+        self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
 
         self.arquivo_lancamento()
 
@@ -295,7 +302,7 @@ class ZETRA:
 
         conciliacao = self.conciliacao.copy()
 
-        orbital = self.orbital
+        orbital = self.orbital if self.orbital is not None else None
 
 
         # Insere as colunas vazias necessárias
@@ -406,12 +413,12 @@ class ZETRA:
         front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CAPITAL CONSIG ", "CAPITAL CONSIG")
         front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CLICKBANK ", "CLICKBANK")
         front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("CIASPREV ", "CIASPREV")
-        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("HOJE PREVIDENCIA PRIVADA ", "HOJE PREVIDENCIA PRIVADA")
+        front_consig_validado_termino['Consignataria'] = front_consig_validado_termino['Consignataria'].astype(str).str.replace("HOJE PREVIDÊNCIA PRIVADA ", "HOJE PREVIDÊNCIA PRIVADA")
 
         if self.consignataria == 'CIASPREV':
             front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'CIASPREV') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
-        elif self.consignataria == 'HOJE PREVIDENCIA PRIVADA':
-            front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'HOJE PREVIDENCIA PRIVADA') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
+        elif self.consignataria == 'HOJE PREVIDÊNCIA PRIVADA':
+            front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'HOJE PREVIDÊNCIA PRIVADA') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
         elif self.consignataria == 'CAPITAL CONSIG':
             front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'] != 'CAPITAL CONSIG') & (front_consig_validado_termino['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA'
         elif self.consignataria == 'CLICKBANK':
@@ -441,6 +448,8 @@ class ZETRA:
 
         # TIRAR BANCO OUTROS
         front_consig_validado_termino.loc[(front_consig_validado_termino['Consignataria'].str.contains('OUTROS', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO OUTROS'  
+
+        print(f'AMOSTRA DE FRONT SEMI TRABALHADO:\n{front_consig_validado_termino.head(10)}\n')
 
         # Salva com os NÃO LANÇAR
         print(f"tratamento_front_preliminar: Tentando salvar FRONT SEMI TRABALHADO em: {self.caminho}")
@@ -745,10 +754,12 @@ class ZETRA:
         # PUXA OS ARQUIVOS À SEREM TRATADOS
         print('trata_averbacao foi acionado')
         data = self.unifica_historico_averb()
-        front = self.tratamento_front_preliminar()
+        # front = self.tratamento_front_preliminar()
+        front = self.front_semi_trabalhado
         consig = self.consignataria
-        orbital_instancia = TRATA_ORBITAL(orbital=self.orbital, front=front, convenio=self.convenio, caminho=self.caminho)
-        orbital_tratado = orbital_instancia.orbital_tratado()
+        if self.orbital is not None:
+            orbital_instancia = TRATA_ORBITAL(orbital=self.orbital, front=front, convenio=self.convenio, caminho=self.caminho)
+            orbital_tratado = orbital_instancia.orbital_tratado()
         convenio = self.convenio
 
         '''if self.convenio == 'GOV. PARANÁ':
@@ -758,7 +769,7 @@ class ZETRA:
         data_averbados_bruto = data
 
         # Vou tentar colocar a coluna de Orbital aqui no meio mesmo
-        if orbital_tratado is not None:
+        if self.orbital is not None:
             mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
             data_averbados_bruto['ORBITAL'] = ''
             data_averbados_bruto['ORBITAL'] = data_averbados_bruto['CPF'].map(mask_orbital)
@@ -957,7 +968,7 @@ class ZETRA:
 
         # --- 5. Cria a coluna Lançar ---
         print(f'CONSIGNATARIA: {self.consignataria}')
-        if consig == 'HOJE PREVIDENCIA PRIVADA':
+        if consig == 'HOJE PREVIDÊNCIA PRIVADA':
             data_averbados = self.adiciona_peculio(data_averbados)
         else:
             data_averbados['Lançar'] = np.minimum(data_averbados['Soma'], data_averbados['Vlr novo'])
@@ -973,7 +984,8 @@ class ZETRA:
 
     def tratamento_front(self, averbado_trabalhado):
         print('tratamento_front foi acionado.')
-        front_consig = self.tratamento_front_preliminar()
+        # front_consig = self.tratamento_front_preliminar()
+        front_consig = self.front_semi_trabalhado
 
         front_consig = front_consig[front_consig['Esteira'].isin(self.condicoes_1)].copy()
 
@@ -1065,7 +1077,7 @@ class ZETRA:
         print(f'comprimento de front_consig_trabalhado de insere coluna de saldo\n{len(front_consig_trabalhado)}')
 
         # ---------------------------------------- AJUSTE PECÚLIO HOJE --------------------------------------- #
-        '''mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDENCIA PRIVADA'
+        '''mask_peculio = front_consig_trabalhado['Consignataria'] == 'HOJE PREVIDÊNCIA PRIVADA'
         front_consig_trabalhado.loc[mask_peculio, 'Valor a lançar'] += 20'''
 
         # ------------------------------------- ESCOLHE CONSIGNATÁRIA -------------------------------------- #
@@ -1073,8 +1085,8 @@ class ZETRA:
 
         if self.consignataria == 'CIASPREV':
             front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CIASPREV', na=False)].copy()
-        elif self.consignataria == 'HOJE PREVIDENCIA PRIVADA':
-            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('HOJE PREVIDENCIA PRIVADA', na=False)].copy()
+        elif self.consignataria == 'HOJE PREVIDÊNCIA PRIVADA':
+            front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('HOJE PREVIDÊNCIA PRIVADA', na=False)].copy()
         elif self.consignataria == 'CAPITAL CONSIG':
             front_consig_trabalhado = front_consig_trabalhado[front_consig_trabalhado['Consignataria'].str.contains('CAPITAL CONSIG', na=False)].copy()
         elif self.consignataria == 'CLICKBANK':

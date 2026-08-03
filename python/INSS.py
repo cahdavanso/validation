@@ -192,7 +192,7 @@ class INSS:
 
         print(f'Contrato 600121721 está no em self.averbados?\n{600121721 in self.averbados['NR_OPER_EDITADO'].values}')
         bool_contrato = 600121721 in self.averbados['NR_OPER_EDITADO'].values
-        print(f'Situação do contrato 600121721\n{self.averbados.loc[self.averbados['NR_OPER_EIDTADO'] == 600121721, ['NR_OPER_EDITADO', 'SITUAÇÃO']]}')
+        print(f'Situação do contrato 600121721\n{self.averbados.loc[self.averbados['NR_OPER_EDITADO'] == 600121721, ['NR_OPER_EDITADO', 'SITUAÇÃO']]}')
 
         valor_reajustado_index = self.averbados.set_index('NR_OPER_EDITADO')['MARGEM REAJUSTADA'].copy()
         valor_reajustado = front_consig['Contrato'].map(valor_reajustado_index.to_dict())
