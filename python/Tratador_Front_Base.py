@@ -304,9 +304,25 @@ class TratadorConsigfacil(TratadorFrontBase):
         df['Contrato'] = df['Contrato'].astype('int64')
         # CORREÇÃO: Sem o "df = " antes do loc. E trocado pd.na por pd.NA (maiúsculo)
         if self.convenio in ['GOV. MARANHÃO']:
-            df.loc[~df['PRAZO'].isin([pd.NA, np.nan, '', 1]), 'OBS'] = 'NÃO LANÇAR - PRAZO'
+            df.loc[~df['PRAZO'].isin([pd.NA, np.nan, '', 0, '0', 1]), 'OBS'] = 'NÃO LANÇAR - PRAZO'
         else:
-            df.loc[~df['PRAZO'].isin([pd.NA, np.nan, '']), 'OBS'] = 'NÃO LANÇAR - PRAZO'
+            df.loc[~df['PRAZO'].isin([pd.NA, np.nan, '', 0, '0']), 'OBS'] = 'NÃO LANÇAR - PRAZO'
+            
+        return df
+
+class TratadorCodata(TratadorFrontBase):
+    def aplicar_regras_especificas(self, df):
+
+        print(f'TratadorCodata ativado')
+
+        # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
+        objeto_andamento = ANDAMENTO(df, self.convenio, self.caminho, self.andamento) # if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
+        df = objeto_andamento.andamento_func_front()
+        # df['PRAZO'] = df['Contrato'].astype(str).map(df.set_index('Contrato')['PRAZO'])
+        df['Contrato'] = df['Contrato'].astype('int64')
+        # CORREÇÃO: Sem o "df = " antes do loc. E trocado pd.na por pd.NA (maiúsculo)
+
+        df.loc[~df['PRAZO'].isin([pd.NA, np.nan, '']), 'OBS'] = 'NÃO LANÇAR - PRAZO'
             
         return df
 
@@ -363,5 +379,16 @@ class TratadorSigrh(TratadorFrontBase):
     def aplicar_regras_especificas(self, df):
         # TIRAR BANCO OUTROS, FUTURO, CIASPREV E HP
         df.loc[(df['Consignataria'].str.contains('OUTROS|FUTURO|CIASPREV|HOJE PREVIDÊNCIA PRIVADA', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO ERRADO'
+
+        return df
+
+class TratadorRF1(TratadorFrontBase):
+    def aplicar_regras_especificas(self, df):
+        if self.convenio not in ['PREF. PALMAS']:
+            df.loc[df['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
+
+        print(f'TratadorConsigfacil ativado')
+
+        df.loc[(~df['Tipo Operacao'].str.contains(REGEX_CARTAO_COMPLETO, na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
 
         return df

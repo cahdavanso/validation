@@ -4,6 +4,8 @@ import pandas as pd
 import xlrd
 import openpyxl
 from python.ESTEIRAS import load_esteiras
+from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
+from python.Tratador_Front_Base import TratadorCodata
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.Andamento_GOVPB import ANDAMENTO
 from datetime import datetime
@@ -15,7 +17,7 @@ rejeitados = ['/']
 class CODATA:
 # Dentro de python/Codata.py
 
-    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, caminho, tacs=None, kobraki=None, extra_judicial=None, funcao=None, andamento_list=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, conciliacao, caminho, tacs=None, kobraki=None, extra_judicial=None, andamento_funcao=None, funcao=None, andamento_list=None, orbital=None):
 
         # A API FastAPI já leu, unificou e tratou a codificação. 
         # Aqui, apenas atribuímos o DataFrame ou inicializamos como vazio se for None.
@@ -26,6 +28,8 @@ class CODATA:
         
         # Front
         self.front = front if front is not None else pd.DataFrame()
+
+        self.andamento_funcao = andamento_funcao if andamento_funcao is not None else None
 
         # Funcao
         self.funcao = funcao if funcao is not None else None
@@ -74,13 +78,40 @@ class CODATA:
         # Tacs
         self.tacs = tacs if tacs is not None else None
 
+        self.condicoes_1 = load_esteiras()  # Carrega as esteiras permitidas
+
         # Orbital
         self.orbital = orbital if orbital is not None else None
 
-        # Chama a primeira função da cadeia de processamento
-        front_trabalhado = self.tratamento_front()
-        self.averbados_func(front_trabalhado)
-        # self.tratamento_funcao()
+        # 1. Instancia a classe
+        unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
+            front=self.front, 
+            convenio=self.convenio, 
+            funcao=self.funcao, 
+            andamento_funcao=self.andamento_funcao,
+            caminho=self.caminho
+        )
+
+        # 2. Chama a primeira unificação (Função pura)
+        # Isso vai processar e preencher com verificar_ccb=True
+        front_meio_caminho = unificador.unifica_front_funcao()
+
+        # 3. Atualiza o front interno da classe para que a segunda unificação use os dados já combinados
+        unificador.front = front_meio_caminho
+
+        # 4. Chama a segunda unificação (Andamento Função)
+        # Isso vai processar a segunda base com verificar_ccb=False
+        self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
+        self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
+
+        front_semi_trabalhado_preliminar = TratadorCodata(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio, caminho=self.caminho, 
+                                                          condicoes_1=self.condicoes_1, kobraki=self.kobraki, tacs=tacs, extra_judicial=self.extra_judicial, 
+                                                          andamento=self.andamento)
+        self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
+        self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
+
+        front_trabalhado = self.front_trabalhado
+        self.averbados_func(front=front_trabalhado)
 
     def unifica_front_funcao(self):
         front = self.front
@@ -634,6 +665,7 @@ class CODATA:
     def averbados_func(self, front):
         # RELATORIO
         front_preliminar = self.tratamento_front_preliminar()
+        front_preliminar = self.front_semi_trabalhado
         front_consig = front.copy()
         averbados = self.averbados
         # Remove a última linha que contém o valor total das parcelas

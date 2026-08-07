@@ -239,6 +239,9 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         front_unif.loc[mask_orbital, 'Orbital'] = "SIM"
         front_unif.loc[front_unif['Orbital'] == '', 'Orbital'] = "NAO"
 
+        # Preenche INSPFEM ONDE DEVE
+        front_unif.loc[front_unif['Convenio'].str.contains('INSPFEM'), 'Consignataria'] = 'INSPFEM - CARD' 
+
         front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG") if self.consignataria is None else front_unif['Consignataria'].fillna(self.consignataria)
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
