@@ -107,7 +107,7 @@ class CONSIGFACIL:
         front_semi_trabalhado_preliminar = TratadorConsigfacil(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
                                                                caminho=self.caminho, condicoes_1=self.condicoes_1, kobraki=self.kobraki, tacs=tacs, andamento=self.andamento)
         self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
-        self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
+        self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, '', 'NÃO LANÇAR - ORBITAL'])]
 
 
         # Salvando Front Trabalhado
@@ -671,13 +671,13 @@ class CONSIGFACIL:
 
         # A mesma coisa de cima só que com CPF
         front_preliminar['SOMASE LOCAL POR CPF']  = front_preliminar.groupby('CPF')['Valor a lançar'].transform('sum')
-        # soma_condicional_dict_averb_cpf = front_preliminar.groupby('CPF')['SOMASE LOCAL POR CPF'].sum().to_dict()
+        soma_condicional_dict_averb_cpf = front_preliminar.groupby('CPF')['Valor a lançar'].sum().to_dict()
 
-        if self.convenio in ['PREF CAJAMAR', 'GOV MT']:
+        if self.orbital is not None:
             # Orbitall
             # orbitall = self.orbital_tratado(front_preliminar)
 
-            prepara_orbital = TRATA_ORBITAL(self.orbital, front_preliminar, self.convenio, self.caminho)
+            prepara_orbital = TRATA_ORBITAL(self.orbital, self.front_semi_trabalhado, self.convenio, self.caminho)
             # complementar_orbital_df = front_trabalhado[front_trabalhado['Análise'].str.contains('NÃO LANÇAR - COMPLEMENTAR|NÃO LANÇAR - TELESAQUE|NÃO LANÇAR - ORBITAL', na=False)].copy()
             orbitall = prepara_orbital.orbital_tratado()
             
@@ -686,17 +686,21 @@ class CONSIGFACIL:
             # 3. Soma por CPF no orbital
             somase_orbital = orbitall.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
 
+            front_preliminar = front_preliminar[front_preliminar['OBS'] != 'NÃO LANÇAR - ORBITAL'].copy()
+
+            soma_condicional_dict_averb_cpf = front_preliminar.groupby('CPF')['Valor a lançar'].sum().to_dict()
+
             # 4. Combina tudo em um único dataframe
             soma_total = (
-                soma_condicional_dict_averb
+                pd.Series(soma_condicional_dict_averb_cpf)
                 .add(somase_orbital, fill_value=0)
             )
             # soma_total_cpf = (soma_condicional_dict_averb_cpf.add(somase_orbital, fill_value=0))
 
-            averbado_novo['PARCELA FRONT'] = averbado_novo['CPF'].map(soma_total)
+            averbado_novo['SOMASE CRED'] = averbado_novo['CPF'].map(soma_total)
             # averbado_novo['PARCELA CPF'] = averbado_novo['CPF'].map(soma_total_cpf)
             # print(type(averbado_novo.loc[0, 'SOMASE']))
-            averbado_novo['PARCELA FRONT'] = averbado_novo['PARCELA FRONT'].fillna(0)
+            averbado_novo['SOMASE CRED'] = averbado_novo['SOMASE CRED'].fillna(0)
             # averbado_novo['PARCELA CPF'] = averbado_novo['PARCELA CPF'].fillna(0)
         else:
             # Puxa para o averbado_novo o valor que está no Front
@@ -731,7 +735,9 @@ class CONSIGFACIL:
             averbado_novo = averbado_trabalhado
 
             averbado_novo['Valor da reserva'] = pd.to_numeric(averbado_novo['Valor da reserva'], errors='coerce').fillna(0)
-            averbado_novo['SOMASE CRED'] = pd.to_numeric(averbado_novo['SOMASE CRED'], errors='coerce').fillna(0)
+            if averbado_novo['SOMASE CRED'].dtype != "float64":
+                averbado_novo['SOMASE CRED'] = averbado_novo['SOMASE CRED'].astype(str).str.replace(".", "").str.replace(",", ".")
+                averbado_novo['SOMASE CRED'] = pd.to_numeric(averbado_novo['SOMASE CRED'], errors='coerce').fillna(0)
 
             # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
             # Esta é a "mágica" que substitui a necessidade de um loop.
@@ -779,7 +785,7 @@ class CONSIGFACIL:
         averbado_finalizado = distribuicao_valores(averbado_novo)
         
 
-        if self.convenio not in ['GOV. PIAUÍ']:
+        if self.convenio in ['GOV. PIAUÍ',]:
             if (averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL').any():
                 averbado_finalizado.loc[averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL', 'Valor da reserva'] = averbado_finalizado['NOVO LANÇAR TOTAL']
                 averbado_finalizado = distribuicao_valores(averbado_finalizado)

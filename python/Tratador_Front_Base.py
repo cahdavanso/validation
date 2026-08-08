@@ -134,7 +134,7 @@ class TratadorFrontBase:
         
         valores_encontrados = df.loc[filtro_esteira, 'Contrato'].map(mapa_orbital).fillna(0)
         
-        df.loc[filtro_esteira, 'Prestacao'] = valores_encontrados.astype(str)
+        df.loc[filtro_esteira, 'Valor a lançar'] = valores_encontrados.astype(str)
         # Se precisar gravar na 'Valor a lançar' como string (como em ZETRA/NEOCONSIG), a classe filha sobrepõe depois.
         
         return df
@@ -307,6 +307,8 @@ class TratadorConsigfacil(TratadorFrontBase):
             df.loc[~df['PRAZO'].isin([pd.NA, np.nan, '', 0, '0', 1]), 'OBS'] = 'NÃO LANÇAR - PRAZO'
         else:
             df.loc[~df['PRAZO'].isin([pd.NA, np.nan, '', 0, '0']), 'OBS'] = 'NÃO LANÇAR - PRAZO'
+
+        df.drop_duplicates(subset=['Contrato'], keep='first', inplace=True)
             
         return df
 

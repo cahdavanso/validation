@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import numpy as np
 
 class TRATA_ORBITAL:
     def __init__(self, orbital, front, convenio, caminho, averbado_final=None, rubrica=None):
@@ -43,7 +44,7 @@ class TRATA_ORBITAL:
                             'PREV. PIRACICABA IPASP': ['PREF PIRA IPASP'],
                             'GOV. PARAÍBA': ['GOV PB INSPFEM', 'INSPFEM S FL'],
                             'GOV. ALAGOAS': ['GOV AL CC', 'GOV AL CB'],
-                            'PREF. CAJAMAR': ['PREF CAJAMAR CC'],
+                            'PREF. CAJAMAR': ['PM CAJAMAR CC'],
                             'GOV. GOIÁS': ['GOV GO CPL', 'GOV GOIAS'],
                             'PREF. PICOS': ['PREF PICOS', 'PREF PICOS DG', 'PM PICOS'],
                             'PREF. GUARULHOS': ['PREF GRU CB'],
@@ -130,13 +131,21 @@ class TRATA_ORBITAL:
         orbital_preparado['Proposta'] = orbital_preparado['Proposta'].astype('int64')
         orbital_preparado['Proposta'] = orbital_preparado['Proposta'].astype(str)
         orbital_final = pd.concat([front_so_orbital, orbital_preparado])
-        orbital_preparado['Proposta'] = orbital_preparado['Proposta'].astype(str)
+        orbital_final['Proposta'] = orbital_final['Proposta'].astype(str)
 
         orbital_final = orbital_final.drop_duplicates(subset=['Proposta'], keep='first')
         if self.convenio == "INSS":
             orbital_final['PRAZO'] = orbital_final['Proposta'].map(front_para_separar.set_index('NR_OPER_EDITADO')['Prazo'])
         else:
             orbital_final['PRAZO'] = orbital_final['Proposta'].map(front_para_separar.set_index('Contrato')['Prazo'])
+
+        # VERIFICA SE TEM A COLUNA OBS NO FRONT, SE SIM, CRIA A COLUNA OBS NO ORBITAL FINAL E PUXA PELO NÚMERO DE CONTRATO SE HÁ OBSERVAÇÃO, QUALQUER COISA DIFERENTE DE "NÃO LANÇAR - ORBITAL" OU PD.NA, NP.NAN, '', SERÁ REMOVIDO
+        if 'OBS' in front_para_separar.columns or 'Análise' in front_para_separar.columns:
+            if self.convenio == "INSS":
+                orbital_final['OBS'] = orbital_final['Proposta'].map(front_para_separar.set_index('NR_OPER_EDITADO')['Análise'])
+            else:
+                orbital_final['OBS'] = orbital_final['Proposta'].map(front_para_separar.set_index('Contrato')['OBS'])
+            orbital_final = orbital_final[orbital_final['OBS'].isin(['NÃO LANÇAR - ORBITAL', pd.NA, np.nan, '', 'NÃO LANÇAR - TELESAQUE', 'NÃO LANÇAR - COMPLEMENTAR'])].copy()
 
         print(f"orbital_tratado: Salvando arquivo de orbital tratado teste com front")
         try:

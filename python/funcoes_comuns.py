@@ -164,7 +164,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
             base_adicional=self.andamento_funcao, 
             coluna_contrato='Proposta', 
             mapeamento=mapeamento, 
-            verificar_ccb=False,
+            verificar_ccb=True,
             atualizar_esteira_integrado=False  # <-- DESLIGA A REGRA AQUI
         )
 
@@ -184,7 +184,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         # 1. Atualizações específicas de Esteira (chamada pela self.funcao)
         if atualizar_esteira_integrado:
             # Regra 1: ANDAMENTO/PENDENTE -> INTEGRADO
-            mask_integrado = front['Contrato'].isin(contratos_base) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE', na=False))
+            mask_integrado = front['Contrato'].isin(contratos_base) & (front['Esteira'].str.contains('ANDAMENTO|PENDENTE|LIBERADA', na=False))
             front.loc[mask_integrado, 'Esteira'] = 'INTEGRADO'
 
             # Regra 2: 99 CARTAO UTILIZADO -> 09.0 PAGO
@@ -203,7 +203,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
             novos_status = chaves_front.map(mapa_andamento_pendente)
             
             # 4. Cria a máscara (filtro) com as suas regras
-            mask_atualizar = novos_status.notna() & front['Esteira'].str.contains('ANDAMENTO|PENDENTE', na=False)
+            mask_atualizar = novos_status.notna() & front['Esteira'].str.contains('ANDAMENTO|PENDENTE|LIBERADA', na=False)
             
             # 5. Substitui a Esteira atual pelo Novo Status apenas nas linhas filtradas pela máscara
             front.loc[mask_atualizar, 'Esteira'] = novos_status[mask_atualizar]
