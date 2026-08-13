@@ -588,7 +588,7 @@ class ANDAMENTO:
         df_front_final = df_front_dispo[~df_front_dispo['Contrato'].isin(contratos_usados)]
         return df_andamento, df_front_final
     
-    def processar_sobras_por_cpf(df_andamento: pd.DataFrame, df_front: pd.DataFrame, esteiras_lancar: list) -> pd.DataFrame:
+    def processar_sobras_por_cpf(self, df_andamento: pd.DataFrame, df_front: pd.DataFrame, esteiras_lancar: list) -> pd.DataFrame:
         """
         Etapa de última alternativa:
         Aloca contratos restantes do Front diretamente no Andamento para linhas sem 'Contrato Editado 1',
