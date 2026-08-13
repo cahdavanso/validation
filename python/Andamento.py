@@ -588,7 +588,7 @@ class ANDAMENTO:
         df_front_final = df_front_dispo[~df_front_dispo['Contrato'].isin(contratos_usados)]
         return df_andamento, df_front_final
     
-    def processar_sobras_por_cpf(df_andamento: pd.DataFrame, df_front: pd.DataFrame, esteiras_lancar: list) -> pd.DataFrame:
+    def processar_sobras_por_cpf(self, df_andamento: pd.DataFrame, df_front: pd.DataFrame, esteiras_lancar: list) -> pd.DataFrame:
         """
         Etapa de última alternativa:
         Aloca contratos restantes do Front diretamente no Andamento para linhas sem 'Contrato Editado 1',
@@ -633,14 +633,15 @@ class ANDAMENTO:
             # NOVA REGRA ADICIONADA:
             # Filtra mantendo APENAS contratos com Prestação MENOR que o valor_alvo
             # =========================================================================
-            candidatas = candidatas[candidatas['Prestacao'] < valor_alvo].copy()
+            candidatas = candidatas[candidatas['Prestacao'] > valor_alvo].copy()
 
             # Se não sobrou nenhum contrato com valor menor para este CPF, pula a linha
             if candidatas.empty:
                 continue
 
             # Como já garantimos que Prestacao < valor_alvo, a diferença é simplesmente valor_alvo - Prestacao
-            candidatas['diferenca_valor'] = valor_alvo - candidatas['Prestacao']
+            # candidatas['diferenca_valor'] = valor_alvo - candidatas['Prestacao']
+            candidatas['diferenca_valor'] = candidatas['Prestacao'] - valor_alvo
 
             # Ordenação em cascata:
             # 1º Esteira -> 2º Operação -> 3º Banco -> 4º Menor Diferença (Valor mais próximo de bater a meta)

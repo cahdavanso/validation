@@ -11,7 +11,10 @@ class TRATA_CONCILIACAO:
         self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
                                          'PRODUTO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO',
                                          'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
-        self.conciliacao.rename(columns={'PRESTAÇÃO ORIGINAL': 'PRESTAÇÃO', 'PMT': 'PRESTAÇÃO', 'PRESTAÇÃO ': 'PRESTAÇÃO'}, inplace=True)
+        self.conciliacao.rename(columns={'PRESTAÇÃO ORIGINAL': 'PRESTAÇÃO', 'PMT': 'PRESTAÇÃO',}, inplace=True)
+
+        # remover espaço da frente e do final dos nomes das colunas
+        self.conciliacao.columns = self.conciliacao.columns.str.strip()
 
     def trata_conciliacao(self):
         # Vamos verificar o tipo da coluna VALOR RECEBIDO de KOBRAKI para garantir que é numérica
