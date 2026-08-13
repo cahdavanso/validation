@@ -308,6 +308,8 @@ class TratadorConsigfacil(TratadorFrontBase):
         else:
             df.loc[~df['PRAZO'].isin([pd.NA, np.nan, '', 0, '0']), 'OBS'] = 'NÃO LANÇAR - PRAZO'
 
+        df.loc[(df['Consignataria'].str.contains('OUTROS|FUTURO', na=False)), 'OBS'] = 'NÃO LANÇAR - BANCO ERRADO'
+
         df.drop_duplicates(subset=['Contrato'], keep='first', inplace=True)
             
         return df

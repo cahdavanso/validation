@@ -129,7 +129,7 @@ class ANDAMENTO:
         andam_file = self.processar_contrato_simples(andam_referencia_prazos, front_para_processar, tolerancia_bool=False, trabalhados_so_ativos=front_trabalhado_puro)
         andam_file = self.processar_contrato_simples(andam_file, front_para_processar, tolerancia_bool=True, trabalhados_so_ativos=None)
         
-        andam_file = self.associar_por_soma_andamento(andam_file, front_para_processar, tolerancia_bool=True, front_so_ativos=front_trabalhado_puro)
+        andam_file = self.associar_por_soma_andamento(andam_file, front_para_processar, tolerancia_bool=False, front_so_ativos=front_trabalhado_puro)
         andam_file = self.associar_por_soma_andamento(andam_file, front_para_processar, tolerancia_bool=True, front_so_ativos=None)
         andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
         andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar, 'Contrato de Andamento')
@@ -137,7 +137,10 @@ class ANDAMENTO:
 
         # Terceira passada
         andam_file, front_base = self.processar_contratos_otimizado(andam_file, front_para_processar)
+        andam_file = self.processar_sobras_por_cpf(andam_file, front_para_processar, esteiras_lancar)
         andam_file = self.extrair_contratos_com_referencia(andam_file, front_para_processar, 'Contrato Editado 1')
+
+
 
         # 3. EXTRAÇÃO DOS PRAZOS
         # colunas_contratos = [col for col in andam_file.columns if 'Contrato' in col or 'Código' in col]
@@ -394,54 +397,86 @@ class ANDAMENTO:
     
     
 
-    def busca_greedy_backtracking(self, alvo, itens, max_contratos=5):
+    def busca_greedy_backtracking(self, alvo, itens, max_contratos=5, tolerancia_centavos=5, cpf_atual=None, cpf_debug=None):
         """
-        Busca a combinação de contratos que resulte na menor diferença absoluta
-        em relação ao valor alvo.
+        Busca a combinação de contratos. Prioriza o match exato (diferença 0).
+        Se esgotar as opções e não achar o exato, só retorna se a diferença estiver dentro da 'tolerancia_centavos'.
         """
-        # print('BUSCA GREEDY ATIVADO')
         # Escala de centavos para evitar erros de float
         alvo_int = int(round(alvo * 100))
         opcoes = sorted([(c, int(round(v * 100))) for c, v in itens], 
                         key=lambda x: x[1], reverse=True)
         
-        # Variáveis para rastrear a melhor aproximação
         self.melhor_resultado = None
         self.menor_delta = float('inf')
 
-        def buscar(index_inicio, alvo_restante, caminho):
+        debug_ativo = (cpf_atual is not None) and (cpf_atual == cpf_debug)
+
+        if debug_ativo:
+            print(f"\n[DEBUG ALGORITMO] Iniciando busca para o CPF: {cpf_atual}")
+            print(f"[DEBUG ALGORITMO] Alvo: {alvo} ({alvo_int} centavos) | Tolerância: {tolerancia_centavos} centavos")
+
+        def buscar(index_inicio, alvo_restante, caminho, nivel=0):
             delta_atual = abs(alvo_restante)
+            espaco = "   " * nivel
+            
+            if debug_ativo and caminho:
+                print(f"{espaco}↳ Testando: {caminho} | Resta: {alvo_restante} | Diferença Atual: {delta_atual}")
             
             # Atualiza o recorde se encontrarmos uma combinação mais próxima
             if delta_atual < self.menor_delta:
                 self.menor_delta = delta_atual
                 self.melhor_resultado = "/".join(map(str, caminho))
+                if debug_ativo:
+                    print(f"{espaco}  ⭐ NOVO RECORDE! {self.melhor_resultado} (Diferença: {self.menor_delta})")
             
-            # Se for um match perfeito, interrompemos a busca (melhor impossível)
+            # Se for um match perfeito, interrompemos a busca na hora
             if delta_atual == 0:
+                if debug_ativo: print(f"{espaco}  🎯 MATCH PERFEITO! Encerrando busca para essa ramificação.")
                 return True
                 
             if len(caminho) >= max_contratos:
                 return False
 
+            # OTIMIZAÇÃO: Usa o menor valor entre o recorde atual e a tolerância aceitável
+            limite_excesso = min(self.menor_delta, tolerancia_centavos)
+
             for i in range(index_inicio, len(opcoes)):
                 contrato, valor = opcoes[i]
                 
-                # Poda lógica: se o valor atual sozinho já piora o delta atual 
-                # mais do que o nosso melhor recorde, podemos pular.
-                if valor > (alvo_restante + self.menor_delta):
+                # PODA AGRESSIVA: Se o contrato estourar o alvo restante ALÉM da tolerância, descarta sem nem testar.
+                if valor > (alvo_restante + limite_excesso):
+                    if debug_ativo:
+                        print(f"{espaco}  ✂️ [PODA] Contrato {contrato} (R${valor/100:.2f}) excede o alvo + tolerância. Ignorando.")
                     continue
                 
                 caminho.append(contrato)
-                if buscar(i + 1, alvo_restante - valor, caminho):
+                
+                if buscar(i + 1, alvo_restante - valor, caminho, nivel + 1):
                     return True
-                caminho.pop()
+                    
+                removido = caminho.pop()
                 
             return False
 
-        buscar(0, alvo_int, [])
-        # Retorna o melhor que conseguiu encontrar dentro do limite de contratos
-        return self.melhor_resultado
+        buscar(0, alvo_int, [], nivel=0)
+        
+        # ==========================================
+        # VEREDITO FINAL (FILTRO DE TOLERÂNCIA)
+        # ==========================================
+        if self.menor_delta == 0:
+            if debug_ativo: print(f"[DEBUG ALGORITMO] Sucesso: Match exato encontrado -> {self.melhor_resultado}\n")
+            return self.melhor_resultado
+            
+        elif self.menor_delta <= tolerancia_centavos:
+            if debug_ativo: 
+                print(f"[DEBUG ALGORITMO] Sucesso parcial: Exato não encontrado. Retornando aproximação com {self.menor_delta} centavo(s) de diferença -> {self.melhor_resultado}\n")
+            return self.melhor_resultado
+            
+        else:
+            if debug_ativo: 
+                print(f"[DEBUG ALGORITMO] Falha: Nenhuma combinação exata ou dentro da tolerância de {tolerancia_centavos} centavos. (Menor diferença foi {self.menor_delta}).\n")
+            return None # Rejeita a combinação pois fugiu da tolerância
 
     def processar_contratos_otimizado(self, df_andamento, df_front):
         # --- 1. Padronização ---
@@ -471,7 +506,7 @@ class ANDAMENTO:
 
         
         # --- DEBUG CPF ESPECÍFICO ---
-        cpf_alvo = "780.865.073-00"
+        cpf_alvo = "175.796.513-00"
         print(f"\n[DEBUG] processar_contratos_otimizado - ANTES da busca para o CPF {cpf_alvo}:")
         colunas_verificar = ['Código na instituição', 'Contrato de Andamento', 'Valor da Parcela', col_destino]
         colunas_existentes = [c for c in colunas_verificar if c in df_andamento.columns]
@@ -518,11 +553,31 @@ class ANDAMENTO:
 
             # Joga só o que está nas esteiras corretas
             possibilidades = possibilidades[possibilidades['Esteira'].isin(self.esteiras)]
+
+            # =========================================================
+            # INSERIR ESTE BLOCO DE DEBUG AQUI (Antes de criar a lista_itens)
+            # =========================================================
+            if cpf == "175.796.513-00":  # Coloque o CPF que você quer espionar
+                print(f"\n[DEBUG BUSCA] CPF sendo processado: {cpf}")
+                print(f"Valor alvo a ser atingido (soma_alvo): {soma_alvo}")
+                print(f"Contratos ENCONTRADOS E CONSIDERADOS no Front:")
+                # Imprime os contratos, seus valores e esteiras para você ver as opções que o algoritmo terá
+                print(possibilidades[['Contrato', 'Prestacao', 'Esteira']])
+                print("=========================================================\n")
+            # =========================================================
+            
+            # Defina o CPF que você quer rastrear (pode colocar lá no topo da função)
+            cpf_alvo = "175.796.513-00" 
             
             lista_itens = list(possibilidades[['Contrato', 'Prestacao']].itertuples(index=False, name=None))
             
-            # A busca agora sempre retornará a melhor combinação disponível
-            resultado = self.busca_greedy_backtracking(soma_alvo, lista_itens)
+            # Chamada atualizada com os novos parâmetros:
+            resultado = self.busca_greedy_backtracking(
+                alvo=soma_alvo, 
+                itens=lista_itens, 
+                cpf_atual=cpf,      # Passa o CPF que está no loop agora
+                cpf_debug=cpf_alvo  # Passa o CPF que aciona os prints
+            )
             
             if resultado:
                 df_andamento.loc[grupo.index, col_destino] = resultado
@@ -532,6 +587,78 @@ class ANDAMENTO:
         # 4. Limpeza Final
         df_front_final = df_front_dispo[~df_front_dispo['Contrato'].isin(contratos_usados)]
         return df_andamento, df_front_final
+    
+    def processar_sobras_por_cpf(df_andamento: pd.DataFrame, df_front: pd.DataFrame, esteiras_lancar: list) -> pd.DataFrame:
+        """
+        Etapa de última alternativa:
+        Aloca contratos restantes do Front diretamente no Andamento para linhas sem 'Contrato Editado 1',
+        respeitando restrição por CPF, valor MENOR que a parcela e prioridades de Esteira, Operação e Banco.
+        """
+        bancos_nao_lancar = ["OUTROS", "FUTURO"]
+
+        # 1. Identifica TODOS os contratos já utilizados em qualquer coluna do Andamento
+        cols_editadas = [c for c in df_andamento.columns if 'Contrato Editado' in c or c == 'Contrato de Andamento']
+        contratos_ja_usados = set(
+            df_andamento[cols_editadas].astype(str).values.flatten()
+        ) - {'nan', 'None', '', 'NaN'}
+
+        # 2. Filtra o Front removendo os contratos que já foram consumidos anteriormente
+        front_sobras = df_front[~df_front['Contrato'].astype(str).isin(contratos_ja_usados)].copy()
+
+        # 3. Mapeia a hierarquia de prioridades no Front
+        ordem_operacao = {'CARTAO BENEFICIO': 1, 'EMPRESTIMO': 2}
+        front_sobras['prioridade_operacao'] = front_sobras['Tipo Operacao'].map(ordem_operacao).fillna(3)
+        front_sobras['prioridade_esteira'] = np.where(front_sobras['Esteira'].isin(esteiras_lancar), 1, 2)
+        front_sobras['prioridade_banco'] = np.where(front_sobras['Consignataria'].isin(bancos_nao_lancar), 2, 1)
+
+        # 4. Seleciona APENAS as linhas onde 'Contrato Editado 1' está vazio/NaN
+        mask_vazios = (
+            df_andamento['Contrato Editado 1'].isna() | 
+            (df_andamento['Contrato Editado 1'].astype(str).str.strip() == "")
+        )
+        linhas_sem_contrato = df_andamento[mask_vazios]
+
+        # 5. Iteração linha a linha
+        for idx, linha in linhas_sem_contrato.iterrows():
+            cpf_atual = linha['CPF']
+            valor_alvo = linha['Valor da Parcela']
+
+            # Filtro 1: Apenas contratos do MESMO CPF
+            candidatas = front_sobras[front_sobras['CPF'] == cpf_atual].copy()
+
+            if candidatas.empty:
+                continue
+
+            # =========================================================================
+            # NOVA REGRA ADICIONADA:
+            # Filtra mantendo APENAS contratos com Prestação MENOR que o valor_alvo
+            # =========================================================================
+            candidatas = candidatas[candidatas['Prestacao'] < valor_alvo].copy()
+
+            # Se não sobrou nenhum contrato com valor menor para este CPF, pula a linha
+            if candidatas.empty:
+                continue
+
+            # Como já garantimos que Prestacao < valor_alvo, a diferença é simplesmente valor_alvo - Prestacao
+            candidatas['diferenca_valor'] = valor_alvo - candidatas['Prestacao']
+
+            # Ordenação em cascata:
+            # 1º Esteira -> 2º Operação -> 3º Banco -> 4º Menor Diferença (Valor mais próximo de bater a meta)
+            candidatas_ordenadas = candidatas.sort_values(
+                by=['prioridade_esteira', 'prioridade_operacao', 'prioridade_banco', 'diferenca_valor'],
+                ascending=[True, True, True, True]
+            )
+
+            # Seleciona o contrato ideal que passou em todas as regras
+            contrato_escolhido = str(candidatas_ordenadas.iloc[0]['Contrato'])
+
+            # Preenche na coluna 'Contrato Editado 1' do DataFrame original
+            df_andamento.loc[idx, 'Contrato Editado 1'] = contrato_escolhido
+
+            # Remove o contrato selecionado IMEDIATAMENTE do pool de sobras
+            front_sobras = front_sobras[front_sobras['Contrato'].astype(str) != contrato_escolhido]
+
+        return df_andamento
     
 
     def extrair_contratos_simples(self, df_sujo: pd.DataFrame, df_limpo: pd.DataFrame) -> pd.DataFrame:

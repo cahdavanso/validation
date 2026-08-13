@@ -117,6 +117,9 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         if self.andamento_funcao is not None:
             colunas = ['Proposta', 'Operação', 'CPF/CNPJ', 'MatrÍcula', 'Cliente', 'Quantidade de Parcelas', 'Data Base', 'Valor da Parcela', 'Descrição do Produto',
                                    'Descrição da Atividade', 'Descrição EMPREGADOR']
+
+            # Remover duplicatas
+            andamento_funcao = self.andamento_funcao.drop_duplicates(subset=colunas, keep='first')
             
             # Vai receber só essas colunas
             andamento_funcao_excel = andamento_funcao[colunas]
