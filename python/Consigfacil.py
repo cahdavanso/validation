@@ -785,7 +785,7 @@ class CONSIGFACIL:
         averbado_finalizado = distribuicao_valores(averbado_novo)
         
 
-        if self.convenio in ['GOV. PIAUÍ',]:
+        if self.convenio in ['GOV. PIAUÍ', 'PREF. SANTA RITA']:
             if (averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL').any():
                 averbado_finalizado.loc[averbado_finalizado['SITUAÇÃO DE DESCONTO'] == 'PARCIAL', 'Valor da reserva'] = averbado_finalizado['NOVO LANÇAR TOTAL']
                 averbado_finalizado = distribuicao_valores(averbado_finalizado)

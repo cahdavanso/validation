@@ -93,7 +93,10 @@ class ANDAMENTO:
         # self.andamento = self.andamento[self.andamento['Prazo Total'] != 1].copy()
 
         # Remoção de cartão de crédito com prazo 0 ou 1
-        self.andamento = self.andamento[~((self.andamento['Modalidade'].isin(['Cartão de Crédito', 'Cartão de Crédito [Prefeitura]', 'Cartão de Crédito [Previdência]'])) & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
+        if self.convenio in ['PREF. SANTA RITA']:
+            self.andamento = self.andamento[~((self.andamento['Modalidade'].isin(['Cartão de Crédito', 'Cartão de Crédito [Prefeitura]', 'Cartão de Crédito [Previdência]', 'Cartão Benefício'])) & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
+        else:
+            self.andamento = self.andamento[~((self.andamento['Modalidade'].isin(['Cartão de Crédito', 'Cartão de Crédito [Prefeitura]', 'Cartão de Crédito [Previdência]'])) & (self.andamento['Prazo Total'].isin([0, 1])))].copy()
 
         '''if 'Clone na instituição' not in self.andamento.columns:
             self.andamento.insert(2, 'Clone na instituição', self.andamento['Código na instituição'])'''
