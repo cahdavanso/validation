@@ -102,8 +102,10 @@ class TRATA_CONCILIACAO:
         if tacs_tratado is not None:
             if precisa_converter:
                 tacs_tratado['CONTRATO'] = tacs_tratado['CONTRATO'].astype(str)
+            if precisa_converter:
+                tacs_tratado['CONTRATO'] = tacs_tratado['CONTRATO'].astype(str)
                 
-            somase_tacs = tacs_tratado.groupby('CONTRATO')['ATRIBUIÇÃO'].sum()
+            somase_tacs = tacs_tratado.groupby('CONTRATO')['VALOR PAGO'].sum()
             conciliacao_tratado['TACS'] = conciliacao_tratado['CONTRATOS'].map(somase_tacs).fillna(0)
             
             # Acumula o valor no total
