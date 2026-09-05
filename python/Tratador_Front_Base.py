@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.Andamento import ANDAMENTO
+from python.Andamento_GOVPB import ANDAMENTO_CODATA
 
 class TratadorFrontBase:
     def __init__(self, front, conciliacao, convenio, caminho, orbital=None, condicoes_1=None, consignataria=None, rubrica=None, kobraki=None, tacs=None, extra_judicial=None, andamento=None):
@@ -320,7 +321,7 @@ class TratadorCodata(TratadorFrontBase):
         print(f'TratadorCodata ativado')
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
-        objeto_andamento = ANDAMENTO(df, self.convenio, self.caminho, self.andamento) # if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
+        objeto_andamento = ANDAMENTO_CODATA(df, self.convenio, self.caminho, self.andamento) # if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
         df = objeto_andamento.andamento_func_front()
         # df['PRAZO'] = df['Contrato'].astype(str).map(df.set_index('Contrato')['PRAZO'])
         df['Contrato'] = df['Contrato'].astype('int64')

@@ -4,6 +4,7 @@ from thefuzz import fuzz
 import os
 from python.ESTEIRAS import load_esteiras
 from datetime import datetime
+import numpy as np
 
 '''front_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\relatorio_2026-05-06_11-45-47_parte_1.csv"
 andamento_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\Consignacao UNIFICADA GOV PB.xlsx"
@@ -43,7 +44,7 @@ andamento['Situação'] = andamento['Situação'].str.strip().map(hierarquia)
 andamento = andamento.sort_values(by='Situação')'''
 
 
-class ANDAMENTO:
+class ANDAMENTO_CODATA:
     def __init__(self, front, convenio, caminho, consignataria, andamento=None, funcao=None):
         self.front = front
         self.andamento = andamento
@@ -126,6 +127,7 @@ class ANDAMENTO:
         front = self.unifica_front_funcao()
         # 1. VALIDAÇÃO E TRATAMENTO INICIAL
         if self.andamento is None:
+            print('\nAndamento está vazio\n')
             return front
 
         # --- NOVO FILTRO DE OBS ---
@@ -141,11 +143,46 @@ class ANDAMENTO:
 
         # Se não houver nada para processar, já retorna o original
         if front_para_processar.empty:
+            print('\nNão há linhas para processar no front\n')
             return front
         # --------------------------
 
-        # Ordenar as esteiras de A-Z
-        front_para_processar = front_para_processar.sort_values(by=['Esteira'], ascending=[True])
+        # 1. Ordem de prioridade para o Tipo de Operação
+        ordem = {
+            '000124 - EMPRÉSTIMO': 1,
+            '000136 - AKRK EMPRÉSTIMO': 2,
+            '000379 - EMPRESTIMO': 3,
+            '000384 - BENS DURAVEIS': 4,
+            '000620 - EMPRÉSTIMO': 5,
+            '000621 - BENS DURÁVEIS': 6,
+            '000669 - BENS DURAVEIS': 7,
+            '00671 - EMPRÉSTIMO': 8,
+            '000674 - DIG BENS DURAVEIS': 9,
+            '000676 - DIG EMPRÉSTIMO': 10,
+            'AKRK EMPRÉSTIMO': 11,
+            'BENS DURAVEIS': 12,
+            'DIG BENS DURAVEIS': 13,
+            'DIG EMPRÉSTIMO': 14,
+            'EMPRESTIMO': 15,
+            'EMPRÉSTIMO': 16,
+        }
+        front_para_processar['prioridade_operacao'] = front_para_processar['Tipo Operacao'].map(ordem).fillna(17)
+
+        # 2. NOVA LÓGICA: Ordem de prioridade para a Esteira
+        # Se a 'Esteira' atual estiver dentro da lista 'esteiras_lancar', recebe 1. Senão, recebe 2.
+
+        front_para_processar['prioridade_esteira'] = np.where(front_para_processar['Esteira'].isin(self.esteiras), 1, 2)
+
+        # 2.1 NOVA LÓGICA: Oridem de prioridade por Consignataria
+        # front_para_processar['prioridade_banco'] = np.where(front_para_processar['Consignataria'].isin(bancos_nao_lancar), 2, 1)
+
+        # 3. Ordenação combinada
+        # Ele vai ordenar primeiro pela Esteira, depois vai puxar as prioridade_operacao para cima, 
+        # e por último vai desempatar por ordem alfabética da própria coluna 'Esteira'
+        front_para_processar = front_para_processar.sort_values(
+            by=['prioridade_esteira', 'prioridade_operacao', 'Esteira'],
+            ascending=[True, True, True]
+        )
         
 
         # Criamos cópias para evitar SettingWithCopyWarning

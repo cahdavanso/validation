@@ -7,7 +7,7 @@ from python.ESTEIRAS import load_esteiras
 from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
 from python.Tratador_Front_Base import TratadorCodata
 from python.trata_conciliacao import TRATA_CONCILIACAO
-from python.Andamento_GOVPB import ANDAMENTO
+from python.Andamento_GOVPB import ANDAMENTO_CODATA
 from datetime import datetime
 import numpy as np
 import xlsxwriter
@@ -62,6 +62,8 @@ class CODATA:
 
             # Ordenamos o DataFrame pela nova coluna (1 até 9)
             self.andamento = self.andamento.sort_values(by='Situação')
+
+            print(f"DEBUG: Andamento após hierarquia:\n{self.andamento.head(10)}")
 
         self.convenio = convenio
         self.consignataria = consignataria
@@ -313,7 +315,9 @@ class CODATA:
 
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
         if self.consignataria == 'CAPITAL CONSIG':
-            objeto_andamento = ANDAMENTO(self.front, self.convenio, self.caminho, self.consignataria, self.andamento, self.funcao)
+            objeto_andamento = ANDAMENTO_CODATA(front= self.front_final_consig, convenio=self.convenio, caminho=self.caminho, consignataria=self.consignataria, andamento=self.andamento, funcao=self.funcao)
+            print("Andamento antes de chamar a função andamento_func_front:")
+            print(self.andamento.head(10))
             front_com_prazo = objeto_andamento.andamento_func_front()
             front_com_prazo.drop_duplicates(subset=['Contrato'], keep='first', inplace=True)
 
@@ -664,7 +668,7 @@ class CODATA:
 
     def averbados_func(self, front):
         # RELATORIO
-        front_preliminar = self.tratamento_front_preliminar()
+        # front_preliminar = self.tratamento_front_preliminar()
         front_preliminar = self.front_semi_trabalhado
         front_consig = front.copy()
         averbados = self.averbados
