@@ -286,9 +286,9 @@ class TratadorFrontBase:
         return df
     
 # 1. Defina as Expressões Regulares no topo do arquivo para padronizar e evitar erros de digitação
-REGEX_CARTAO_COMPLETO = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO|CARTAO CONSIGNAD|CARTAO BENEFICIO'
+REGEX_CARTAO_COMPLETO = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO|CARTAO CONSIGNAD|CARTAO BENEFICIO|CARTÃO BENEFÍCIO'
 REGEX_CARTAO_SIMPLES = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO|CARTAO CONSIGNAD'
-REGEX_BENEFICIO = 'CARTAO BENEFICIO'
+REGEX_BENEFICIO = 'CARTAO BENEFICIO', 'CARTÃO BENEFÍCIO'
 
 
 class TratadorConsigfacil(TratadorFrontBase):
@@ -320,8 +320,14 @@ class TratadorCodata(TratadorFrontBase):
 
         print(f'TratadorCodata ativado')
 
+        print(f'Consignataria: {self.consignataria}\n')
+
+        print(f'A consignatária chamada é igual a "CAPITAL CONSIG"? {self.consignataria == "CAPITAL CONSIG"}\n')
+
+        print(f'Amostra de andamento:\n{self.andamento.head(10)}\n')
+
         # Marca Prazo - Já está marcando "NÃO LANÇAR - PRAZO" dentro da função andamento_func_front
-        objeto_andamento = ANDAMENTO_CODATA(df, self.convenio, self.caminho, self.andamento) # if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
+        objeto_andamento = ANDAMENTO_CODATA(front=df, convenio=self.convenio, caminho=self.caminho, consignataria=self.consignataria, andamento=self.andamento) # if self.convenio != 'GOV. MATO GROSSO' else ANDAMENTO_PROVISORIO(self.front, self.convenio, self.caminho, self.andamento, self.funcao)
         df = objeto_andamento.andamento_func_front()
         # df['PRAZO'] = df['Contrato'].astype(str).map(df.set_index('Contrato')['PRAZO'])
         df['Contrato'] = df['Contrato'].astype('int64')
@@ -334,7 +340,7 @@ class TratadorCodata(TratadorFrontBase):
 
 class TratadorZetra(TratadorFrontBase):
     def aplicar_regras_especificas(self, df):
-        convenios_bh = ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ', 'PREF. SOBRAL']
+        convenios_bh = ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ', 'PREF. SOBRAL', 'PREF. SERRA']
         
         # CORREÇÃO: Aspas consertadas no print
         print(f"Convenio é {self.convenio}")

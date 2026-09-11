@@ -41,7 +41,7 @@ from python.Lineconsig import LINECONSIG
 
 app = FastAPI()
 # Mude para False quando subir para produção
-MODO_DESENVOLVIMENTO = False
+MODO_DESENVOLVIMENTO = True
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -105,7 +105,7 @@ CONSIGLOG_CONVENIO = ["GOV. BAHIA", "PREF. ARAGUAÍNA", "PREF. DUQUE DE CAXIAS",
 
 ZETRA_CONVENIO = ["GOV. ESPÍRITO SANTO", "GOV. PARANÁ", "GOV. RIO DE JANEIRO", "IGEPREV", "PREF. BELO HORIZONTE", "PREF. AÇAILÂNDIA", 
                   "PREF. CAMPINAS", "PREF. MACAÉ", "PREF. SÃO JOSE DE RIBAMAR", "PREF. SÃO PAULO-HMSP", "PREF. SOBRAL", "PREVIPALMAS",
-                  "PREF. BARBACENA", "GOV. ALAGOAS - TJAL"
+                  "PREF. BARBACENA", "GOV. ALAGOAS - TJAL", "PREF. SERRA"
                 ]
 
 RF1_CONVENIO = ["PREF. ANANINDEUA"]
@@ -128,7 +128,7 @@ QUANTUM_CONVENIO = ["PREF. SÃO JOSÉ DO RIO PRETO", "PREVIDÊNCIA SÃO JOSÉ DO
 
 LINECONSIG_CONVENIO = ["PREF. PICOS", "PREV. PICOS"]
 
-SAFECONSIG_CONVENIO = ["PREF. TAUBATÉ", "PREF. SANTOS", "GOV. CEARÁ", "GOV. ALAGOAS"]
+SAFECONSIG_CONVENIO = ["PREF. TAUBATÉ", "PREF. SANTOS", "GOV. CEARÁ", "GOV. ALAGOAS", "PREF. CAUCAIA"]
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [

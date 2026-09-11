@@ -107,7 +107,7 @@ class CODATA:
         self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
 
         front_semi_trabalhado_preliminar = TratadorCodata(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio, caminho=self.caminho, 
-                                                          condicoes_1=self.condicoes_1, kobraki=self.kobraki, tacs=tacs, extra_judicial=self.extra_judicial, 
+                                                          condicoes_1=self.condicoes_1, consignataria=self.consignataria, kobraki=self.kobraki, tacs=tacs, extra_judicial=self.extra_judicial, 
                                                           andamento=self.andamento)
         self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
         self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
@@ -317,7 +317,6 @@ class CODATA:
         if self.consignataria == 'CAPITAL CONSIG':
             objeto_andamento = ANDAMENTO_CODATA(front= self.front_final_consig, convenio=self.convenio, caminho=self.caminho, consignataria=self.consignataria, andamento=self.andamento, funcao=self.funcao)
             print("Andamento antes de chamar a função andamento_func_front:")
-            print(self.andamento.head(10))
             front_com_prazo = objeto_andamento.andamento_func_front()
             front_com_prazo.drop_duplicates(subset=['Contrato'], keep='first', inplace=True)
 

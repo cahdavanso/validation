@@ -1,5 +1,6 @@
 from thefuzz import fuzz
 import pandas as pd
+import numpy as np
 import openpyxl
 import numpy as np
 from python.ESTEIRAS import load_esteiras
@@ -401,6 +402,23 @@ class SAFECONSIG:
             averbados_prazo['Parc. Averbada'] = averbados_prazo['Parc. Averbada'].astype(str).str.replace(",", ".")
             averbados_prazo['Parc. Averbada'] = pd.to_numeric(averbados_prazo['Parc. Averbada'], errors="coerce")
 
+        # colunas_valores_unificados = [col for col in averbado_finalizado.columns if 'Valor_Unif_' in col]
+        colunas_valores_unificados = averbados_prazo.filter(like='Valor_Unif_')
+
+        # NOVO PASSO: Adiciona a coluna 'ORBITAL' ao DataFrame de colunas para soma
+        colunas_para_somar = colunas_valores_unificados.copy()  # Cria uma cópia para garantir a segurança
+
+        # Verifica se 'ORBITAL' já existe antes de adicionar (apenas por garantia, embora o código garanta)
+        if 'ORBITAL' in averbados_prazo.columns:
+            # Usa .loc para garantir que a coluna seja adicionada
+            colunas_para_somar.loc[:, 'ORBITAL'] = averbados_prazo['ORBITAL']
+
+        averbados_prazo['Soma'] = colunas_para_somar.sum(axis=1)
+        print(f'Coluna de Soma em prazo, criado!')
+
+        averbados_prazo['Parc. Averbada'] = np.minimum(averbados_prazo['Soma'], averbados_prazo['Parc. Averbada'])
+        print(f'Feita o mínimo entre Soma e Parc. Averbada')
+
         averbados_prazo.to_excel(os.path.join(self.caminho, f"AVERBADOS COM PRAZO {self.convenio}.xlsx"), index=False)
         averbados = averbados[averbados['Prazo'] == 'Prazo Rotativo'].copy()
 
@@ -521,7 +539,7 @@ class SAFECONSIG:
             # 7. (Opcional) Remove a coluna auxiliar que criamos.
         # averbado_novo = averbado_novo.drop(columns=['SOMA ACUMULADA DA RESERVA'])
 
-        if self.convenio in ['PREF. TAUBATÉ', 'PREF. SANTOS', 'GOV. ALAGOAS', 'GOV. CEARÁ']:
+        if self.convenio in ['PREF. TAUBATÉ', 'PREF. SANTOS', 'GOV. ALAGOAS', 'GOV. CEARÁ', 'PREF. CAUCAIA']:
             averbado_finalizado = distribuicao_valores(averbado_novo)
 
             try:
@@ -575,8 +593,13 @@ class SAFECONSIG:
         averbado_finalizado['Soma Final'] = np.maximum(averbado_finalizado['Soma'] - averbado_finalizado['lancado_prazo'], 0)
 
         averbado_finalizado['Lançar'] = np.minimum(averbado_finalizado['Soma Final'], averbado_finalizado['Parc. Averbada'])
+
+        # --- 2.5 Puxa as liminares ---
+        tutela = front_preliminar[front_preliminar['Acao Judicial'] == 'SIM']
+        averbado_finalizado["LIMINAR"] = averbado_finalizado['CPF'].map(tutela.set_index('CPF')['Contrato'].to_dict())
+        condicao_liminar = averbado_finalizado['LIMINAR'].notna()
             
-        averbado_finalizado.loc[averbado_finalizado['LIMINAR'] == "SIM", 'Lançar'] = 0
+        averbado_finalizado.loc[condicao_liminar, 'Lançar'] = 0
 
         # Remoção de duplicatas por matrícula
         # averbado_finalizado.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)

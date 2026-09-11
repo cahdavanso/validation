@@ -111,6 +111,8 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
                                     'PREV. PIRACICABA IPASP': ['IPASP', 'IPASP DG'],
                                     'PREVIPALMAS': ['PM PALMAS PREV'],
                                     'SEMAE - SERVIÇO MUNICIPAL DE ÁGUA E ESGOTO DE PIRACICABA': ['PM PIRA SEMAE'],
+                                    'PREF. SERRA': ['PM SERRA CB', 'PM SERRA CC'],
+                                    'PREF. CAUCAIA': ['PM CAUCAIA CC', 'PM CAUCAIA EMP']
                                 }
         
         #  Separar no andamento do função somente o convenio que vamos juntar

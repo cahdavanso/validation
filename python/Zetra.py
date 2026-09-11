@@ -106,7 +106,10 @@ class ZETRA:
                              "COMP": 6, "OP": 1},
 
             "PREF. SOBRAL": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 3, "VAL": 10, "PRZ": 3,
-                             "COMP": 6, "OP": 1}
+                             "COMP": 6, "OP": 1},
+
+            "PREF. SERRA": {"MAT": 10, "CPF": 11, "NOME": 50, "EST": 3, "ORG": 3, "COD": 4, "VAL": 10, "PRZ": 3,
+                                 "COMP": 6, "OP": 1}
         }
 
         front_semi_trabalhado_preliminar = TratadorZetra(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
@@ -1045,7 +1048,7 @@ class ZETRA:
         # --------------------------------------------------------------------------------------------------------------
 
         # Separa apenas o que retornou como "cartão de crédito" no tipo de conciliação
-        if self.convenio in ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ']:
+        if self.convenio in ['PREF. BELO HORIZONTE', 'PREF. CAMPINAS', 'GOV. PARANÁ', "PREF. SERRA"]:
             front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Operacao'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTAO BENEFICIO', na=False)].copy()
         else:
             front_consig_cartao_conciliacao = front_consig[front_consig['Tipo Conciliação'].str.contains('Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO', na=False)].copy()
@@ -1126,13 +1129,13 @@ class ZETRA:
                                 "IGEPREV CIASPREV": "02470", "PREF. PIRACICABA": "5600", "PREF. PIRACICABA - SEMAE": "675",
                                 "PREV. PIRACICABA": "6277", "PREF. BELO HORIZONTE CB": "204U", "PREF. BELO HORIZONTE CC": "204V",
                                 "PREF. MACAÉ": "11Q0", "PREVIPALMAS CAPITAL": "10243", "PREVIPALMAS CIASPREV": "894", "PREF. CAMPINAS": "435",
-                                "GOV. PARANÁ": "5408", "PREF. BARBACENA": "3609", "GOV. ALAGOAS - TJAL": "605", "PREF. SOBRAL": "541"}
+                                "GOV. PARANÁ": "5408", "PREF. BARBACENA": "3609", "GOV. ALAGOAS - TJAL": "605", "PREF. SOBRAL": "541", "PREF. SERRA": "847"}
 
         estab_dict = {"PREF. AÇAILÂNDIA": "001", "PREF. BARBACENA": "001", "IGEPREV CAPITAL": "001", "IGEPREV CIASPREV": "001",
                       "PREF. PIRACICABA": "001", "PREF. PIRACICABA - SEMAE": "002", "PREF. CAMPINAS": "",
                       "PREV. PIRACICABA": "001", "PREF. BELO HORIZONTE CB": "001", "PREF. BELO HORIZONTE CC": "001",
                       "PREF. MACAÉ": "001", "PREVIPALMAS CAPITAL": "001", "PREVIPALMAS CIASPREV": "001",
-                      "GOV. PARANÁ": "002", "GOV. ALAGOAS - TJAL": "001", "PREF. SOBRAL": "001"}
+                      "GOV. PARANÁ": "002", "GOV. ALAGOAS - TJAL": "001", "PREF. SOBRAL": "001", "PREF. SERRA": "001"}
 
         emp_dict_gov_rj = {"ADMINISTRAÇÃO DIRETA (GOVERNO ESTADO)": "01",
                            "ENCARGOS GERAIS DO ESTADO": "01",
@@ -1189,7 +1192,7 @@ class ZETRA:
                             'SECRETARIA DE ESTADO DA FAZENDA' : 'SEFA',
                             'INSTITUTO AGRONÔMICO DO PARANÁ' : 'IDR',
                             'UNESPAR - CAMPUS DE DE PARANAVAÍ' : 'FAFIPA',
-                            'SECRETARIA DE ESTADO DA ADMINISTRAÇÃO E DA PREVIDÊNCIA' : 'SEAP'
+                            'SECRETARIA DE ESTADO DA ADMINISTRAÇÃO E DA PREVIDÊNCIA' : 'SEAP',
                             }
 
 
@@ -1264,6 +1267,7 @@ class ZETRA:
         if self.convenio == 'GOV. PARANÁ':
             mask_estabelecimento = ~a_lancar["CATEGORIA"].isin(["Aposentado", "Pensionista"])
             a_lancar.loc[mask_estabelecimento, "ESTABELECIMENTO"] = "001"
+
 
         if self.convenio not in ['GOV. RIO DE JANEIRO']:
             if self.convenio in ['PREF. BARBACENA']:
@@ -1355,7 +1359,7 @@ class ZETRA:
         matricula = self.format_number(df['Matrícula'], regras['MAT'])
         cpf = self.format_cpf(df['CPF'], regras['CPF']) if not self.convenio == 'PREF. CAMPINAS' else ''
         nome = self.format_text(df['Servidor'], regras['NOME']) if not self.convenio == 'PREF. CAMPINAS' else ''
-        estab = self.format_number(df['ESTABELECIMENTO'], regras['EST']) if self.convenio in ['PREF. CAMPINAS', 'GOV. PARANÁ'] else ''
+        estab = self.format_number(df['ESTABELECIMENTO'], regras['EST']) if self.convenio not in ['PREF. CAMPINAS'] else ''
         id_orgao = self.format_id_orgao(df['Id. órgão'], regras['ID_ORG']) if self.convenio == 'GOV. PARANÁ' else ''
         orgao = self.format_number(df['ÓRGÃO'], regras['ORG']) if not self.convenio == 'GOV. PARANÁ' else '' 
         cod_desc = self.format_number(df['CÓDIGO DE DESCONTO'], regras['COD']) if not self.convenio in ['GOV. RIO DE JANEIRO', 'PREF. MACAÉ'] else self.format_text(df['CÓDIGO DE DESCONTO'], regras['COD'])
@@ -1370,7 +1374,7 @@ class ZETRA:
         operacao = self.format_constant('I', regras['OP']) if self.convenio != 'PREF. CAMPINAS' else self.format_constant('7', regras['OP'])  # 'I' de Inclusão
 
         # 3. Concatena tudo
-        if self.convenio in ['PREF. AÇAILÂNDIA', 'PREF. BARBACENA', 'PREF. MACAÉ', 'PREVIPALMAS', 'PREF. BELO HORIZONTE', 'PREF. SOBRAL']:
+        if self.convenio in ['PREF. AÇAILÂNDIA', 'PREF. BARBACENA', 'PREF. MACAÉ', 'PREVIPALMAS', 'PREF. BELO HORIZONTE', 'PREF. SOBRAL', 'PREF. SERRA']:
             layout = (matricula + cpf + nome + estab + orgao + cod_desc + valor + prazo + comp + operacao)
         elif self.convenio == 'GOV. RIO DE JANEIRO':
             layout = (matricula + cpf + nome + cod_desc + estab + valor + comp + operacao)
