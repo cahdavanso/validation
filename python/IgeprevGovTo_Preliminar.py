@@ -60,15 +60,15 @@ d8_gov_to_click_parciais = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPRE
 d8_igeprev_capital = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Movimento_Financeiro-IGEPREV-CAPITAL-032026.csv", encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
 d8_igeprev_ciasprev = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Movimento_Financeiro-IGEPREV-CIASPREV-032026.csv", encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
 conciliacao_df = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Conciliação-Governo do Tocantins + IGEPREV - 032026.xlsx")
-kobraki_df = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RECEBIVEIS KOBRAKI - ABRIL 2026.xlsx", sheet_name="CONSOLIDADO")
+recebimentos_df = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RECEBIVEIS RECEBIMENTOS - ABRIL 2026.xlsx", sheet_name="CONSOLIDADO")
 
 caminho = r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\teste_programa"
 '''
-# , portal_file_list, d8_to, d8_igeprev, conciliacao=None,  kobraki=None
+# , portal_file_list, d8_to, d8_igeprev, conciliacao=None,  recebimentos=None
 # averbado_unif = pd.concat()
 
 class IGEPREV_GOVTO:
-    def __init__(self, front, funcao, portal_file_path_to, portal_file_path_igeprev, d8_file_path_to, d8_file_path_igeprev, caminho, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None):
+    def __init__(self, front, funcao, portal_file_path_to, portal_file_path_igeprev, d8_file_path_to, d8_file_path_igeprev, caminho, conciliacao=None, recebimentos=None, extra_judicial=None, desconto_inadimplencia=None):
         self.caminho = caminho
         self.front = front
         self.averbados_to = portal_file_path_to
@@ -76,9 +76,9 @@ class IGEPREV_GOVTO:
         self.d8_to = d8_file_path_to
         self.d8_igeprev = d8_file_path_igeprev
         self.funcao = funcao
-        self.kobraki = kobraki if kobraki is not None else None
+        self.recebimentos = recebimentos if recebimentos is not None else None
         self.extra_judicial = extra_judicial if extra_judicial is not None else None
-        self.tacs = tacs if tacs is not None else None
+        self.desconto_inadimplencia = desconto_inadimplencia if desconto_inadimplencia is not None else None
         self.caminho = caminho
         
         conciliacao_falso = pd.DataFrame(
@@ -253,7 +253,7 @@ class IGEPREV_GOVTO:
 
     def validacao_termino(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
@@ -795,7 +795,7 @@ class IGEPREV_GOVTO:
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR AVERBADOS TRABALHADO: {e}")
 
-'''teste = IGEPREV_GOVTO(front, funcao, conciliacao_df, kobraki_df)
+'''teste = IGEPREV_GOVTO(front, funcao, conciliacao_df, recebimentos_df)
 
 resultado = teste.unifica_averbados()'''
 

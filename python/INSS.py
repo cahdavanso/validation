@@ -11,7 +11,7 @@ import os
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 class INSS:
-    def __init__(self, portal_file_list, front, conciliacao, caminho, funcao=None, kobraki=None, tacs=None, extra_judicial=None, casos_capital=None, orbital=None, d8=None):
+    def __init__(self, portal_file_list, front, conciliacao, caminho, funcao=None, recebimentos=None, desconto_inadimplencia=None, extra_judicial=None, casos_capital=None, orbital=None, d8=None):
         
         # --- ADAPTAÇÃO: Recebendo DataFrames do server.py ---
         
@@ -31,11 +31,11 @@ class INSS:
 
         self.funcao = funcao
 
-        self.kobraki = kobraki if kobraki is not None else None
+        self.recebimentos = recebimentos if recebimentos is not None else None
 
         self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
-        self.tacs = tacs if tacs is not None else None
+        self.desconto_inadimplencia = desconto_inadimplencia if desconto_inadimplencia is not None else None
         
         self.orbital = orbital
 
@@ -295,7 +295,7 @@ class INSS:
 
         # Marca saldo positivo
         # conciliacao_tatado = self.trata_conciliacao()
-        prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         conciliacao_tratado = prepara_conciliacao.trata_conciliacao()
         conciliacao_tratado['CONTRATOS'] = conciliacao_tratado['CONTRATOS'] # .astype('Int64')
         front_consig['Saldo'] = front_consig['Contrato'].map(conciliacao_tratado.set_index('CONTRATOS')['Saldo'].to_dict())

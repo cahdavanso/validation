@@ -7,7 +7,7 @@ from python.Andamento import ANDAMENTO
 from python.Andamento_GOVPB import ANDAMENTO_CODATA
 
 class TratadorFrontBase:
-    def __init__(self, front, conciliacao, convenio, caminho, orbital=None, condicoes_1=None, consignataria=None, rubrica=None, kobraki=None, tacs=None, extra_judicial=None, andamento=None):
+    def __init__(self, front, conciliacao, convenio, caminho, orbital=None, condicoes_1=None, consignataria=None, rubrica=None, recebimentos=None, desconto_inadimplencia=None, extra_judicial=None, andamento=None):
         self.front = front.copy()
         self.conciliacao = conciliacao.copy()
         self.orbital = orbital
@@ -16,8 +16,8 @@ class TratadorFrontBase:
         self.condicoes_1 = condicoes_1 if condicoes_1 else []
         self.consignataria = consignataria
         self.rubrica = rubrica
-        self.kobraki = kobraki
-        self.tacs = tacs
+        self.recebimentos = recebimentos
+        self.desconto_inadimplencia = desconto_inadimplencia
         self.extra_judicial = extra_judicial
         self.andamento = andamento
 
@@ -182,7 +182,7 @@ class TratadorFrontBase:
     
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo

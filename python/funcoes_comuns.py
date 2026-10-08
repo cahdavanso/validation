@@ -549,7 +549,7 @@ class TRATA_CONTRATOS:
         # Como deve ficar:
         front['Contrato'] = front['Contrato'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-        # teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        # teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         teste_conciliacao = self.conciliacao_tratada
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
@@ -571,7 +571,7 @@ class TRATA_CONTRATOS:
 
         data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
 
-        '''teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.extra_judicial)
+        '''teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()'''
 
         # Operações liquidadas. Tratando NRº OPER EDITADO

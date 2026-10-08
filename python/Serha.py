@@ -12,8 +12,8 @@ import logging
 import re
 
 class SERHA:
-    def __init__(self, portal_file_list, convenio, front, conciliacao, trabalhado_anterior, rubrica, caminho, andamento_funcao=None, kobraki=None, extra_judicial=None, 
-                 tacs=None, funcao=None, complementar=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, conciliacao, trabalhado_anterior, rubrica, caminho, andamento_funcao=None, recebimentos=None, extra_judicial=None, 
+                 desconto_inadimplencia=None, funcao=None, complementar=None, orbital=None):
         # isso é apenas para caso seja um arquivo de averbação
         self.averbados = portal_file_list if portal_file_list is not None else None
         if self.averbados is not None:
@@ -56,12 +56,12 @@ class SERHA:
         self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
         self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio}.xlsx"), index=False)
 
-        # kobraki
-        self.kobraki = kobraki if kobraki is not None else None
+        # recebimentos
+        self.recebimentos = recebimentos if recebimentos is not None else None
 
         self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
-        self.tacs = tacs
+        self.desconto_inadimplencia = desconto_inadimplencia
 
         conciliacao_falso = pd.DataFrame(
             columns=['CONTRATOS', 'CPF', 'PRESTAÇÃO', 'PRAZO', 'D8 JUN 25', 'ST JUL 25', 'RECEBIDO GERAL'])
@@ -541,7 +541,7 @@ class SERHA:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
         if conciliacao_tratado is False:
             print("validacao_termino_front: O tratamento da conciliação falhou. Verifique os erros anteriores.")
@@ -645,6 +645,8 @@ class SERHA:
                 contratos_validos_para_cpf = cpf_contratos.get(cpf, [])
                 operacoes_validas_para_cpf = cpf_operacao.get(cpf, [])
 
+                # print(f"DEBUG: Contratos válidos para o CPF '{cpf}': {contratos_validos_para_cpf}")
+
                 if not contratos_validos_para_cpf:
                     return []
 
@@ -740,7 +742,10 @@ class SERHA:
             print("Analisando a Planilha A e extraindo os contratos...")
             df_sujo['ContratoOriginal'] = df_sujo['ContratoOriginal'].astype(str).str.replace('nan', '')
 
+            # print(f"DEBUG: df_sujo antes de encontrar_contratos_na_linha:\n{df_sujo.head()}\n")
+
             lista_de_contratos_encontrados = df_sujo.apply(encontrar_contratos_na_linha, axis=1)
+            # print(f"DEBUG: Lista de contratos encontrados:\n{lista_de_contratos_encontrados}\n")
 
             # =======================================================================
             # NOVA TRAVA: PADRONIZAÇÃO DE TIPAGEM PARA STRING 
@@ -761,6 +766,7 @@ class SERHA:
                 
                 # Atualiza as colunas existentes a cada iteração (pois podemos criar novas)
                 colunas_existentes = [col for col in df_sujo.columns if str(col).startswith('Contrato ') and col != 'ContratoOriginal']
+                # print(f"DEBUG: Colunas existentes\n {colunas_existentes}\n")
                 
                 for contrato_encontrado in novos_contratos:
                     # Trava contra duplicidade: agora a comparação entre textos é 100% perfeita
@@ -779,6 +785,7 @@ class SERHA:
                     
                     # Se todas estiverem ocupadas (ou se não existia nenhuma), cria a próxima
                     if not alocado:
+                        # print(f"DEBUG: if not alocado está sendo acionado?")
                         prox_num = len(colunas_existentes) + 1
                         nova_col = f'Contrato {prox_num}'
                         # Já criamos a coluna preenchida com vazio ('') para manter a tipagem de texto
@@ -922,217 +929,217 @@ class SERHA:
         # trabalhado_mes_passado = trabalhado_mes_passado.iloc[:-2]
         front_trabalhado = front_trab.copy()
 
-        if self.rubrica == 'CARTÃO':
-            trabalhado_mes_passado.loc[
-                ~trabalhado_mes_passado['ContratoOriginal'].astype(str).str.contains('/'),
-                'ContratoOriginal'
-            ] = trabalhado_mes_passado['Contrato 1'].astype(str) # .str[:9]
+        # if self.rubrica == 'CARTÃO':
+        trabalhado_mes_passado.loc[
+            ~trabalhado_mes_passado['ContratoOriginal'].astype(str).str.contains('/'),
+            'ContratoOriginal'
+        ] = trabalhado_mes_passado['Contrato 1'].astype(str) # .str[:9]
 
-            averbados = self.averbados.copy()
-            if complemento is None:
-                complemento = pd.DataFrame(columns=['DATA', 'MASP', 'CPF Consignado', 'Nome Consignado', 'ContratoOriginal'])
-                print('Nenhum complemento foi fornecido para o mês anterior.')
-            else:
-                complemento = complemento.rename(columns={'CPF': 'CPF Consignado'})
-                complemento = complemento.rename(columns={'Data': 'DATA'})
-                complemento = complemento.rename(columns={'Data + Hora': 'DATA'})
+        averbados = self.averbados.copy()
+        if complemento is None:
+            complemento = pd.DataFrame(columns=['DATA', 'MASP', 'CPF Consignado', 'Nome Consignado', 'ContratoOriginal'])
+            print('Nenhum complemento foi fornecido para o mês anterior.')
+        else:
+            complemento = complemento.rename(columns={'CPF': 'CPF Consignado'})
+            complemento = complemento.rename(columns={'Data': 'DATA'})
+            complemento = complemento.rename(columns={'Data + Hora': 'DATA'})
 
-            # Remove a última linha do relatório de averbados
-            averbados = averbados.loc[~averbados.iloc[:, 0].astype(str).str.contains('Auditoria Reservas Geral', na=False)].copy()
+        # Remove a última linha do relatório de averbados
+        averbados = averbados.loc[~averbados.iloc[:, 0].astype(str).str.contains('Auditoria Reservas Geral', na=False)].copy()
 
-            # print(f'Relatorio de averbados:\n{averbados[['Contrato', 'Acao']]}')
+        # print(f'Relatorio de averbados:\n{averbados[['Contrato', 'Acao']]}')
 
-            # No relatório de averbações abriremos o filtro da coluna "Acao", selecionaremos tudo que é Cancelamento e excluiremos da planilha
-            averbados_sem_cancelamento = averbados.loc[averbados['Acao'] != 'Cancelamento']
+        # No relatório de averbações abriremos o filtro da coluna "Acao", selecionaremos tudo que é Cancelamento e excluiremos da planilha
+        averbados_sem_cancelamento = averbados.loc[averbados['Acao'] != 'Cancelamento']
 
-            # print(averbados_sem_cancelamento[['Contrato', 'Acao']])
+        # print(averbados_sem_cancelamento[['Contrato', 'Acao']])
 
-            # Colocar os casos complementares
-            # A partir da complementar vou fazer um contse para saber se já existe no Trabalhado Cartão atual
-            contse_la_complementar = trabalhado_mes_passado.groupby("CPF Consignado")["CPF Consignado"].count().to_dict()
-            complemento['Contse lá'] = complemento['CPF Consignado'].map(contse_la_complementar)
+        # Colocar os casos complementares
+        # A partir da complementar vou fazer um contse para saber se já existe no Trabalhado Cartão atual
+        contse_la_complementar = trabalhado_mes_passado.groupby("CPF Consignado")["CPF Consignado"].count().to_dict()
+        complemento['Contse lá'] = complemento['CPF Consignado'].map(contse_la_complementar)
 
-            complemento_final = complemento.loc[complemento['Contse lá'].isna()]
+        complemento_final = complemento.loc[complemento['Contse lá'].isna()]
 
-            if 'Contrato original' in complemento_final.columns:
-                complemento_final.rename(columns={'Contrato original': 'ContratoOriginal'}, inplace=True)
-            if 'Contrato original' in complemento.columns:
-                complemento.rename(columns={'Contrato original': 'ContratoOriginal'}, inplace=True)
+        if 'Contrato original' in complemento_final.columns:
+            complemento_final.rename(columns={'Contrato original': 'ContratoOriginal'}, inplace=True)
+        if 'Contrato original' in complemento.columns:
+            complemento.rename(columns={'Contrato original': 'ContratoOriginal'}, inplace=True)
 
-            # CADÊ O AGUINALDO!!!
-            try:
-                complemento_final.to_excel(os.path.join(self.caminho, f"COMPLEMENTO TRATADO {self.convenio} {self.rubrica}.xlsx"), index=False)
-            except Exception as e:
-                print(f"DEBUG: ERRO AO SALVAR COMPLEMENTO TRATADO {self.convenio}: {e}")
+        # CADÊ O AGUINALDO!!!
+        try:
+            complemento_final.to_excel(os.path.join(self.caminho, f"COMPLEMENTO TRATADO {self.convenio} {self.rubrica}.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR COMPLEMENTO TRATADO {self.convenio}: {e}")
 
-            nova_coluna_data = trabalhado_mes_passado['DATA'].tolist() + complemento_final['DATA'].tolist()
-            nova_coluna_masp = trabalhado_mes_passado['MASP'].tolist() + complemento_final['MASP'].tolist()
-            nova_coluna_CPF = trabalhado_mes_passado['CPF Consignado'].tolist() + complemento_final['CPF Consignado'].tolist()
-            nova_coluna_nome = trabalhado_mes_passado['Nome Consignado'].tolist() + complemento_final['Nome Consignado'].tolist()
-            nova_coluna_contrato_original = trabalhado_mes_passado['ContratoOriginal'].tolist() + complemento_final['ContratoOriginal'].tolist()
+        nova_coluna_data = trabalhado_mes_passado['DATA'].tolist() + complemento_final['DATA'].tolist()
+        nova_coluna_masp = trabalhado_mes_passado['MASP'].tolist() + complemento_final['MASP'].tolist()
+        nova_coluna_CPF = trabalhado_mes_passado['CPF Consignado'].tolist() + complemento_final['CPF Consignado'].tolist()
+        nova_coluna_nome = trabalhado_mes_passado['Nome Consignado'].tolist() + complemento_final['Nome Consignado'].tolist()
+        nova_coluna_contrato_original = trabalhado_mes_passado['ContratoOriginal'].tolist() + complemento_final['ContratoOriginal'].tolist()
 
-            nova_planilha_data = pd.DataFrame(nova_coluna_data, columns=['DATA'])
+        nova_planilha_data = pd.DataFrame(nova_coluna_data, columns=['DATA'])
 
-            outras_colunas_data = trabalhado_mes_passado.drop(columns=['DATA'])
+        outras_colunas_data = trabalhado_mes_passado.drop(columns=['DATA'])
 
-            nova_planilha_data.reset_index(drop=True, inplace=True)
-            outras_colunas_data.reset_index(drop=True, inplace=True)
+        nova_planilha_data.reset_index(drop=True, inplace=True)
+        outras_colunas_data.reset_index(drop=True, inplace=True)
 
-            trabalhado_mes_passado = pd.concat([nova_planilha_data, outras_colunas_data.reindex(nova_planilha_data.index)], axis=1)
+        trabalhado_mes_passado = pd.concat([nova_planilha_data, outras_colunas_data.reindex(nova_planilha_data.index)], axis=1)
 
-            trabalhado_mes_passado['MASP'] = nova_coluna_masp
+        trabalhado_mes_passado['MASP'] = nova_coluna_masp
 
-            trabalhado_mes_passado['CPF Consignado'] = nova_coluna_CPF
+        trabalhado_mes_passado['CPF Consignado'] = nova_coluna_CPF
 
-            trabalhado_mes_passado['Nome Consignado'] = nova_coluna_nome
+        trabalhado_mes_passado['Nome Consignado'] = nova_coluna_nome
 
-            trabalhado_mes_passado['ContratoOriginal'] = nova_coluna_contrato_original
+        trabalhado_mes_passado['ContratoOriginal'] = nova_coluna_contrato_original
 
-            try:
-                trabalhado_mes_passado.to_excel(os.path.join(self.caminho, f"TRABALHADO MÊS PASSADO COM COMPLEMENTO {self.convenio} {self.rubrica}.xlsx"), index=False)
-                print(f"DEBUG: TRABALHADO MÊS PASSADO COM COMPLEMENTO {self.convenio} salvo com sucesso!")
-            except Exception as e:
-                print(f"DEBUG: ERRO AO SALVAR TRABALHADO MÊS PASSADO COM COMPLEMENTO {self.convenio}: {e}")
+        try:
+            trabalhado_mes_passado.to_excel(os.path.join(self.caminho, f"TRABALHADO MÊS PASSADO COM COMPLEMENTO {self.convenio} {self.rubrica}.xlsx"), index=False)
+            print(f"DEBUG: TRABALHADO MÊS PASSADO COM COMPLEMENTO {self.convenio} salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR TRABALHADO MÊS PASSADO COM COMPLEMENTO {self.convenio}: {e}")
 
-            # =================================== UPDATE DOS CONTRATOS DE COMPLEMENTO ==================================
-            mapa_de_contratos = complemento.set_index('CPF Consignado')['ContratoOriginal']
+        # =================================== UPDATE DOS CONTRATOS DE COMPLEMENTO ==================================
+        mapa_de_contratos = complemento.set_index('CPF Consignado')['ContratoOriginal']
 
-            novos_contratos = trabalhado_mes_passado['CPF Consignado'].map(mapa_de_contratos)
+        novos_contratos = trabalhado_mes_passado['CPF Consignado'].map(mapa_de_contratos)
 
-            trabalhado_mes_passado = trabalhado_mes_passado.copy()
-            trabalhado_mes_passado['ContratoOriginal'] = novos_contratos.fillna(trabalhado_mes_passado['ContratoOriginal'])
-            # ==========================================================================================================
-
-
-            # Cria a coluna de CPF com ponto e traço
-            averbados_sem_cancelamento= averbados_sem_cancelamento.copy()
-            averbados_sem_cancelamento['CPF Consig.'] = averbados_sem_cancelamento['CPF Consig.'].astype(int)
-            cpf_tratado = averbados_sem_cancelamento['CPF Consig.'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
-
-            averbados_sem_cancelamento.insert(4, 'CPF Ponto e Traço', cpf_tratado, True)
-
-            # Criação da coluna DATA, que é a junção de Data com Hora
-            try:
-                data_hora = averbados_sem_cancelamento['Data'] + " " + averbados_sem_cancelamento['Hora']
-            except Exception as e:
-                averbados_sem_cancelamento['Data'] = pd.to_datetime(averbados_sem_cancelamento['Data'], format='ISO8601', errors='coerce').dt.strftime('%d/%m/%Y')
-                averbados_sem_cancelamento['Data'] = averbados_sem_cancelamento['Data'].astype(str).str.strip()
-                averbados_sem_cancelamento['Hora'] = averbados_sem_cancelamento['Hora'].astype(str).str.strip()
-                print(f'Tipo da coluna Data {averbados_sem_cancelamento["Data      "].dtype}')
-                print(f'Tipo da coluna Hora {averbados_sem_cancelamento["Hora    "].dtype}')
-                data_hora = averbados_sem_cancelamento['Data'] + " " + averbados_sem_cancelamento['Hora']
-                print(f"Apuração de data e hora: {e}")
-            
-
-            averbados_sem_cancelamento.insert(2, 'DATA', '', True)
-            averbados_sem_cancelamento['DATA'] = pd.to_datetime(data_hora, format='%d/%m/%Y %H:%M:%S')
-
-            averbados_sem_cancelamento = averbados_sem_cancelamento.sort_values(by='DATA', ascending=False)
-
-            # Contse aqui e Contse lá
-            averbados_sem_cancelamento.insert(10, 'cont aq', '', True)
-            averbados_sem_cancelamento.insert(11, 'cont la', '', True)
-
-            averbados_sem_cancelamento['cont aq'] = averbados_sem_cancelamento.groupby('CPF Consig.')['CPF Consig.'].transform('count')
-
-            cont_la = trabalhado_mes_passado.groupby('CPF Consignado')['CPF Consignado'].count().to_dict()
-            averbados_sem_cancelamento['cont la'] = averbados_sem_cancelamento['CPF Consig.'].map(cont_la)
-            averbados_sem_cancelamento['cont la'] = averbados_sem_cancelamento['cont la'].fillna(0)
-
-            # print(f'Averbados sem cancelamento cont igual a 1:\n{averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la']>= 1, ['CPF Consig.','Contrato','cont la']]}')
-
-            # Vamos remover os cont la que forem iguais ou maiores que 1
-            averbados_cont_la_zero = averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la'] == 0].copy()
-
-            print(f"DEBUG: Tentando salvar AVERBADOS GOV MG")
-            try:
-                averbados_sem_cancelamento.to_excel(os.path.join(self.caminho, f"AVERBADOS {self.convenio} {self.rubrica}.xlsx"), index=False)
-            except Exception as e:
-                print(f"DEBUG: ERRO AO SALVAR AVERBADOS {self.convenio}: {e}")
-
-            # print(averbados_cont_la_zero[['CPF Consig.','Contrato', 'cont la']])
-
-            nova_coluna_data = trabalhado_mes_passado['DATA'].tolist() + averbados_cont_la_zero['DATA'].tolist()
-            nova_coluna_masp = trabalhado_mes_passado['MASP'].tolist() + averbados_cont_la_zero['MASP'].tolist()
-            nova_coluna_CPF = trabalhado_mes_passado['CPF Consignado'].tolist() + averbados_cont_la_zero['CPF Consig.'].tolist()
-            nova_coluna_nome = trabalhado_mes_passado['Nome Consignado'].tolist() + averbados_cont_la_zero['Nome Consignado'].tolist()
-            nova_coluna_contrato_original = trabalhado_mes_passado['ContratoOriginal'].tolist() + averbados_cont_la_zero['Contrato'].tolist()
-
-            nova_planilha_data = pd.DataFrame(nova_coluna_data, columns=['DATA'])
-
-            outras_colunas_data = trabalhado_mes_passado.drop(columns=['DATA'])
-
-            nova_planilha_data.reset_index(drop=True, inplace=True)
-            outras_colunas_data.reset_index(drop=True, inplace=True)
-
-            trabalhado_mes_passado = pd.concat([nova_planilha_data, outras_colunas_data.reindex(nova_planilha_data.index)],
-                                               axis=1)
-
-            trabalhado_mes_passado['MASP'] = nova_coluna_masp
-
-            trabalhado_mes_passado['CPF Consignado'] = nova_coluna_CPF
-
-            trabalhado_mes_passado['Nome Consignado'] = nova_coluna_nome
-
-            trabalhado_mes_passado['ContratoOriginal'] = nova_coluna_contrato_original
-
-            try:
-                trabalhado_mes_passado.to_excel(os.path.join(self.caminho, f"TRABALHADO MÊS PASSADO {self.convenio} {self.rubrica}.xlsx"), index=False)
-                print(f"DEBUG: TRABALHADO MÊS PASSADO {self.convenio} salvo com sucesso!")
-            except Exception as e:
-                print(f"DEBUG: ERRO AO SALVAR TRABALHADO MÊS PASSADO {self.convenio}: {e}")
-
-            # Faremos a mesma coisa para o cont la que são iguais ou maiores que 1
-            averbados_cont_la_um = averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la'] >= 1].copy()
+        trabalhado_mes_passado = trabalhado_mes_passado.copy()
+        trabalhado_mes_passado['ContratoOriginal'] = novos_contratos.fillna(trabalhado_mes_passado['ContratoOriginal'])
+        # ==========================================================================================================
 
 
-            # Transforma as duas colunas em str
-            averbados_cont_la_um['Contrato'] = averbados_cont_la_um['Contrato'].astype(str).str.strip()
-            trabalhado_mes_passado['ContratoOriginal'] = trabalhado_mes_passado['ContratoOriginal'].astype(str)
+        # Cria a coluna de CPF com ponto e traço
+        averbados_sem_cancelamento= averbados_sem_cancelamento.copy()
+        averbados_sem_cancelamento['CPF Consig.'] = averbados_sem_cancelamento['CPF Consig.'].astype(int)
+        cpf_tratado = averbados_sem_cancelamento['CPF Consig.'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
 
-            # Verifica quais contratos que permanecem iguais
-            trabalhado_mes_passado['Contrato para copiar'] = trabalhado_mes_passado['ContratoOriginal']
-            # print(trabalhado_mes_passado['Contrato para copiar'])
+        averbados_sem_cancelamento.insert(4, 'CPF Ponto e Traço', cpf_tratado, True)
 
-            '''print(f'Tipo da coluna Contrato para copiar: {trabalhado_mes_passado['Contrato para copiar'].loc[trabalhado_mes_passado['CPF Consignado'] == 99140187691]}')
-            print(f'Tipo da coluna Contato do averbados_cont_la: {averbados_cont_la_um['Contrato'].loc[averbados_cont_la_um['CPF Consig.'] == 99140187691]}')'''
+        # Criação da coluna DATA, que é a junção de Data com Hora
+        try:
+            data_hora = averbados_sem_cancelamento['Data'] + " " + averbados_sem_cancelamento['Hora']
+        except Exception as e:
+            averbados_sem_cancelamento['Data'] = pd.to_datetime(averbados_sem_cancelamento['Data'], format='ISO8601', errors='coerce').dt.strftime('%d/%m/%Y')
+            averbados_sem_cancelamento['Data'] = averbados_sem_cancelamento['Data'].astype(str).str.strip()
+            averbados_sem_cancelamento['Hora'] = averbados_sem_cancelamento['Hora'].astype(str).str.strip()
+            print(f'Tipo da coluna Data {averbados_sem_cancelamento["Data      "].dtype}')
+            print(f'Tipo da coluna Hora {averbados_sem_cancelamento["Hora    "].dtype}')
+            data_hora = averbados_sem_cancelamento['Data'] + " " + averbados_sem_cancelamento['Hora']
+            print(f"Apuração de data e hora: {e}")
+        
 
-            trabalhado_mes_passado['DATA'] = pd.to_datetime(trabalhado_mes_passado['DATA'], errors='coerce')
-            trabalhado_mes_passado = trabalhado_mes_passado.sort_values(by='DATA', ascending=False)
-            trabalhado_mes_passado = trabalhado_mes_passado.drop_duplicates(subset='ContratoOriginal', keep='first')
-            trabalhado_mes_passado = trabalhado_mes_passado.drop_duplicates(subset='MASP', keep='first')
+        averbados_sem_cancelamento.insert(2, 'DATA', '', True)
+        averbados_sem_cancelamento['DATA'] = pd.to_datetime(data_hora, format='%d/%m/%Y %H:%M:%S')
+
+        averbados_sem_cancelamento = averbados_sem_cancelamento.sort_values(by='DATA', ascending=False)
+
+        # Contse aqui e Contse lá
+        averbados_sem_cancelamento.insert(10, 'cont aq', '', True)
+        averbados_sem_cancelamento.insert(11, 'cont la', '', True)
+
+        averbados_sem_cancelamento['cont aq'] = averbados_sem_cancelamento.groupby('CPF Consig.')['CPF Consig.'].transform('count')
+
+        cont_la = trabalhado_mes_passado.groupby('CPF Consignado')['CPF Consignado'].count().to_dict()
+        averbados_sem_cancelamento['cont la'] = averbados_sem_cancelamento['CPF Consig.'].map(cont_la)
+        averbados_sem_cancelamento['cont la'] = averbados_sem_cancelamento['cont la'].fillna(0)
+
+        # print(f'Averbados sem cancelamento cont igual a 1:\n{averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la']>= 1, ['CPF Consig.','Contrato','cont la']]}')
+
+        # Vamos remover os cont la que forem iguais ou maiores que 1
+        averbados_cont_la_zero = averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la'] == 0].copy()
+
+        print(f"DEBUG: Tentando salvar AVERBADOS GOV MG")
+        try:
+            averbados_sem_cancelamento.to_excel(os.path.join(self.caminho, f"AVERBADOS {self.convenio} {self.rubrica}.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR AVERBADOS {self.convenio}: {e}")
+
+        # print(averbados_cont_la_zero[['CPF Consig.','Contrato', 'cont la']])
+
+        nova_coluna_data = trabalhado_mes_passado['DATA'].tolist() + averbados_cont_la_zero['DATA'].tolist()
+        nova_coluna_masp = trabalhado_mes_passado['MASP'].tolist() + averbados_cont_la_zero['MASP'].tolist()
+        nova_coluna_CPF = trabalhado_mes_passado['CPF Consignado'].tolist() + averbados_cont_la_zero['CPF Consig.'].tolist()
+        nova_coluna_nome = trabalhado_mes_passado['Nome Consignado'].tolist() + averbados_cont_la_zero['Nome Consignado'].tolist()
+        nova_coluna_contrato_original = trabalhado_mes_passado['ContratoOriginal'].tolist() + averbados_cont_la_zero['Contrato'].tolist()
+
+        nova_planilha_data = pd.DataFrame(nova_coluna_data, columns=['DATA'])
+
+        outras_colunas_data = trabalhado_mes_passado.drop(columns=['DATA'])
+
+        nova_planilha_data.reset_index(drop=True, inplace=True)
+        outras_colunas_data.reset_index(drop=True, inplace=True)
+
+        trabalhado_mes_passado = pd.concat([nova_planilha_data, outras_colunas_data.reindex(nova_planilha_data.index)],
+                                            axis=1)
+
+        trabalhado_mes_passado['MASP'] = nova_coluna_masp
+
+        trabalhado_mes_passado['CPF Consignado'] = nova_coluna_CPF
+
+        trabalhado_mes_passado['Nome Consignado'] = nova_coluna_nome
+
+        trabalhado_mes_passado['ContratoOriginal'] = nova_coluna_contrato_original
+
+        try:
+            trabalhado_mes_passado.to_excel(os.path.join(self.caminho, f"TRABALHADO MÊS PASSADO {self.convenio} {self.rubrica}.xlsx"), index=False)
+            print(f"DEBUG: TRABALHADO MÊS PASSADO {self.convenio} salvo com sucesso!")
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR TRABALHADO MÊS PASSADO {self.convenio}: {e}")
+
+        # Faremos a mesma coisa para o cont la que são iguais ou maiores que 1
+        averbados_cont_la_um = averbados_sem_cancelamento.loc[averbados_sem_cancelamento['cont la'] >= 1].copy()
 
 
-            averbados_cont_la_um['contratos passados'] = averbados_cont_la_um['Contrato'].map(trabalhado_mes_passado.set_index('ContratoOriginal')['Contrato para copiar'])
-            # print(averbados_cont_la_um)
-            averbados_cont_la_um = averbados_cont_la_um.drop_duplicates(subset='CPF Consig.', keep='first')
+        # Transforma as duas colunas em str
+        averbados_cont_la_um['Contrato'] = averbados_cont_la_um['Contrato'].astype(str).str.strip()
+        trabalhado_mes_passado['ContratoOriginal'] = trabalhado_mes_passado['ContratoOriginal'].astype(str)
 
-            # FAZER NOVAMENTO O TRATAMENTO DO TRABALHADO COMO SE FOSSE UM NOVO EM FOLHA
-            trabalhado_mes_atual = trabalhado_mes_passado[['DATA', 'MASP', 'CPF Consignado', 'Nome Consignado', 'ContratoOriginal']].copy()
-            trabalhado_mes_atual['CPF Consignado'] = trabalhado_mes_atual['CPF Consignado'].fillna(0).astype(int)
-            cpf_tratado = trabalhado_mes_atual['CPF Consignado'].astype(str).str.zfill(11).str.replace(
-                r'(\d{3})(\d{3})(\d{3})(\d{2})', r'\1.\2.\3-\4', regex=True)
+        # Verifica quais contratos que permanecem iguais
+        trabalhado_mes_passado['Contrato para copiar'] = trabalhado_mes_passado['ContratoOriginal']
+        # print(trabalhado_mes_passado['Contrato para copiar'])
 
-            trabalhado_mes_atual.insert(4, 'CPF Ponto e Traço', cpf_tratado, True)
+        '''print(f'Tipo da coluna Contrato para copiar: {trabalhado_mes_passado['Contrato para copiar'].loc[trabalhado_mes_passado['CPF Consignado'] == 99140187691]}')
+        print(f'Tipo da coluna Contato do averbados_cont_la: {averbados_cont_la_um['Contrato'].loc[averbados_cont_la_um['CPF Consig.'] == 99140187691]}')'''
 
-            # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- UPDATE DOS CONTRATOS -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-            # Criar o "mapa" de busca a partir do df_B
-            # (Transforma averbados_cont_la_um em um "dicionário": {CPF: Contrato})
-            mapa_de_contratos = averbados_cont_la_um.set_index('CPF Consig.')['Contrato']
-
-            # Use o .map() para criar uma coluna de "Novos Contratos"
-            # A coluna 'CPF' do df_A é usada como chave de busca no 'mapa'
-            novos_contratos = trabalhado_mes_atual['CPF Consignado'].map(mapa_de_contratos)
-            trabalhado_mes_atual = trabalhado_mes_atual.copy()
-
-            # Atualize a coluna 'Contrato'
-            # Use .fillna() para preencher os 'NaN' (vazios)
-            # com os valores da coluna antiga ('df_A['Contrato']')
-            trabalhado_mes_atual['ContratoOriginal'] = novos_contratos.fillna(trabalhado_mes_atual['ContratoOriginal'])
-            # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+        trabalhado_mes_passado['DATA'] = pd.to_datetime(trabalhado_mes_passado['DATA'], errors='coerce')
+        trabalhado_mes_passado = trabalhado_mes_passado.sort_values(by='DATA', ascending=False)
+        trabalhado_mes_passado = trabalhado_mes_passado.drop_duplicates(subset='ContratoOriginal', keep='first')
+        trabalhado_mes_passado = trabalhado_mes_passado.drop_duplicates(subset='MASP', keep='first')
 
 
-        elif self.rubrica == 'BENEFÍCIO':
+        averbados_cont_la_um['contratos passados'] = averbados_cont_la_um['Contrato'].map(trabalhado_mes_passado.set_index('ContratoOriginal')['Contrato para copiar'])
+        # print(averbados_cont_la_um)
+        averbados_cont_la_um = averbados_cont_la_um.drop_duplicates(subset='CPF Consig.', keep='first')
+
+        # FAZER NOVAMENTO O TRATAMENTO DO TRABALHADO COMO SE FOSSE UM NOVO EM FOLHA
+        trabalhado_mes_atual = trabalhado_mes_passado[['DATA', 'MASP', 'CPF Consignado', 'Nome Consignado', 'ContratoOriginal']].copy()
+        trabalhado_mes_atual['CPF Consignado'] = trabalhado_mes_atual['CPF Consignado'].fillna(0).astype(int)
+        cpf_tratado = trabalhado_mes_atual['CPF Consignado'].astype(str).str.zfill(11).str.replace(
+            r'(\d{3})(\d{3})(\d{3})(\d{2})', r'\1.\2.\3-\4', regex=True)
+
+        trabalhado_mes_atual.insert(4, 'CPF Ponto e Traço', cpf_tratado, True)
+
+        # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- UPDATE DOS CONTRATOS -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+        # Criar o "mapa" de busca a partir do df_B
+        # (Transforma averbados_cont_la_um em um "dicionário": {CPF: Contrato})
+        mapa_de_contratos = averbados_cont_la_um.set_index('CPF Consig.')['Contrato']
+
+        # Use o .map() para criar uma coluna de "Novos Contratos"
+        # A coluna 'CPF' do df_A é usada como chave de busca no 'mapa'
+        novos_contratos = trabalhado_mes_atual['CPF Consignado'].map(mapa_de_contratos)
+        trabalhado_mes_atual = trabalhado_mes_atual.copy()
+
+        # Atualize a coluna 'Contrato'
+        # Use .fillna() para preencher os 'NaN' (vazios)
+        # com os valores da coluna antiga ('df_A['Contrato']')
+        trabalhado_mes_atual['ContratoOriginal'] = novos_contratos.fillna(trabalhado_mes_atual['ContratoOriginal'])
+        # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+
+        '''elif self.rubrica == 'BENEFÍCIO':
             # ====================================================================================
             # 1. LIMPEZA INICIAL (Mantido do seu código original)
             # ====================================================================================
@@ -1304,7 +1311,7 @@ class SERHA:
             # Garante que a coluna entra na posição 4 e sobrescreve a temporária caso já exista
             if 'CPF Ponto e Traço' in trabalhado_mes_atual.columns:
                 trabalhado_mes_atual = trabalhado_mes_atual.drop(columns=['CPF Ponto e Traço'])
-            trabalhado_mes_atual.insert(4, 'CPF Ponto e Traço', cpf_tratado, True)
+            trabalhado_mes_atual.insert(4, 'CPF Ponto e Traço', cpf_tratado, True)'''
 
         # Vamos separar só os NaN
         # Aqui é feito o tratamento dos números de contrato
@@ -1314,6 +1321,9 @@ class SERHA:
 
         # A linha que já existe no seu código:
         trabalhado_mes_atual_tratado = self.trata_contratos(trabalhado_mes_atual, front)
+
+        print(f"DEBUG: O que tem em trabalhado_mes_atual_tratado?: {trabalhado_mes_atual_tratado.head(15)}\n")
+        print(f"DEBUG: Quais são as colunas em trabalhado_mes_atual_tratado?: {trabalhado_mes_atual_tratado.columns.tolist()}\n")
 
         # Verificação logo após a função:
         if 'Contrato 2' in trabalhado_mes_atual_tratado.columns:
@@ -1375,6 +1385,8 @@ class SERHA:
 
         # PUXA TABELA
         # trabalhado_mes_atual_tratado['TABELA 1'] = trabalhado_mes_atual_tratado['Contrato 1'].map(front_unico.set_index('Contrato')['Tipo Conciliação'])
+        '''print(f"DEBUG: O que tem em trabalhado_mes_atual_tratado?: {trabalhado_mes_atual_tratado.head(15)}\n")
+        print(f"DEBUG: Quais são as colunas em trabalhado_mes_atual_tratado?: {trabalhado_mes_atual_tratado.columns.tolist()}\n")'''
         trabalhado_mes_atual_tratado['TABELA 1'] = trabalhado_mes_atual_tratado['Contrato 1'].map(front_unico.set_index('Contrato')['Tipo Operacao'])
 
         front_trabalhado = front_trabalhado.loc[front_trabalhado['OBS'] != 'NÃO LANÇAR - ORBITAL']
@@ -1461,7 +1473,7 @@ class SERHA:
             # print(f'VALOR SOMASE DE 867.972.636-20\n{somase_orbital['867.972.636-20']}')
 
             # 2. Filtra todas as colunas que começam com "Parcela "
-            colunas_parcelas = trabalhado_mes_atual_tratado.filter(like='Valor_Unif')
+            colunas_parcelas = trabalhado_mes_atual_tratado.filter(like='Parcela')
 
             # NOVO PASSO: Adiciona a coluna 'ORBITAL' ao DataFrame de colunas para soma
             colunas_para_somar = colunas_parcelas.copy()  # Cria uma cópia para garantir a segurança
@@ -1476,7 +1488,7 @@ class SERHA:
         else:
             # Valor a lançar
             # 1. Filtra todas as colunas que começam com "Parcela "
-            colunas_parcelas = trabalhado_mes_atual_tratado.filter(like='Valor_Unif')
+            colunas_parcelas = trabalhado_mes_atual_tratado.filter(like='Parcela')
 
             # 2. Soma essas colunas horizontalmente (axis=1) e cria a nova coluna
             trabalhado_mes_atual_tratado['Valor a Lançar'] = colunas_parcelas.sum(axis=1)

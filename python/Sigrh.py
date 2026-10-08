@@ -23,9 +23,9 @@ import os
 # caminho = r'P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\TRABALHADOS'
 # funcao_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\FUNÇÃO GOV SC 05.2026.csv"
 # conciliacao_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\Conciliação-Governo de Santa Catarina- 032026.xlsx"
-# kobraki_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\RECEBIVEIS KOBRAKI - ABRIL 2026.xlsx"
+# recebimentos_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\RECEBIVEIS RECEBIMENTOS - ABRIL 2026.xlsx"
 # orbital_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\Orbital_Ativos cartão orbital - fechamento 04.26.xlsx"
-# tacs_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\TACS MAIO 2026 - CONSOLIDADO.xlsx"
+# desconto_inadimplencia_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\DESCONTO_INADIMPLENCIA MAIO 2026 - CONSOLIDADO.xlsx"
 # andamento_capital_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\BASE DE CONSIGNAÇOES CAPITAL GOV SC 05.2026.xls"
 # andamento_click_bruto = r"P:\PESSOAL\VALIDAÇÃO DOS LANÇAMENTOS\2026\MAIO\GOV SC\RELATORIOS\BASE DE CONSIGNACOES CLICK GOV SC 05.2026.xls"
 
@@ -40,13 +40,13 @@ import os
 #         try:
 #             # 1. Identificar se é uma String (Caminho) ou Objeto de Upload
 #             if isinstance(uploaded_file, str):
-#                 nome_real = os.path.basename(uploaded_file) # Pega só o fim: "TACS MAIO 2026 - CONSOLIDADO.xlsx"
+#                 nome_real = os.path.basename(uploaded_file) # Pega só o fim: "DESCONTO_INADIMPLENCIA MAIO 2026 - CONSOLIDADO.xlsx"
 #             else:
 #                 nome_real = getattr(uploaded_file, 'name', filename_override or '')
             
 #             nome_real_lower = nome_real.lower()
 
-#             # 2. Se foi passado um override genérico (ex: 'tacs'), mas o arquivo real tem extensão,
+#             # 2. Se foi passado um override genérico (ex: 'desconto_inadimplencia'), mas o arquivo real tem extensão,
 #             # nós garantimos que a extensão seja preservada para os testes do endswith.
 #             if filename_override and not nome_real_lower.endswith(('.xlsx', '.xls', '.csv', '.txt')):
 #                 # Se o arquivo real for string, a extensão já veio nele. Se for objeto, tentamos mapear.
@@ -54,7 +54,7 @@ import os
 #                 nome_real_lower = f"{filename_override.lower()}{extensao}"
 
 #             # 3. Fluxos de Leitura Baseados no Nome e Extensão Verdadeiros
-#             if "kobraki" in nome_real_lower and nome_real_lower.endswith(('.xlsx', '.xls')):
+#             if "recebimentos" in nome_real_lower and nome_real_lower.endswith(('.xlsx', '.xls')):
 #                 df = pd.read_excel(uploaded_file, sheet_name='CONSOLIDADO')
                 
 #             elif "orbital" in nome_real_lower:
@@ -124,21 +124,21 @@ import os
 
 # conciliacao_df, _ = read_and_unify_files([conciliacao_bruto])
 
-# kobraki_df, _ = read_and_unify_files([kobraki_bruto], filename_override='kobraki')
+# recebimentos_df, _ = read_and_unify_files([recebimentos_bruto], filename_override='recebimentos')
 
 # orbital_df, _ = read_and_unify_files([orbital_bruto], filename_override='orbital')
 
-# tacs_df, _ = read_and_unify_files([tacs_bruto], filename_override='tacs')
+# desconto_inadimplencia_df, _ = read_and_unify_files([desconto_inadimplencia_bruto], filename_override='desconto_inadimplencia')
 
 # andamento_capital_df, _ = read_and_unify_files([andamento_capital_bruto], filename_override='andamento')
 
 # andamento_click_df, _ = read_and_unify_files([andamento_click_bruto], filename_override='andamento')
 
-# print(f'TACS_DF:\n{tacs_df}')
+# print(f'DESCONTO_INADIMPLENCIA_DF:\n{desconto_inadimplencia_df}')
 
 class SIGRH:
     def __init__(self, front, averbado_capital, averbado_click, andamento_capital, andamento_click, convenio, consignataria, caminho, funcao=None, orbital=None, 
-                 conciliacao=None, kobraki=None, extra_judicial=None, tacs=None):
+                 conciliacao=None, recebimentos=None, extra_judicial=None, desconto_inadimplencia=None):
         self.convenio = convenio
         self.caminho = caminho
 
@@ -202,11 +202,11 @@ class SIGRH:
                                          'PRODUTO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO',
                                          'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
         
-        self.kobraki = kobraki if kobraki is not None else None
+        self.recebimentos = recebimentos if recebimentos is not None else None
 
         self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
-        self.tacs = tacs if tacs is not None else None
+        self.desconto_inadimplencia = desconto_inadimplencia if desconto_inadimplencia is not None else None
 
         self.orbital = orbital
         
@@ -606,7 +606,7 @@ class SIGRH:
     
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo
@@ -923,7 +923,7 @@ class SIGRH:
 
                 
 # sigrh_obj = SIGRH(averbado_capital=averbado_capital_df, averbado_click=averbado_click_df, front=front_df, convenio='GOV. SANTA CATARINA', 
-#                   consignataria='CAPITAL CONSIG', caminho=caminho, funcao=funcao_df, conciliacao=conciliacao_df, kobraki=kobraki_df, tacs=tacs_df, 
+#                   consignataria='CAPITAL CONSIG', caminho=caminho, funcao=funcao_df, conciliacao=conciliacao_df, recebimentos=recebimentos_df, desconto_inadimplencia=desconto_inadimplencia_df, 
 #                   orbital=orbital_df, andamento_capital=andamento_capital_df, andamento_click=andamento_capital_df)
 
 # validacao = sigrh_obj.layout_final()

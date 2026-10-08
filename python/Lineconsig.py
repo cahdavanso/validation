@@ -13,7 +13,7 @@ import re
 
 
 class LINECONSIG:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, andamento_funcao=None, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, andamento_funcao=None, funcao=None, conciliacao=None, recebimentos=None, extra_judicial=None, desconto_inadimplencia=None, orbital=None):
 
         self.averbados = portal_file_list
 
@@ -26,11 +26,11 @@ class LINECONSIG:
 
         self.andamento_funcao = andamento_funcao if andamento_funcao is not None else None
 
-        self.kobraki = kobraki if kobraki is not None else None
+        self.recebimentos = recebimentos if recebimentos is not None else None
 
         self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
-        self.tacs = tacs if tacs is not None else None
+        self.desconto_inadimplencia = desconto_inadimplencia if desconto_inadimplencia is not None else None
 
 
         conciliacao_falso = pd.DataFrame(
@@ -79,7 +79,7 @@ class LINECONSIG:
 
         front_semi_trabalhado_preliminar = TratadorValidacaoSimples(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
                                                                     caminho=self.caminho, condicoes_1=self.condicoes_1, consignataria=self.consignataria,
-                                                                    kobraki=self.kobraki, tacs=tacs)
+                                                                    recebimentos=self.recebimentos, desconto_inadimplencia=desconto_inadimplencia)
         self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
         self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
 

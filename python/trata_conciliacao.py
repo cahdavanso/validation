@@ -2,10 +2,10 @@ import pandas as pd
 import numpy as np
 
 class TRATA_CONCILIACAO:
-    def __init__(self, conciliacao, kobraki=None, tacs=None):
+    def __init__(self, conciliacao, recebimentos=None, desconto_inadimplencia=None):
         self.conciliacao = conciliacao
-        self.kobraki = kobraki if kobraki is not None else None
-        self.tacs = tacs if tacs is not None else None
+        self.recebimentos = recebimentos if recebimentos is not None else None
+        self.desconto_inadimplencia = desconto_inadimplencia if desconto_inadimplencia is not None else None
 
         self.conciliacao.rename(columns={'RECEBIDO GERAL ': 'RECEBIDO GERAL', ' RECEBIDO GERAL ': 'RECEBIDO GERAL'}, inplace=True)
         self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
@@ -17,26 +17,26 @@ class TRATA_CONCILIACAO:
         self.conciliacao.columns = self.conciliacao.columns.str.strip()
 
     def trata_conciliacao(self):
-        # Vamos verificar o tipo da coluna VALOR RECEBIDO de KOBRAKI para garantir que é numérica
-        '''if 'VALOR RECEBIDO' in self.kobraki.columns:
-                print(f"Amostra de linhas da coluna VALOR RECEBIDO:\n{self.kobraki['VALOR RECEBIDO'].head()}")
-                print(f"Tipo da coluna VALOR RECEBIDO: {self.kobraki['VALOR RECEBIDO'].dtype}")
+        # Vamos verificar o tipo da coluna VALOR RECEBIDO de RECEBIMENTOS para garantir que é numérica
+        '''if 'VALOR RECEBIDO' in self.recebimentos.columns:
+                print(f"Amostra de linhas da coluna VALOR RECEBIDO:\n{self.recebimentos['VALOR RECEBIDO'].head()}")
+                print(f"Tipo da coluna VALOR RECEBIDO: {self.recebimentos['VALOR RECEBIDO'].dtype}")
         else:
             try:
-                    print(f"KOBRAKI:\n{self.kobraki.head()}")
+                    print(f"RECEBIMENTOS:\n{self.recebimentos.head()}")
             except Exception as e:
-                    print(f"Erro ao exibir KOBRAKI:\n{e}")
-        # Vamos verificar o tipo da coluna CONTRATO de KOBRAKI para garantir que é numérica
-        if 'CONTRATO' in self.kobraki.columns:
-            print(f"Amostra de linhas da coluna CONTRATO:\n{self.kobraki['CONTRATO'].head()}")
-            print(f"Tipo da coluna CONTRATO: {self.kobraki['CONTRATO'].dtype}")
+                    print(f"Erro ao exibir RECEBIMENTOS:\n{e}")
+        # Vamos verificar o tipo da coluna CONTRATO de RECEBIMENTOS para garantir que é numérica
+        if 'CONTRATO' in self.recebimentos.columns:
+            print(f"Amostra de linhas da coluna CONTRATO:\n{self.recebimentos['CONTRATO'].head()}")
+            print(f"Tipo da coluna CONTRATO: {self.recebimentos['CONTRATO'].dtype}")
 
             print(f"Amostra de linhas da coluna CONTRATOS Conciliação:\n{self.conciliacao['CONTRATOS'].head()}")
             print(f"Tipo da coluna CONTRATOS: {self.conciliacao['CONTRATOS'].dtype}")'''
 
         
-        kobraki_tratado = self.kobraki
-        tacs_tratado = self.tacs
+        recebimentos_tratado = self.recebimentos
+        desconto_inadimplencia_tratado = self.desconto_inadimplencia
 
 
         conciliacao_tratado = self.conciliacao
@@ -84,34 +84,34 @@ class TRATA_CONCILIACAO:
         # 2. Inicializa o TOTAL RECEBIDO com a base principal (protegendo contra vazios)
         conciliacao_tratado['TOTAL RECEBIDO'] = conciliacao_tratado['RECEBIDO GERAL'].fillna(0)
 
-        # --- BLOCO KOBRAKI ---
-        if kobraki_tratado is not None:
+        # --- BLOCO RECEBIMENTOS ---
+        if recebimentos_tratado is not None:
             if precisa_converter:
-                kobraki_tratado['CONTRATO'] = kobraki_tratado['CONTRATO'].astype(str)
+                recebimentos_tratado['CONTRATO'] = recebimentos_tratado['CONTRATO'].astype(str)
                 
-            somase_kobraki = kobraki_tratado.groupby('CONTRATO')['VALOR RECEBIDO'].sum()
-            conciliacao_tratado['KOBRAKI'] = conciliacao_tratado['CONTRATOS'].map(somase_kobraki).fillna(0)
+            somase_recebimentos = recebimentos_tratado.groupby('CONTRATO')['VALOR RECEBIDO'].sum()
+            conciliacao_tratado['RECEBIMENTOS'] = conciliacao_tratado['CONTRATOS'].map(somase_recebimentos).fillna(0)
             
             # Acumula o valor no total
-            conciliacao_tratado['TOTAL RECEBIDO'] += conciliacao_tratado['KOBRAKI']
+            conciliacao_tratado['TOTAL RECEBIDO'] += conciliacao_tratado['RECEBIMENTOS']
         else:
-            conciliacao_tratado['KOBRAKI'] = 0.0 # Mantém a estrutura da tabela padronizada
+            conciliacao_tratado['RECEBIMENTOS'] = 0.0 # Mantém a estrutura da tabela padronizada
 
 
-        # --- BLOCO TACS ---
-        if tacs_tratado is not None:
+        # --- BLOCO DESCONTO_INADIMPLENCIA ---
+        if desconto_inadimplencia_tratado is not None:
             if precisa_converter:
-                tacs_tratado['CONTRATO'] = tacs_tratado['CONTRATO'].astype(str)
+                desconto_inadimplencia_tratado['CONTRATO'] = desconto_inadimplencia_tratado['CONTRATO'].astype(str)
             if precisa_converter:
-                tacs_tratado['CONTRATO'] = tacs_tratado['CONTRATO'].astype(str)
+                desconto_inadimplencia_tratado['CONTRATO'] = desconto_inadimplencia_tratado['CONTRATO'].astype(str)
                 
-            somase_tacs = tacs_tratado.groupby('CONTRATO')['VALOR PAGO'].sum()
-            conciliacao_tratado['TACS'] = conciliacao_tratado['CONTRATOS'].map(somase_tacs).fillna(0)
+            somase_desconto_inadimplencia = desconto_inadimplencia_tratado.groupby('CONTRATO')['VALOR PAGO'].sum()
+            conciliacao_tratado['DESCONTO_INADIMPLENCIA'] = conciliacao_tratado['CONTRATOS'].map(somase_desconto_inadimplencia).fillna(0)
             
             # Acumula o valor no total
-            conciliacao_tratado['TOTAL RECEBIDO'] += conciliacao_tratado['TACS']
+            conciliacao_tratado['TOTAL RECEBIDO'] += conciliacao_tratado['DESCONTO_INADIMPLENCIA']
         else:
-            conciliacao_tratado['TACS'] = 0.0
+            conciliacao_tratado['DESCONTO_INADIMPLENCIA'] = 0.0
 
 
         # 2. Calcular prestação * prazo

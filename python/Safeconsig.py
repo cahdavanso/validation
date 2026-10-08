@@ -14,7 +14,7 @@ import logging
 import re
 
 class SAFECONSIG:
-    def __init__(self, front, portal_file_list, convenio,  caminho, andamento_funcao=None, funcao=None, conciliacao=None, orbital=None,kobraki=None, extra_judicial=None, tacs=None):
+    def __init__(self, front, portal_file_list, convenio,  caminho, andamento_funcao=None, funcao=None, conciliacao=None, orbital=None,recebimentos=None, extra_judicial=None, desconto_inadimplencia=None):
         
         self.convenio = convenio
         self.caminho = caminho
@@ -66,11 +66,11 @@ class SAFECONSIG:
         
         self.orbital = orbital if orbital is not None else None
         
-        self.kobraki = kobraki if kobraki is not None else None
+        self.recebimentos = recebimentos if recebimentos is not None else None
 
         self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
-        self.tacs = tacs if tacs is not None else None
+        self.desconto_inadimplencia = desconto_inadimplencia if desconto_inadimplencia is not None else None
         
         # 5. Andamento
         self.andamento = self.averbados[self.averbados['Prazo'] != "ROTATIVO"].copy()
@@ -100,7 +100,7 @@ class SAFECONSIG:
 
         self.front_semi_trabalhado = self.tratamento_front_preliminar()
         self.front_trabalhado = self.tratamento_front()
-        prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         self.conciliacao_tratada = prepara_conciliacao.trata_conciliacao()
         
         self.averbados_func()
@@ -307,7 +307,7 @@ class SAFECONSIG:
         # TRAVA DE SEGURANÇA: Remove qualquer coluna duplicada que tenha vindo dos merges anteriores
         front_copy = front.loc[:, ~front.columns.duplicated()].copy()
         
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo

@@ -198,8 +198,8 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
             logging.info(f"Lendo: {uploaded_file.filename}")
             
             
-            if "kobraki" in filename and filename.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(file_obj, sheet_name='CONSOLIDADO')
+            if "recebimentos" in filename and filename.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_obj, sheet_name='CONCILIAÇÃO - RECEBIMENTO')
             elif "extrajudicial" in filename and filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(file_obj, sheet_name='CONSOLIDADO')
             elif "d8_to" in name:
@@ -369,9 +369,9 @@ async def validar_planilhas(
     AVERBADOS_IGEPREV: List[UploadFile] = File(None, alias="AVERBADOS_IGEPREV"),
     ZIPS: List[UploadFile] = File(None, alias="ZIPS"),
     CONCILIACAO: List[UploadFile] = File(None, alias="CONCILIACAO"),
-    KOBRAKI: List[UploadFile] = File(None, alias="KOBRAKI"),
+    RECEBIMENTOS: List[UploadFile] = File(None, alias="RECEBIMENTOS"),
     EXTRA_JUDICIAL: List[UploadFile] = File(None, alias="EXTRA_JUDICIAL"),
-    TACS: List[UploadFile] = File(None, alias="TACS"),
+    DESCONTO_INADIMPLENCIA: List[UploadFile] = File(None, alias="DESCONTO_INADIMPLENCIA"),
     D8_TO: List[UploadFile] = File(None, alias="D8_TO"),
     D8_IGEPREV: List[UploadFile] = File(None, alias="D8_IGEPREV"),
     LIQUIDADOS: List[UploadFile] = File(None, alias="LIQUIDADOS"),
@@ -420,9 +420,9 @@ async def validar_planilhas(
     averbados_to_df, erros = await read_and_unify_files(AVERBADOS_TO, convenio=convenio)
     averbados_igeprev_df, erros = await read_and_unify_files(AVERBADOS_IGEPREV, convenio=convenio)
     conciliacao_df, erros = await read_and_unify_files(CONCILIACAO, convenio=convenio)
-    kobraki_df, erros = await read_and_unify_files(KOBRAKI, convenio=convenio)
+    recebimentos_df, erros = await read_and_unify_files(RECEBIMENTOS, convenio=convenio)
     extra_judicial_df, errors = await read_and_unify_files(EXTRA_JUDICIAL, convenio=convenio)
-    tacs_df, erros = await read_and_unify_files(TACS, convenio=convenio)
+    desconto_inadimplencia_df, erros = await read_and_unify_files(DESCONTO_INADIMPLENCIA, convenio=convenio)
     d8_df_to, erros = await read_and_unify_files(D8_TO, convenio=convenio)
     d8_df_igeprev, erros = await read_and_unify_files(D8_IGEPREV, convenio=convenio)
     liquidados_df, erros = await read_and_unify_files(LIQUIDADOS, convenio=convenio)
@@ -453,9 +453,9 @@ async def validar_planilhas(
             funcao=funcao_df,
             consignataria=consignataria, 
             conciliacao=conciliacao_df,
-            kobraki=kobraki_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             andamento_list=andamento_df,
             orbital=orbital_df,
             caminho=CAMINHO_SAIDA
@@ -468,9 +468,9 @@ async def validar_planilhas(
             front=front_df,
             funcao=funcao_df,
             conciliacao=conciliacao_df,
-            kobraki=kobraki_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA,
             casos_capital=casoscapital_df,
             orbital=orbital_df,
@@ -483,9 +483,9 @@ async def validar_planilhas(
             convenio=convenio,
             front=front_df,
             conciliacao=conciliacao_df,
-            kobraki=kobraki_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             funcao=funcao_df,
             andamento_funcao = xao_df,
             trabalhado_anterior=trabalhado_anterior_df,
@@ -502,11 +502,11 @@ async def validar_planilhas(
             front=front_df,
             consignataria=consignataria,
             conciliacao=conciliacao_df,
-            kobraki=kobraki_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
             andamento_funcao=xao_df,
             funcao=funcao_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA,
             orbital=orbital_df
         )
@@ -518,9 +518,9 @@ async def validar_planilhas(
             front=front_df,
             consignataria=consignataria,
             conciliacao=conciliacao_df,
-            kobraki=kobraki_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA,
             andamento_funcao=xao_df,
             funcao=funcao_df,
@@ -534,9 +534,9 @@ async def validar_planilhas(
             front=front_df,
             consignataria=consignataria,
             conciliacao=conciliacao_df,
-            kobraki=kobraki_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA,
             rubrica=rubrica,
             andamento_funcao=xao_df,
@@ -552,9 +552,9 @@ async def validar_planilhas(
             funcao=funcao_df,
             andamento_funcao=xao_df,
             conciliacao=conciliacao_df,
-            kobraki=kobraki_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             consignataria=consignataria,
             caminho=CAMINHO_SAIDA,
             historico=historico_df,
@@ -570,9 +570,9 @@ async def validar_planilhas(
             andamento_funcao=xao_df,
             funcao=funcao_df,
             conciliacao=conciliacao_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             extra_judicial=extra_judicial_df,
-            kobraki=kobraki_df
+            recebimentos=recebimentos_df
         )
     elif convenio in CIP_CONVENIO:
         logging.info("Usando o validador: CIP")
@@ -583,8 +583,8 @@ async def validar_planilhas(
             caminho=CAMINHO_SAIDA,
             funcao=funcao_df,
             conciliacao=conciliacao_df,
-            tacs=tacs_df,
-            kobraki=kobraki_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
             orbital=orbital_df
         )
@@ -598,9 +598,9 @@ async def validar_planilhas(
             front=front_df,
             funcao=funcao_df,
             conciliacao=conciliacao_df,
-            kobraki=kobraki_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA
         )
     elif convenio in SIGRH_CONVENIO:
@@ -616,9 +616,9 @@ async def validar_planilhas(
                           funcao=funcao_df,
                           orbital=orbital_df,
                           conciliacao=conciliacao_df,
-                          kobraki=kobraki_df,
+                          recebimentos=recebimentos_df,
                           extra_judicial=extra_judicial_df,
-                          tacs=tacs_df)
+                          desconto_inadimplencia=desconto_inadimplencia_df)
         
     elif convenio in NEOCONSIG_CONVENIO:
         logging.info("Usando validador: NEOCONSIG")
@@ -628,11 +628,11 @@ async def validar_planilhas(
             front=front_df,
             consignataria=consignataria,
             conciliacao=conciliacao_df,
-            kobraki=kobraki_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
             andamento_funcao=xao_df,
             funcao=funcao_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA,
             orbital=orbital_df
         )
@@ -644,9 +644,9 @@ async def validar_planilhas(
             front=front_df,
             consignataria=consignataria,
             conciliacao=conciliacao_df,
-            kobraki=kobraki_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
-            tacs=tacs_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA,
             andamento_funcao=xao_df,
             funcao=funcao_df,
@@ -664,8 +664,8 @@ async def validar_planilhas(
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             orbital=orbital_df,
-            tacs=tacs_df,
-            kobraki=kobraki_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
             caminho=CAMINHO_SAIDA,
         )
@@ -677,9 +677,9 @@ async def validar_planilhas(
                 front=front_df,
                 consignataria=consignataria,
                 conciliacao=conciliacao_df,
-                kobraki=kobraki_df,
+                recebimentos=recebimentos_df,
                 extra_judicial=extra_judicial_df,
-                tacs=tacs_df,
+                desconto_inadimplencia=desconto_inadimplencia_df,
                 caminho=CAMINHO_SAIDA,
                 andamento_funcao=xao_df,
                 funcao=funcao_df,
@@ -697,8 +697,8 @@ async def validar_planilhas(
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             orbital=orbital_df,
-            tacs=tacs_df,
-            kobraki=kobraki_df,
+            desconto_inadimplencia=desconto_inadimplencia_df,
+            recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
             andamento_list=andamento_df,
             caminho=CAMINHO_SAIDA,

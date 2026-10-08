@@ -21,7 +21,7 @@ rejeitados = ['/']
 class CONSIGFACIL:
     # O init foi adaptado para receber os DataFrames do server.py, mas prepara os dados
     # exatamente como o original esperava (convertendo tipos, etc.)
-    def __init__(self, front, portal_file_list, convenio,  caminho, andamento_funcao=None, funcao=None, conciliacao=None, orbital=None,kobraki=None, extra_judicial=None, tacs=None, andamento_list=None):
+    def __init__(self, front, portal_file_list, convenio,  caminho, andamento_funcao=None, funcao=None, conciliacao=None, orbital=None,recebimentos=None, extra_judicial=None, desconto_inadimplencia=None, andamento_list=None):
         
         self.convenio = convenio
         self.caminho = caminho
@@ -72,11 +72,11 @@ class CONSIGFACIL:
         
         self.orbital = orbital if orbital is not None else None
         
-        self.kobraki = kobraki if kobraki is not None else None
+        self.recebimentos = recebimentos if recebimentos is not None else None
 
         self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
-        self.tacs = tacs if tacs is not None else None
+        self.desconto_inadimplencia = desconto_inadimplencia if desconto_inadimplencia is not None else None
         
         # 5. Andamento
         self.andamento = andamento_list if andamento_list is not None else pd.DataFrame()
@@ -105,7 +105,7 @@ class CONSIGFACIL:
         self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio} {datetime.now().strftime("%m-%Y")}.xlsx"), index=False)
 
         front_semi_trabalhado_preliminar = TratadorConsigfacil(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
-                                                               caminho=self.caminho, condicoes_1=self.condicoes_1, kobraki=self.kobraki, tacs=tacs, andamento=self.andamento)
+                                                               caminho=self.caminho, condicoes_1=self.condicoes_1, recebimentos=self.recebimentos, desconto_inadimplencia=desconto_inadimplencia, andamento=self.andamento)
         self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
         self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, '', 'NÃO LANÇAR - ORBITAL'])]
 
@@ -128,7 +128,7 @@ class CONSIGFACIL:
         # =======================================================================================================================================================
         # =======================================================================================================================================================
         '''instancia_front = TratadorFrontBase(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio, caminho=self.caminho, orbital=self.orbital,
-                                            condicoes_1=self.condicoes_1, kobraki=self.kobraki, tacs=self.tacs, extra_judicial=self.extra_judicial)
+                                            condicoes_1=self.condicoes_1, recebimentos=self.recebimentos, desconto_inadimplencia=self.desconto_inadimplencia, extra_judicial=self.extra_judicial)
 
         # Criação do Front Semi Trabalhado
         self.front_semi_trabalhado = instancia_front.tratamento_front_preliminar_base()
@@ -481,7 +481,7 @@ class CONSIGFACIL:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Credbase trabalhado são do mesmo tipo

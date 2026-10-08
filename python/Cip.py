@@ -11,7 +11,7 @@ import os
 import re
 
 class CIP:
-    def __init__(self, portal_file_list, convenio, front, caminho, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, caminho, funcao=None, conciliacao=None, recebimentos=None, extra_judicial=None, desconto_inadimplencia=None, orbital=None):
         self.averbados = portal_file_list
 
         self.convenio = convenio
@@ -21,11 +21,11 @@ class CIP:
         # Funcao
         self.funcao = funcao if funcao is not None else None
 
-        self.kobraki = kobraki if kobraki is not None else None
+        self.recebimentos = recebimentos if recebimentos is not None else None
 
         self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
-        self.tacs = tacs if tacs is not None else None
+        self.desconto_inadimplencia = desconto_inadimplencia if desconto_inadimplencia is not None else None
 
 
         conciliacao_falso = pd.DataFrame(
@@ -310,7 +310,7 @@ class CIP:
 
     def validacao_termino_front(self, front):
         front_copy = front.copy()
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Certifica que todos os contratos no Front trabalhado são do mesmo tipo
@@ -445,10 +445,17 @@ class CIP:
         # 3. Busca por Grupo (Backtracking por CPF)
         col_v = 'Valor da Parcela' if 'Valor da Parcela' in df_andamento.columns else 'Prestacao'
 
-        # Calcula de forma dinâmica a soma de todas as colunas 'Valor_Unif_' já criadas por linha
         colunas_valores_unif = [col for col in df_andamento.columns if str(col).startswith('Valor_Unif_')]
+
         if colunas_valores_unif:
-            soma_atual_unif = df_andamento[colunas_valores_unif].sum(axis=1).round(2)
+            # Garante que os dados sejam string para trocar vírgulas por pontos (se houver formatação brasileira),
+            # converte forçadamente para número, e transforma lixos ou textos vazios em 0.
+            subset_numerico = df_andamento[colunas_valores_unif].apply(
+                lambda col: pd.to_numeric(col.astype(str).str.replace('.', '').str.replace(',', '.'), errors='coerce')
+            ).fillna(0)
+            
+            # Executa a soma e o arredondamento na base já purificada
+            soma_atual_unif = subset_numerico.sum(axis=1).round(2)
         else:
             soma_atual_unif = pd.Series(0.0, index=df_andamento.index)
 
@@ -898,7 +905,7 @@ class CIP:
         front = self.tratamento_front_preliminar()
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         if front is False:
@@ -934,7 +941,7 @@ class CIP:
         data_averbados, front_base = self.processar_contratos_otimizado(data_averbados, front)
         data_averbados = self.extrair_contratos_com_referencia(data_averbados, front)
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.extra_judicial)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.extra_judicial)
         conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO
@@ -1209,7 +1216,7 @@ class CIP:
 
         for index, linha in df.iterrows():
             # Limpeza básica para garantir que não vão espaços em branco pro XML
-            cpf = str(linha['CPF']).strip()
+            cpf = str(linha['CPF']).strip().replace('.', '').replace('-', '')
             averbacao = str(linha['Nº AVERBAÇÃO SCC']).strip()
             contrato = str(linha['Nº CONTRATO']).strip()
             

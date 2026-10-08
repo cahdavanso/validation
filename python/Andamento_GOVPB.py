@@ -10,12 +10,12 @@ import numpy as np
 andamento_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\Consignacao UNIFICADA GOV PB.xlsx"
 caminho = r"P:\PESSOAL\2026\MAIO\GOV PB\TRABALHADOS TESTE ANDAMENTO"
 funcao_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\RL167_v4.csv"
-kobraki_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\RECEBIVEIS KOBRAKI - ABRIL 2026.xlsx"
+recebimentos_bruto = r"P:\PESSOAL\2026\MAIO\GOV PB\RELATORIOS\RECEBIVEIS RECEBIMENTOS - ABRIL 2026.xlsx"
 
 front = pd.read_csv(front_bruto, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
 andamento = pd.read_excel(andamento_bruto)
 funcao = pd.read_csv(funcao_bruto, encoding="utf-8-sig", sep=";", on_bad_lines="skip", low_memory=False)
-kobraki = pd.read_excel(kobraki_bruto, sheet_name='CONSOLIDADO')
+recebimentos = pd.read_excel(recebimentos_bruto, sheet_name='CONSOLIDADO')
 convenio = "GOV. PARAÍBA"
 
 andamento = andamento.dropna(axis=0, how='all')

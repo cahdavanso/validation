@@ -14,7 +14,7 @@ import re
 
 
 class CONSIGI_KONEXIA:
-    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, andamento_funcao=None, funcao=None, conciliacao=None, kobraki=None, extra_judicial=None, tacs=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, consignataria, caminho, andamento_funcao=None, funcao=None, conciliacao=None, recebimentos=None, extra_judicial=None, desconto_inadimplencia=None, orbital=None):
         self.averbados = portal_file_list
 
 
@@ -27,11 +27,11 @@ class CONSIGI_KONEXIA:
 
         self.andamento_funcao = andamento_funcao if andamento_funcao is not None else None
 
-        self.kobraki = kobraki if kobraki is not None else None
+        self.recebimentos = recebimentos if recebimentos is not None else None
 
         self.extra_judicial = extra_judicial if extra_judicial is not None else None
 
-        self.tacs = tacs if tacs is not None else None
+        self.desconto_inadimplencia = desconto_inadimplencia if desconto_inadimplencia is not None else None
 
 
         conciliacao_falso = pd.DataFrame(
@@ -80,7 +80,7 @@ class CONSIGI_KONEXIA:
 
         front_semi_trabalhado_preliminar = TratadorValidacaoSimples(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
                                                                     caminho=self.caminho, condicoes_1=self.condicoes_1, consignataria=self.consignataria,
-                                                                    kobraki=self.kobraki, tacs=tacs)
+                                                                    recebimentos=self.recebimentos, desconto_inadimplencia=desconto_inadimplencia)
         
         self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
         self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
@@ -95,7 +95,7 @@ class CONSIGI_KONEXIA:
         front = self.front_semi_trabalhado
         front['Contrato'] = front['Contrato'].astype(str).str.strip()
 
-        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.tacs)
+        teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         if front is False:
@@ -130,7 +130,7 @@ class CONSIGI_KONEXIA:
 
         data_averbados = self.extrair_contratos_com_referencia(data_averbados_bruto, semi_front)
 
-        # teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.kobraki, self.extra_judicial)
+        # teste_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.extra_judicial)
         # conciliacao_tratado = teste_conciliacao.trata_conciliacao()
 
         # Operações liquidadas. Tratando NRº OPER EDITADO
