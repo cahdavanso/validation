@@ -415,7 +415,7 @@ class TRATA_CONTRATOS:
                 print(f"DEBUG: ERRO AO SALVAR RELATÓRIO AVERBADO CONTRATOS TRATADOS: {e}")
             return df_resultado
     
-    def adiciona_peculio(self, averbacoes):
+    def adiciona_peculio(self, averbacoes, coluna_lancar):
         data_averbados = averbacoes.copy()
 
         # 1. Cria uma coluna inicial zerada para acumular a soma
@@ -442,7 +442,7 @@ class TRATA_CONTRATOS:
                 data_averbados.loc[mascara_esteira_valida, 'Soma_Calculada'] += (valores_validos + 20)
 
         # 3. Aplica a comparação final com o Valor Prestação (Teto)
-        data_averbados['Lançar'] = np.minimum(data_averbados['Soma_Calculada'], data_averbados['VALOR PARCELA'])
+        data_averbados['Lançar'] = np.minimum(data_averbados['Soma_Calculada'], data_averbados[coluna_lancar])
 
         # (Opcional) Remove a coluna temporária se não precisar mais
         data_averbados = data_averbados.drop(columns=['Soma_Calculada'])
@@ -674,7 +674,11 @@ class TRATA_CONTRATOS:
 
             # --- 4 OBS ---
             data_averbados[f'OBS {i}'] = data_averbados[f'OBS {i}'].fillna('')
-            condicao_obs = (data_averbados[f'OBS {i}'] != '') & (~data_averbados[f'OBS {i}'].isin(['NÃO LANÇAR - NÃO CARTÃO', 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA']))
+            print(f'Convenio: {self.convenio}')
+            if self.convenio == "PREF. PLANALTINA":
+                condicao_obs = (data_averbados[f'OBS {i}'] != '') & (~data_averbados[f'OBS {i}'].isin(['NÃO LANÇAR - CONSIGNATÁRIA ERRADA']))
+            else:
+                condicao_obs = (data_averbados[f'OBS {i}'] != '') & (~data_averbados[f'OBS {i}'].isin(['NÃO LANÇAR - NÃO CARTÃO', 'NÃO LANÇAR - CONSIGNATÁRIA ERRADA']))
 
             # Ação: Nessas linhas, define o 'Valor_Unif' correspondente como 0
             # O operador | significa OU (se uma condição OU a outra for verdadeira)

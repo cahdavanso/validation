@@ -88,6 +88,40 @@ class CONSIGI_KONEXIA:
 
         self.arquivo_lancamento()
 
+    def adiciona_peculio(self, averbacoes):
+            data_averbados = averbacoes.copy()
+    
+            # 1. Cria uma coluna inicial zerada para acumular a soma
+            data_averbados['Soma_Calculada'] = 0.0
+    
+            # 2. Define o limite máximo de colunas que você criou (ajuste esse range se tiver mais que 10)
+            # Se você tiver 'Esteira_1' até 'Esteira_5', o range deve ser range(1, 6)
+            # Coloquei até 20 para garantir, o código verifica se a coluna existe.
+            for i in range(1, 20):
+                col_esteira = f'Esteira_{i}'
+                col_valor = f'Valor_Unif_{i}'
+    
+                # Verifica se esse par de colunas existe no DataFrame
+                if col_esteira in data_averbados.columns and col_valor in data_averbados.columns:
+                    # --- A LÓGICA MÁGICA ---
+                    # 1. Cria uma máscara: Linhas onde a Esteira X está na lista de permitidas
+                    mascara_esteira_valida = data_averbados[col_esteira].isin(self.condicoes_1)
+    
+                    # 2. Pega os valores correspondentes, preenche NaN com 0 para evitar erros
+                    valores_validos = data_averbados.loc[mascara_esteira_valida, col_valor].fillna(0)
+    
+                    # 3. Adiciona (Valor + 20) na coluna acumuladora
+                    # Importante: Só somamos nas linhas onde a máscara é Verdadeira
+                    data_averbados.loc[mascara_esteira_valida, 'Soma_Calculada'] += (valores_validos + 20)
+    
+            # 3. Aplica a comparação final com o Valor Prestação (Teto)
+            data_averbados['Lançar'] = np.minimum(data_averbados['Soma_Calculada'], data_averbados['VALOR DA PARCELA'])
+    
+            # (Opcional) Remove a coluna temporária se não precisar mais
+            data_averbados = data_averbados.drop(columns=['Soma_Calculada'])
+    
+            return data_averbados
+
 
     def trata_averbacao(self):
         # PUXA OS ARQUIVOS À SEREM TRATADOS
@@ -113,7 +147,7 @@ class CONSIGI_KONEXIA:
         data_averbados_bruto = data[colunas]
 
         # Remove Suporte
-        data_averbados_bruto = data_averbados_bruto[data_averbados_bruto['FUNCIONÁRIO'] != 'Suporte']
+        # data_averbados_bruto = data_averbados_bruto[data_averbados_bruto['FUNCIONÁRIO'] != 'Suporte']
 
         '''data_averbados_bruto['NRO CONTRATO'] = data_averbados_bruto['NRO CONTRATO'].fillna('')
         data_averbados_bruto = data_averbados_bruto[data_averbados_bruto['NRO CONTRATO'] != '']
@@ -244,7 +278,7 @@ class CONSIGI_KONEXIA:
 
         # --- 5. Cria a coluna Lançar ---
         if consig == 'HOJE PREVIDÊNCIA PRIVADA':
-            data_averbados = self.adiciona_peculio(data_averbados)
+            data_averbados = prepara_data_averbados.adiciona_peculio(data_averbados, 'VALOR DA PARCELA')
         else:
             data_averbados['Lançar'] = np.minimum(data_averbados['Soma'], data_averbados['VALOR DA PARCELA'])
             # data_averbados.loc[condicao_liminar, 'Lançar'] = 0
