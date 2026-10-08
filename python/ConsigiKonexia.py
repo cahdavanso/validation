@@ -5,7 +5,7 @@ from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
 from python.funcoes_comuns import TRATA_CONTRATOS
-from python.Tratador_Front_Base import TratadorValidacaoSimples
+from python.Tratador_Front_Base import TratadorConsigiKonexia
 from python.TrataOrbital import TRATA_ORBITAL
 import openpyxl
 import numpy as np
@@ -78,7 +78,7 @@ class CONSIGI_KONEXIA:
         self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
         self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio}.xlsx"), index=False)
 
-        front_semi_trabalhado_preliminar = TratadorValidacaoSimples(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
+        front_semi_trabalhado_preliminar = TratadorConsigiKonexia(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
                                                                     caminho=self.caminho, condicoes_1=self.condicoes_1, consignataria=self.consignataria,
                                                                     recebimentos=self.recebimentos, desconto_inadimplencia=desconto_inadimplencia)
         

@@ -378,6 +378,10 @@ class TratadorValidacaoSimples(TratadorFrontBase):
         df.loc[(~df['Tipo Operacao'].str.contains(REGEX_CARTAO_COMPLETO, na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         return df
 
+class TratadorConsigiKonexia(TratadorFrontBase):
+    def aplicar_regras_especificas(self, df):
+        df.loc[(~df['Tipo Operacao'].str.contains(REGEX_CARTAO_SIMPLES, na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+        return df
 
 class TratadorNeoconsig(TratadorFrontBase):
     def aplicar_regras_especificas(self, df):
