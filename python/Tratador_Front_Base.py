@@ -383,6 +383,10 @@ class TratadorConsigiKonexia(TratadorFrontBase):
         df.loc[(~df['Tipo Operacao'].str.contains(REGEX_CARTAO_SIMPLES, na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
         return df
 
+class TratadorSafeconsig(TratadorFrontBase):
+    def aplicar_regras_especificas(self, df):
+        return df
+
 class TratadorNeoconsig(TratadorFrontBase):
     def aplicar_regras_especificas(self, df):
         # A diferença do Neoconsig é que ele avalia o "Tipo Conciliação" em vez do "Tipo Operacao"

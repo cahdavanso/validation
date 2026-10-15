@@ -4,6 +4,8 @@ from datetime import datetime
 from python.ESTEIRAS import load_esteiras
 from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.TrataOrbital import TRATA_ORBITAL
+from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
+from python.Tratador_Front_Base import TratadorValidacaoSimples
 from datetime import datetime
 import openpyxl
 import numpy as np
@@ -11,7 +13,7 @@ import os
 import re
 
 class CIP:
-    def __init__(self, portal_file_list, convenio, front, caminho, funcao=None, conciliacao=None, recebimentos=None, extra_judicial=None, desconto_inadimplencia=None, orbital=None):
+    def __init__(self, portal_file_list, convenio, front, caminho, andamento_funcao=None, funcao=None, conciliacao=None, recebimentos=None, extra_judicial=None, desconto_inadimplencia=None, orbital=None):
         self.averbados = portal_file_list
 
         self.convenio = convenio
@@ -20,6 +22,8 @@ class CIP:
 
         # Funcao
         self.funcao = funcao if funcao is not None else None
+
+        self.andamento_funcao = andamento_funcao
 
         self.recebimentos = recebimentos if recebimentos is not None else None
 
@@ -47,6 +51,30 @@ class CIP:
         self.caminho = caminho
 
         self.condicoes_1 = load_esteiras()
+
+        unificador = UNIFICA_FRONT_FUNC_ESTEIRAS(
+                    front=self.front, 
+                    convenio=self.convenio, 
+                    funcao=self.funcao, 
+                    andamento_funcao=self.andamento_funcao, caminho=self.caminho
+                )
+        
+        # 2. Chama a primeira unificação (Função pura)
+        # Isso vai processar e preencher com verificar_ccb=True
+        front_meio_caminho = unificador.unifica_front_funcao()
+
+        # 3. Atualiza o front interno da classe para que a segunda unificação use os dados já combinados
+        unificador.front = front_meio_caminho
+
+        # 4. Chama a segunda unificação (Andamento Função)
+        # Isso vai processar a segunda base com verificar_ccb=False
+        self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
+
+        front_semi_trabalhado_preliminar = TratadorValidacaoSimples(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
+                                                                 caminho=self.caminho, condicoes_1=self.condicoes_1,
+                                                                 recebimentos=self.recebimentos, desconto_inadimplencia=desconto_inadimplencia)
+        self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
+        self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
 
 
         self.criacao_xml()
@@ -895,6 +923,74 @@ class CIP:
 
         return averbado_contratos_faltantes
 
+    def distribuicao_valores(self, averbado_trabalhado, front_trabalhar):
+        # IMPORTANTE: Garanta que as colunas de valores são numéricas, não texto.
+        # O .to_numeric(errors='coerce') converte o que for possível para número e põe NaN no que não for.
+        averbado_novo = averbado_trabalhado
+        cpf_tratado = averbado_novo['CPF do Servidor'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
+        averbado_novo.insert(1, 'CPF', cpf_tratado)
+        if self.orbital is not None:
+            orbital_instancia = TRATA_ORBITAL(orbital=self.orbital, front=front_trabalhar, convenio=self.convenio, caminho=self.caminho)
+            orbital_tratado = orbital_instancia.orbital_tratado()
+            mask_orbital = orbital_tratado.groupby('CPF/CNPJ')['VALOR DESCONTO'].sum()
+            averbado_novo['ORBITAL'] = ''
+            averbado_novo['ORBITAL'] = averbado_novo['CPF'].map(mask_orbital)
+
+        # Remoção de duplicatas por matrícula
+        # averbado_novo.drop_duplicates(subset=['Matrícula'], keep='first', inplace=True)
+        
+        front_preliminar = front_trabalhar.copy()
+        # Transforma vazios no OBS em aspas vazias
+        front_preliminar['OBS'] = front_preliminar['OBS'].fillna('')
+        front_preliminar = front_preliminar[front_preliminar['OBS'] == '']
+
+        soma_series_averb = front_preliminar.groupby('CPF')['Valor a lançar'].sum()
+
+        # 2. Agora o .add() vai funcionar, pois soma_series_averb ainda é um objeto Pandas
+        # Supondo que mask_orbital também seja uma Series de CPFs e valores
+        # soma_total = soma_series_averb.add(mask_orbital, fill_value=0)
+
+        if averbado_novo['Valor da Parcela'].dtype != 'float64':
+            averbado_novo['Valor da Parcela'] = averbado_novo['Valor da Parcela'].astype(str).str.replace(".", "")
+            averbado_novo['Valor da Parcela'] = averbado_novo['Valor da Parcela'].astype(str).str.replace(",", ".")
+            averbado_novo['Valor da Parcela'] = pd.to_numeric(averbado_novo['Valor da Parcela'], errors='coerce').fillna(0)
+
+        averbado_novo['SOMASE FRONT'] = averbado_novo['CPF'].map(soma_series_averb)
+        averbado_novo['SOMASE FRONT'] = pd.to_numeric(averbado_novo['SOMASE FRONT'], errors='coerce').fillna(0)
+
+        if 'ORBITAL' in averbado_novo.columns:
+            # Usa .loc para garantir que a coluna seja adicionada
+            averbado_novo['ORBITAL'] = averbado_novo['ORBITAL'].fillna(0)
+            averbado_novo['SOMASE FRONT'] = averbado_novo['SOMASE FRONT'] + averbado_novo['ORBITAL']
+
+        # NOTA: Como não há coluna de prioridade, a ordem de distribuição dependerá
+        # da ordem atual do DataFrame. Se precisar de uma ordem específica,
+        # um .sort_values() viria aqui.
+
+        # 1. Calcula a soma ACUMULADA da reserva dentro de cada grupo de CPF.
+        # Esta é a "mágica" que substitui a necessidade de um loop.
+        averbado_novo['SOMA ACUMULADA DA RESERVA'] = averbado_novo.groupby('CPF')['Valor da Parcela'].cumsum()
+
+        # 2. Calcula o valor que JÁ FOI ALOCADO para as linhas ANTERIORES.
+        # É a soma acumulada até a linha atual, menos o valor da própria linha.
+        alocado_anteriormente = averbado_novo['SOMA ACUMULADA DA RESERVA'] - averbado_novo['Valor da Parcela']
+        averbado_novo['ALOCADO ANTERIORMENTE'] = alocado_anteriormente
+
+        # 3. Calcula o saldo restante do SOMASE ANTES de processar a linha atual.
+        saldo_restante = averbado_novo['SOMASE FRONT'] - alocado_anteriormente
+
+        # 4. O valor a lançar é o MÍNIMO entre o que a reserva da linha pede e o saldo que ainda temos.
+        # Usamos .clip(0) para garantir que o saldo não seja negativo (se já estourou, é 0).
+        valor_a_lancar = np.minimum(averbado_novo['Valor da Parcela'], saldo_restante.clip(0))
+
+        # 5. Atribui o resultado final arredondado às colunas.
+        averbado_novo['Lançar'] = valor_a_lancar.round(2)
+
+        # 6. Preenche a coluna OBS para linhas que não receberam nada.
+        averbado_novo.loc[averbado_novo['Lançar'] == 0, 'OBS'] = 'NÃO'
+
+        return averbado_novo
+
     def trata_averbacao(self):
         # PUXA OS ARQUIVOS À SEREM TRATADOS
         data = self.averbados
@@ -1073,9 +1169,11 @@ class CIP:
 
     def arquivo_lancamento(self):
         # Cria o novo DataFrame
-        data_averbados = self.trata_averbacao()
-        front_trabalhado = self.tratamento_front()
-        data_averbados.loc[data_averbados['Lançar'] < 5, 'Lançar'] = 0
+        # data_averbados = self.trata_averbacao()
+        data_averbados = self.distribuicao_valores(self.averbados, self.front_semi_trabalhado)
+        # front_trabalhado = self.tratamento_front()
+        front_trabalhado = self.front_trabalhado
+        data_averbados.loc[data_averbados['Lançar'] < 15, 'Lançar'] = 0
         temp = data_averbados[data_averbados['Lançar'] != 0]
         colunas_alancar = ['CPF', 'Número da Averbação', 'Lançar', 'Número do Contrato']
         a_lancar = pd.DataFrame(temp[colunas_alancar])

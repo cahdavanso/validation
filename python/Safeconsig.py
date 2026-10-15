@@ -8,6 +8,7 @@ from python.trata_conciliacao import TRATA_CONCILIACAO
 from python.TrataOrbital import TRATA_ORBITAL
 from python.funcoes_comuns import UNIFICA_FRONT_FUNC_ESTEIRAS
 from python.funcoes_comuns import TRATA_CONTRATOS
+from python.Tratador_Front_Base import TratadorSafeconsig
 from datetime import datetime
 import os
 import logging
@@ -56,6 +57,9 @@ class SAFECONSIG:
         conciliacao_falso['ST JUL 25'] = 'DESCONTO TOTAL'
         conciliacao_falso['RECEBIDO GERAL'] = 0
 
+        # Esteiras
+        self.esteiras_permitidas = load_esteiras()
+
 
         self.conciliacao = conciliacao if conciliacao is not None else conciliacao_falso
         
@@ -98,8 +102,16 @@ class SAFECONSIG:
         self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
         self.front_final_consig.to_excel(os.path.join(self.caminho, f"FRONT FINAL CONSIG {self.convenio}.xlsx"), index=False)
 
-        self.front_semi_trabalhado = self.tratamento_front_preliminar()
-        self.front_trabalhado = self.tratamento_front()
+        '''self.front_semi_trabalhado = self.tratamento_front_preliminar()
+        self.front_trabalhado = self.tratamento_front()'''
+
+        front_semi_trabalhado_preliminar = TratadorSafeconsig(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
+                                                                            caminho=self.caminho, condicoes_1=self.esteiras_permitidas,
+                                                                            recebimentos=self.recebimentos, desconto_inadimplencia=desconto_inadimplencia)
+                
+        self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
+        self.front_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
+
         prepara_conciliacao = TRATA_CONCILIACAO(self.conciliacao, self.recebimentos, self.desconto_inadimplencia)
         self.conciliacao_tratada = prepara_conciliacao.trata_conciliacao()
         
@@ -124,7 +136,7 @@ class SAFECONSIG:
         print(f'Esteiras Únicas do front: {front_consig["Esteira"].unique()}')
 
         # Esteiras
-        esteiras_permitidas = load_esteiras()
+        esteiras_permitidas = self.esteiras_permitidas
         
         
         # Vamos renomear a primeira coluna da conciliação
@@ -328,8 +340,8 @@ class SAFECONSIG:
         front_copy = front_copy.loc[:, ~front_copy.columns.duplicated()]
 
         if front_copy['Prestacao'].dtype != 'float64':
-            front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace('.', '', regex=False)
-            front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
+            '''front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace('.', '', regex=False)
+            front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)'''
             front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
 
         print(f'Colunas de front_copy: {front_copy.columns}')
@@ -369,7 +381,7 @@ class SAFECONSIG:
             if col_esteira in averbado_finalizado.columns and col_valor in averbado_finalizado.columns:
                 # --- A LÓGICA MÁGICA ---
                 # 1. Cria uma máscara: Linhas onde a Esteira X está na lista de permitidas
-                mascara_esteira_valida = averbado_finalizado[col_esteira].isin(self.condicoes_1)
+                mascara_esteira_valida = averbado_finalizado[col_esteira].isin(self.esteiras_permitidas)
 
                 # 2. Pega os valores correspondentes, preenche NaN com 0 para evitar erros
                 valores_validos = averbado_finalizado.loc[mascara_esteira_valida, col_valor].fillna(0)

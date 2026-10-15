@@ -51,6 +51,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
                                     'PREF. ANANINDEUA': ['PM ANANIN CC', 'PM ANANINDEUA', 'PM ANANIN CB', 'PM ANANIN CB DG'],
                                     'PREF. ARACAJU': ['PM ARACAJU', 'PM ARACAJU CB', 'PM ARACAJU CC'],
                                     'PREF. ARAGUAÍNA': ['PM ARAGUAINA'],
+                                    'PREF. ARARAQUARA': ['PM ARARAQ EMP', 'PM ARARAQ CC', 'PM ARARAQ CB'],
                                     'PREF. ARAPONGAS': ['PM ARAPONGAS CC'],
                                     'PREF. ARAUCÁRIA': ['PM ARAUC EMP'],
                                     'PREF. AÇAILÂNDIA': ['PM ACAILANDIA'],
