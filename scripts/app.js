@@ -234,6 +234,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "AVERBADOS_IGEPREV",
     "D8_TO",
     "D8_IGEPREV",
+    "RECUSADOS_IGEPREV",
     "XAO",
     "CONCILIACAO",
     "RECEBIMENTOS",

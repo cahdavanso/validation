@@ -406,8 +406,24 @@ class TratadorRF1(TratadorFrontBase):
         if self.convenio not in ['PREF. PALMAS']:
             df.loc[df['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
 
-        print(f'TratadorConsigfacil ativado')
+        print(f'TratadorRF1 ativado')
 
         df.loc[(~df['Tipo Operacao'].str.contains(REGEX_CARTAO_COMPLETO, na=False)), 'OBS'] = 'NÃO LANÇAR - NÃO CARTÃO'
+
+        return df
+
+class TratadorIgeprevTo(TratadorFrontBase):
+    def aplicar_regras_especificas(self, df):
+        print(f'TratadorIgeprevTo ativado')
+        df.loc[df['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
+        df.loc[df['Tabela'].str.contains('ADTO', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
+
+        # CONTSEs de CPF e Consignataria
+        filtro_previdencia = df['Consignataria'] == "HOJE PREVIDÊNCIA PRIVADA"
+        df['CONTSES'] = filtro_previdencia.groupby(df['CPF']).transform('sum')
+        df['CONTSES'] = df['CONTSES'].fillna(0)
+
+
+        df['Peculio'] = df['CONTSES'] * 20
 
         return df

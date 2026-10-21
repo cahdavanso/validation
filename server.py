@@ -374,6 +374,7 @@ async def validar_planilhas(
     DESCONTO_INADIMPLENCIA: List[UploadFile] = File(None, alias="DESCONTO_INADIMPLENCIA"),
     D8_TO: List[UploadFile] = File(None, alias="D8_TO"),
     D8_IGEPREV: List[UploadFile] = File(None, alias="D8_IGEPREV"),
+    RECUSADOS_IGEPREV: List[UploadFile] = File(None, alias="RECUSADOS_IGEPREV"),
     LIQUIDADOS: List[UploadFile] = File(None, alias="LIQUIDADOS"),
     LIMINAR: List[UploadFile] = File(None, alias="LIMINAR"),
     HISTORICO: List[UploadFile] = File(None, alias="HISTORICO"),
@@ -425,6 +426,7 @@ async def validar_planilhas(
     desconto_inadimplencia_df, erros = await read_and_unify_files(DESCONTO_INADIMPLENCIA, convenio=convenio)
     d8_df_to, erros = await read_and_unify_files(D8_TO, convenio=convenio)
     d8_df_igeprev, erros = await read_and_unify_files(D8_IGEPREV, convenio=convenio)
+    igeprev_recusados = await read_and_unify_files(RECUSADOS_IGEPREV, convenio=convenio)
     liquidados_df, erros = await read_and_unify_files(LIQUIDADOS, convenio=convenio)
     liminar_df, erros = await read_and_unify_files(LIMINAR, convenio=convenio)
     historico_df, erros = await read_and_unify_files(HISTORICO, convenio=convenio)
@@ -593,10 +595,13 @@ async def validar_planilhas(
         validador = IGEPREV_GOVTO(
             portal_file_path_to=averbados_to_df,
             portal_file_path_igeprev=averbados_igeprev_df,
+            convenio=convenio,
             d8_file_path_to=d8_df_to,
             d8_file_path_igeprev=d8_df_igeprev,
+            recusados_igeprev=igeprev_recusados,
             front=front_df,
             funcao=funcao_df,
+            andamento_funcao=xao_df,
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
             extra_judicial=extra_judicial_df,
