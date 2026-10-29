@@ -251,6 +251,11 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
                 df = df[:-6]
                 df['Consignataria'] = consig
                 df = df.dropna(axis=1, how='all')
+            elif "recusados_igeprev" in name:
+                df = pd.read_csv(file_obj, sep=';', encoding='latin1')
+                # linha_identificacao = str(df_preliminar.iloc[1].values)
+                df = df[:-4]
+                df = df.dropna(axis=1, how='all')
             elif conv in ZETRA_CONVENIO and 'averbados' in name:
                 df_temp = pd.read_csv(file_obj, sep=';', encoding='latin1')
                 if len(df_temp) > 3:
@@ -426,7 +431,7 @@ async def validar_planilhas(
     desconto_inadimplencia_df, erros = await read_and_unify_files(DESCONTO_INADIMPLENCIA, convenio=convenio)
     d8_df_to, erros = await read_and_unify_files(D8_TO, convenio=convenio)
     d8_df_igeprev, erros = await read_and_unify_files(D8_IGEPREV, convenio=convenio)
-    igeprev_recusados = await read_and_unify_files(RECUSADOS_IGEPREV, convenio=convenio)
+    igeprev_recusados, erros = await read_and_unify_files(RECUSADOS_IGEPREV, convenio=convenio)
     liquidados_df, erros = await read_and_unify_files(LIQUIDADOS, convenio=convenio)
     liminar_df, erros = await read_and_unify_files(LIMINAR, convenio=convenio)
     historico_df, erros = await read_and_unify_files(HISTORICO, convenio=convenio)

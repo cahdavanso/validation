@@ -59,14 +59,14 @@ d8_gov_to_capital_parciais = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEP
 d8_gov_to_ciasprev_parciais = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CIASPREV-032026.xlsx", header=7, sheet_name=planilha_parciais)
 d8_gov_to_hp_parciais = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-CLICKBANK-032026.xlsx", header=7, sheet_name=planilha_parciais)
 d8_gov_to_click_parciais = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RETORNO-GOV_TOCANTINS-HOJE-032026.xlsx", header=7, sheet_name=planilha_parciais)
-d8_igeprev_capital = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Movimento_Financeiro-IGEPREV-CAPITAL-032026.csv", encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
-d8_igeprev_ciasprev = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Movimento_Financeiro-IGEPREV-CIASPREV-032026.csv", encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
+andamento_igeprev_capital = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Movimento_Financeiro-IGEPREV-CAPITAL-032026.csv", encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
+andamento_igeprev_ciasprev = pd.read_csv(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Movimento_Financeiro-IGEPREV-CIASPREV-032026.csv", encoding="latin1", sep=";", on_bad_lines="skip", low_memory=False)
 conciliacao_df = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\Conciliação-Governo do Tocantins + IGEPREV - 032026.xlsx")
 recebimentos_df = pd.read_excel(r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\RELATORIOS\RECEBIVEIS RECEBIMENTOS - ABRIL 2026.xlsx", sheet_name="CONSOLIDADO")
 
 caminho = r"P:\PESSOAL\2026\ABRIL\GOV TO - IGEPREV\teste_programa"
 '''
-# , portal_file_list, d8_to, d8_igeprev, conciliacao=None,  recebimentos=None
+# , portal_file_list, d8_to, andamento_igeprev, conciliacao=None,  recebimentos=None
 # averbado_unif = pd.concat()
 
 class IGEPREV_GOVTO:
@@ -78,7 +78,7 @@ class IGEPREV_GOVTO:
         self.averbados_igeprev = portal_file_path_igeprev
         self.d8_to = d8_file_path_to
         self.recusados_igeprev = recusados_igeprev # -> É só o movimento financeiro de igeprev do mês anterior ao que estamos trabalhando
-        self.d8_igeprev = d8_file_path_igeprev
+        self.andamento_igeprev = d8_file_path_igeprev
         self.funcao = funcao
         self.andamento_funcao = andamento_funcao
         self.recebimentos = recebimentos if recebimentos is not None else None
@@ -343,8 +343,8 @@ class IGEPREV_GOVTO:
         d8_unificado['CONCAT CPF PARCELA'] = ""
 
         if mask_d8.any():
-            # Sequencial ordenado por CPF e Valor (1, 2, 3...)
-            contse_d8 = d8_unificado[mask_d8].groupby(['CPF', col_valor_d8]).count()
+            # Equivalente exato ao CONT.SES do Excel (mantém o índice original das linhas!)
+            contse_d8 = d8_unificado[mask_d8].groupby(['CPF', col_valor_d8]).transform('size')
             d8_unificado.loc[mask_d8, 'CONTSE'] = contse_d8.astype(str)
             
             # Concatenação da chave
@@ -360,8 +360,9 @@ class IGEPREV_GOVTO:
         front['CONCAT CPF PARCELA'] = ""
 
         if mask_front.any():
-            seq_front = front[mask_front].groupby(['CPF', 'Prestacao']).count()
-            front.loc[mask_front, 'CONTSE'] = seq_front.astype(str)
+            # Equivalente exato ao CONT.SES do Excel (mantém o índice original das linhas!)
+            contse_d8 = d8_unificado[mask_d8].groupby(['CPF', col_valor_d8]).transform('size')
+            d8_unificado.loc[mask_d8, 'CONTSE'] = contse_d8.astype(str)
             
             front.loc[mask_front, 'CONCAT CPF PARCELA'] = (
                 front.loc[mask_front, 'CPF'].astype(str) + "_" +
@@ -404,67 +405,74 @@ class IGEPREV_GOVTO:
 
         return d8_gov_to_unificado        
 
-    def unifica_d8_igeprev(self, arquivo):
-        d8_igeprev_unificado = arquivo.copy()
+    def unifica_andamento_igeprev(self, arquivo):
+        andamento_igeprev_unificado = arquivo
 
-        '''igeprev_d8_capital = d8_igeprev_capital.copy()
+        '''igeprev_andamento_capital = andamento_igeprev_capital.copy()
         # Tira as últimas 5 linhas 
-        igeprev_d8_capital_reduzido = igeprev_d8_capital[:-4]
-        igeprev_d8_capital_reduzido['CONSIGNATARIA'] = 'CAPITAL'
+        igeprev_andamento_capital_reduzido = igeprev_andamento_capital[:-4]
+        igeprev_andamento_capital_reduzido['CONSIGNATARIA'] = 'CAPITAL'
 
-        igeprev_d8_ciasprev = d8_igeprev_ciasprev.copy()
+        igeprev_andamento_ciasprev = andamento_igeprev_ciasprev.copy()
         # Tira as últimas 5 linhas 
-        igeprev_d8_ciasprev_reduzido = igeprev_d8_ciasprev[:-4]
-        igeprev_d8_ciasprev_reduzido['CONSIGNATARIA'] = 'CIASPREV'
+        igeprev_andamento_ciasprev_reduzido = igeprev_andamento_ciasprev[:-4]
+        igeprev_andamento_ciasprev_reduzido['CONSIGNATARIA'] = 'CIASPREV'
 
         # Acho que dá para concatenar de boas
-        d8_igeprev_unificado = pd.concat([igeprev_d8_capital_reduzido, igeprev_d8_ciasprev_reduzido], ignore_index=True)'''
+        andamento_igeprev_unificado = pd.concat([igeprev_andamento_capital_reduzido, igeprev_andamento_ciasprev_reduzido], ignore_index=True)'''
 
-        if d8_igeprev_unificado['VLR.  ADE'].dtype != 'float64':
-            d8_igeprev_unificado['VLR.  ADE'] = d8_igeprev_unificado['VLR.  ADE'].astype(str).str.replace(".", "")
-            d8_igeprev_unificado['VLR.  ADE'] = d8_igeprev_unificado['VLR.  ADE'].astype(str).str.replace(",", ".")
-            d8_igeprev_unificado['VLR.  ADE'] = pd.to_numeric(d8_igeprev_unificado['VLR.  ADE'], errors='coerce')
+        if andamento_igeprev_unificado['VLR.  ADE'].dtype != 'float64':
+            andamento_igeprev_unificado['VLR.  ADE'] = andamento_igeprev_unificado['VLR.  ADE'].astype(str).str.replace(".", "")
+            andamento_igeprev_unificado['VLR.  ADE'] = andamento_igeprev_unificado['VLR.  ADE'].astype(str).str.replace(",", ".")
+            andamento_igeprev_unificado['VLR.  ADE'] = pd.to_numeric(andamento_igeprev_unificado['VLR.  ADE'], errors='coerce')
 
-        # Testa d8 sem peculios errados
-        # d8_igeprev_sem_peculios_errados = self.remove_peculios_indesejados(d8_igeprev_unificado, self.front_tratado)
+        # Testa andamento sem peculios errados
+        # andamento_igeprev_sem_peculios_errados = self.remove_peculios_indesejados(andamento_igeprev_unificado, self.front_tratado)
+
+        # REMOVE ADIANTAMENTO SALARIAL
+        andamento_igeprev_unificado = andamento_igeprev_unificado.loc[~andamento_igeprev_unificado['SERVIÇO'].isin(['4073', 4073])]
+
+        # REMOVE LINHAS COM VALOR MENOR QUE 20
+        andamento_igeprev_unificado = andamento_igeprev_unificado.loc[andamento_igeprev_unificado['VLR.  ADE'] >= 20]
 
         # Transforma  em excel
-        d8_igeprev_unificado.to_excel(fr'{self.caminho}\D8 UNIFICADO DE IGEPREV {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        andamento_igeprev_unificado.to_excel(fr'{self.caminho}\ANDAMENTO UNIFICADO DE IGEPREV {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
-        return d8_igeprev_unificado
+        return andamento_igeprev_unificado
  
-    def d8_com_prazo(self):
+    def andamento_igeprev_com_prazo(self):
         # d8_unificado_govt_to = self.unifica_d8_gov_to()
-        d8_unificado_igeprev = self.unifica_d8_igeprev(self.d8_igeprev)
-        recusados_igeprev = self.unifica_d8_igeprev(self.recusados_igeprev) # -> Vai fazer o mesmo tratamento que é feito no
+        d8_unificado_igeprev = self.unifica_andamento_igeprev(self.andamento_igeprev)
+        
+        recusados_igeprev = self.unifica_andamento_igeprev(self.recusados_igeprev) # -> Vai fazer o mesmo tratamento que é feito no
 
         # Separar prazo de d8 gov to
         # d8_govto_prazo = d8_unificado_govt_to[(d8_unificado_govt_to['PARCELA'].str.contains('/')) & (~d8_unificado_govt_to['RUBRICA'].isin(['3620_2023', '3620_2024', '3620_2025']))]
 
         # Separar prazo de d8 igeprev
-        d8_igeprev_prazo = d8_unificado_igeprev[~d8_unificado_igeprev['PRZ.'].isin([1, '1','Indeter.'])]
-        d8_igeprev_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE IGEPREV COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        andamento_igeprev_prazo = d8_unificado_igeprev[~d8_unificado_igeprev['PRZ.'].isin([1, '1','Indeter.'])]
 
         # TRATAMENTO DO RECUSADO
         # 1. Filtra os rejeitados em folha e extrai a lista/conjunto de ADEs únicos
         ades_rejeitados = set(
-            recusados_igeprev.loc[recusados_igeprev['SIT. DA  PARCELA'] == 'Rejeitada Folha', 'ADE']
+            recusados_igeprev.loc[recusados_igeprev['SIT. DA  PARCELA'] == 'Rejeitada Folha', 'Nº ADE']
             .dropna()
             .astype(str)
         )
 
         # 2. Garante o tipo string no d8 para evitar falha de casamento (ex: int vs str com zeros)
-        d8_igeprev_prazo['ADE'] = d8_igeprev_prazo['ADE'].astype(str)
+        andamento_igeprev_prazo['Nº ADE'] = andamento_igeprev_prazo['Nº ADE'].astype(str)
 
         # 3. Remove diretamente quem está no conjunto de rejeitados
-        d8_igeprev_prazo = d8_igeprev_prazo[~d8_igeprev_prazo['ADE'].isin(ades_rejeitados)].copy()
+        andamento_igeprev_prazo = andamento_igeprev_prazo[~andamento_igeprev_prazo['Nº ADE'].isin(ades_rejeitados)].copy()
 
-        d8_igeprev_peculios_tratados = self.remove_peculios_indesejados(d8_igeprev_prazo, self.front_tratado)
+        andamento_igeprev_peculios_tratados = self.remove_peculios_indesejados(andamento_igeprev_prazo, self.front_tratado)
 
         # d8_govto_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
-        # return d8_govto_prazo, d8_igeprev_prazo
-        return d8_igeprev_peculios_tratados
+        # return d8_govto_prazo, andamento_igeprev_prazo
+        andamento_igeprev_prazo.to_excel(fr'{self.caminho}\ANDAMENTO UNIFICADO DE IGEPREV COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        return andamento_igeprev_peculios_tratados
     
     def averbados_com_prazo(self):
         averbados_gov_to = self.averbados_to
@@ -484,14 +492,14 @@ class IGEPREV_GOVTO:
 
         # --------------------------------------------- TESTE DA ABA DE RECUSADOS ---------------------------------------------
         # ADFs para remover do arquivo de averbado
-        d8_unificado_remocoes = d8_unificado_govt_to[~d8_unificado_govt_to['MOTIVO'].str.contains('CORTE PARCIAL')].copy()
+        d8_unificado_remocoes = d8_unificado_govt_to.loc[~d8_unificado_govt_to['MOTIVO'].str.contains('CORTE PARCIAL', na=False)].copy()
         # Vamos criar uma coluna gêmea, porque por algum motivo usar a mesma coluna no .set_index('ADF')['ADF'] não retorna a coluna indicada
         d8_unificado_remocoes['ADF_PARA_REMOVER'] = d8_unificado_remocoes['ADF']
         # Filtra mantendo apenas os CODIGOADF que NÃO estão na coluna 'ADF' do d8_unificado_remocoes
         averbados_gov_to_teste_removidos = averbados_gov_to[~averbados_gov_to['CODIGOADF'].isin(d8_unificado_remocoes['ADF'])].copy()
         # Substituímos os valores integrais pelos parciais
         d8_recusados_parcialmente = d8_unificado_govt_to[d8_unificado_govt_to['MOTIVO'].str.contains('CORTE PARCIAL', na=False)]
-        padrao_regex = r'Valor\s*Corte\s*:\s*([\d.,]+)'
+        padrao_regex = r'Valor\s+Descontado\s+([\d.]+,\d{2})'
         # Criamos a nova coluna extraindo o padrão da coluna MOTIVO
         d8_recusados_parcialmente['VALOR_DO_CORTE'] = d8_recusados_parcialmente['MOTIVO'].str.extract(padrao_regex)
         if d8_recusados_parcialmente['VALOR_DO_CORTE'].dtype != 'float64':
@@ -521,6 +529,8 @@ class IGEPREV_GOVTO:
         # PRAZO
         averbados_gov_to = averbados_gov_to[~averbados_gov_to['PRAZO'].isin(['INDETERMINADO'])]
 
+        averbados_gov_to = averbados_gov_to[~averbados_gov_to['RUBRICA_CODIGO'].isin(['3620_2023', '3620_2024', '3620_2025'])]
+
         # SEM PECULIOS
         averbados_gov_to_sem_peculios = self.remove_peculios_indesejados(averbados_gov_to, self.front_tratado)
         averbados_gov_to = averbados_gov_to_sem_peculios.copy()
@@ -541,104 +551,103 @@ class IGEPREV_GOVTO:
 
         return averbados_gov_to
 
-    def front_com_d8(self):
+    def front_com_andamento(self):
         front_tratado = self.front_tratado
-        # d8_govto_prazo, d8_igeprev_prazo = self.d8_com_prazo()
-        d8_igeprev_prazo = self.d8_com_prazo()
+        # d8_govto_prazo, andamento_igeprev_prazo = self.andamento_igeprev_com_prazo()
+        andamento_igeprev_prazo = self.andamento_igeprev_com_prazo()
+
+        # ANDAMENTO DE TOCANTINS
         govto_prazo = self.averbados_com_prazo()
 
+        # AVERBADOS INDETERMINADOS
         gov_to_separado = self.unifica_gov_to_averbados()
 
         # Criar colunas no front
-        front_tratado['SOMASE D8 GOV TO'] = ''
-        front_tratado['SOMASE IGEPREV'] = ''
-        front_tratado['SOMAS DE D8'] = ''
+        front_tratado['SOMASE ANDAMENTO GOV TO'] = ''
+        front_tratado['SOMASE ANDAMENTO IGEPREV'] = ''
+        front_tratado['SOMAS DOS ANDAMENTOS'] = ''
         front_tratado['SOMASE LOCAL'] = ''
-        front_tratado['DIFF D8'] = ''
+        front_tratado['DIFF LOCAL MENOS ANDAMENTOS'] = ''
         
         # Vamos reordenar o arquivo para HP ficar em primeiro
-        front_tratado = front_tratado.sort_values(by=['Consignataria'], ascending=False)
+        # front_tratado = front_tratado.sort_values(by=['Consignataria'], ascending=False)
 
         # Somase de d8 gov to
-        somase_govto_averbado = govto_prazo.groupby('CPF')['VALOR_PARCELA'].sum()
-        front_tratado['SOMASE D8 GOV TO'] = front_tratado['CPF'].map(somase_govto_averbado).fillna(0)
+        somase_govto_prazo = govto_prazo.groupby('CPF')['VALOR_PARCELA'].sum()
+        front_tratado['SOMASE ANDAMENTO GOV TO'] = front_tratado['CPF'].map(somase_govto_prazo).fillna(0)
         
 
         # Somase de d8 igeprev
-        somase_d8_igeprev = d8_igeprev_prazo.groupby('CPF')['VLR.  ADE'].sum()
-        front_tratado['SOMASE IGEPREV'] = front_tratado['CPF'].map(somase_d8_igeprev).fillna(0)
+        somase_andamento_igeprev = andamento_igeprev_prazo.groupby('CPF')['VLR.  ADE'].sum()
+        front_tratado['SOMASE ANDAMENTO IGEPREV'] = front_tratado['CPF'].map(somase_andamento_igeprev).fillna(0)
 
         # Soma dos d8
-        front_tratado['SOMAS DE D8'] = front_tratado['SOMASE D8 GOV TO'] + front_tratado['SOMASE IGEPREV']
+        front_tratado['SOMAS DOS ANDAMENTOS'] = front_tratado['SOMASE ANDAMENTO GOV TO'] + front_tratado['SOMASE ANDAMENTO IGEPREV']
 
 
         # SOMASE LOCAL
         front_tratado['SOMASE LOCAL'] = front_tratado.groupby("CPF")['Valor a lançar'].transform('sum')
 
         # Diff entre somas dos SOMASES de D8 e SOMASE LOCAL
-        front_tratado['DIFF D8'] = front_tratado['SOMASE LOCAL'] - front_tratado['SOMAS DE D8']
-        front_tratado['DIFF D8'] = front_tratado['DIFF D8'].round(2)
+        front_tratado['DIFF LOCAL MENOS ANDAMENTOS'] = front_tratado['SOMASE LOCAL'] - front_tratado['SOMAS DOS ANDAMENTOS']
+        front_tratado['DIFF LOCAL MENOS ANDAMENTOS'] = front_tratado['DIFF LOCAL MENOS ANDAMENTOS'].round(2)
 
         # Ordernar CPF do menor para o maior
-        front_tratado = front_tratado(by='CPF', ascending=False)
+        front_tratado = front_tratado.sort_values(by='CPF', ascending=True)
 
         # Marcar o que é Cartão de crédito
-        REGEX_CARTAO_SIMPLES = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO|CARTAO CONSIGNAD'
+        REGEX_CARTAO_SIMPLES = 'Cartão de Crédito|CARTAO DE CREDITO|CARTÃO DE CRÉDITO|CARTÃO CONSIGNADO|CARTAO CONSIGNADO|CARTAO CONSIGNAD|CARTAO BENEFICIO|CARTÃO BENEFÍCIO|cartao beneficio|cartão benefício'
 
         # SOMASES de cartão
         filtro_cartao = front_tratado[front_tratado['Tipo Operacao'].str.contains(REGEX_CARTAO_SIMPLES)]
 
-        somas_por_cpf = filtro_cartao.groupy('CPF')['Valor a lançar'].sum()
+        somas_por_cpf = filtro_cartao.groupby('CPF')['Valor a lançar'].sum()
 
         front_tratado['SOMASES CART'] = front_tratado['CPF'].map(somas_por_cpf).fillna(0)
 
         # SOMASE CART TOCANTINS
         # Filtra e agrupa gerando a Series de soma por CPF
         soma_cartao = (
-            gov_to_separado[gov_to_separado['RUBRICA'] == "Cartão crédito"]
+            gov_to_separado[gov_to_separado['RUBRICA_DESCRICAO'].str.contains("Cartão")]
             .groupby('CPF')['VALOR_PARCELA']
             .sum()
         )
 
-        # Traz o valor somado para o front_tratado (CPFs sem lançamento viram 0.0)
-        front_tratado['SOMASE CART GOV TO'] = front_tratado['CPF'].map(soma_cartao).fillna(0.0)
-
         # Verificar se o SOMASES CART é igual ao SOMASES CART ANDAMENTO TOCANTINS
         somases = pd.to_numeric(front_tratado['SOMASES CART'], errors='coerce').fillna(0)
-        somase_govto = pd.to_numeric(front_tratado['SOMASE CART GOV TO'], errors='coerce').fillna(0)
-        condicao = (somases != 0) & (somases == somase_govto)
-        front_tratado['VALID'] = np.where(condicao, 'FALSO', 'VERDADEIRO')
+        condicao = (somases != 0)
+        front_tratado['VALID'] = np.where(condicao, 'VERDADEIRO', 'FALSO')
 
-        # Os que deram FALSO na coluna VALID, será feito uma comparação entre SOMASES CART e DIFF D8
-        lancar_falso = front_tratado['VALID'] == 'FALSO'
-        front_tratado.loc[lancar_falso, 'Lançar'] = np.maximum(front_tratado.loc[lancar_falso, 'SOMASES CART'], front_tratado.loc[lancar_falso, 'DIFF D8'])
+        # Os que deram VERDADEIRO na coluna VALID, será feito uma comparação entre SOMASES CART e DIFF LOCAL MENOS ANDAMENTOS
+        lancar_verdadeiro = front_tratado['VALID'] == 'VERDADEIRO'
+        front_tratado.loc[lancar_verdadeiro, 'Lançar'] = np.maximum(front_tratado.loc[lancar_verdadeiro, 'SOMASES CART'], front_tratado.loc[lancar_verdadeiro, 'DIFF LOCAL MENOS ANDAMENTOS'])
 
-        # Vamos separar CPF e Lançar dos que deram FALSO
-        # 2. Isola o de-para de CPF -> Lançar dos casos FALSO
+        # Vamos separar CPF e Lançar dos que deram VERDADEIRO
+        # 2. Isola o cartão máximo e os CPF -> Lançar dos casos VERDADEIRO
         # .drop_duplicates(subset='CPF') evita o InvalidIndexError caso o CPF apareça em mais de uma linha
-        filtro_falso = front_tratado['VALID'] == 'FALSO'
-        mapa_falso = (
-            front_tratado.loc[filtro_falso, ['CPF', 'Lançar']]
+        filtro_verdadeiro = front_tratado['VALID'] == 'VERDADEIRO'
+        mapa_verdadeiro = (
+            front_tratado.loc[filtro_verdadeiro, ['CPF', 'Lançar']]
             .dropna(subset=['Lançar'])
             .drop_duplicates(subset='CPF', keep='first')
             .set_index('CPF')['Lançar']
         )
 
         # 3. Mapeia o valor de lançamento do CPF
-        valor_falso_por_cpf = front_tratado['CPF'].map(mapa_falso)
+        valor_verdadeiro_por_cpf = front_tratado['CPF'].map(mapa_verdadeiro)
 
         # 4. Aplica a hierarquia de regras via np.select (vetorizado, rápido e limpo)
         condicoes = [
-            valor_falso_por_cpf.notna(),           # 1ª prioridade: CPF tinha valor de FALSO mapeado
-            front_tratado['DIFF D8'] > 0          # 2ª prioridade: DIFF D8 positivo
+            valor_verdadeiro_por_cpf.notna(),           # 1ª prioridade: CPF tinha valor de VERDADEIRO mapeado
+            front_tratado['DIFF LOCAL MENOS ANDAMENTOS'] > 0          # 2ª prioridade: DIFF LOCAL MENOS ANDAMENTOS positivo
         ]
 
         escolhas = [
-            valor_falso_por_cpf,                  # Assume o valor calculado do FALSO
-            front_tratado['DIFF D8']              # Assume o DIFF D8
+            valor_verdadeiro_por_cpf,                  # Assume o valor calculado do VERDADEIRO
+            front_tratado['DIFF LOCAL MENOS ANDAMENTOS']              # Assume o DIFF LOCAL MENOS ANDAMENTOS
         ]
 
-        # Caso nenhuma das duas seja atendida (ex: DIFF D8 <= 0), o valor default será 0.0
+        # Caso nenhuma das duas seja atendida (ex: DIFF LOCAL MENOS ANDAMENTOS <= 0), o valor default será 0.0
         front_tratado['Lançar'] = np.select(condicoes, escolhas, default=0.0)
         
         # Contse seq no front para pegar só os primeiros
@@ -648,7 +657,7 @@ class IGEPREV_GOVTO:
 
 
         # Vamos salvar e retornar somente o que é maior que 0
-        front_trabalhado = front_tratado[(front_tratado['Lançar'] > 0) & (front_tratado['Contse seq'] == 1)]
+        front_trabalhado = front_tratado[(front_tratado['Lançar'] > 0) & (front_tratado['Contse seq'].isin([1, '1']))]
         
         front_trabalhado.to_excel(fr'{self.caminho}\FRONT TOTALMENTE TRABALHADO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
@@ -656,7 +665,7 @@ class IGEPREV_GOVTO:
 
     def front_final(self):
 
-        front_tratado, front_para_lancamento = self.front_com_d8()
+        front_tratado, front_para_lancamento = self.front_com_andamento()
         # ==============================================================================
         # 1. TRATAMENTO DOS PECÚLIOS NO "FRONT TRATADO"
         # ==============================================================================
@@ -665,7 +674,7 @@ class IGEPREV_GOVTO:
 
         # Normaliza colunas textuais para evitar falhas com espaços extras
         tipo_op = front_tratado['Tipo Operacao'].astype(str).str.strip()
-        consignataria = front_tratado['Consignatária'].astype(str).str.strip()
+        consignataria = front_tratado['Consignataria'].astype(str).str.strip()
 
         # Máscara dos critérios: Cartão E HOJE PREVIDÊNCIA PRIVADA
         mascara_peculio = (
@@ -683,17 +692,6 @@ class IGEPREV_GOVTO:
             .size()
         )
 
-
-        # ==============================================================================
-        # 2. SEPARAÇÃO DO "FRONT PARA LANÇAMENTO"
-        # ==============================================================================
-        # Normaliza a coluna 'Contse seq' (para aceitar 1 numérico ou '1' string)
-        mask_seq_1 = front_tratado['Contse seq'].astype(str).str.strip() == '1'
-
-        # Cria a nova base isolada com .copy() para evitar SettingWithCopyWarning
-        front_para_lancamento = front_tratado[mask_seq_1].copy()
-
-
         # ==============================================================================
         # 3. CRIAÇÃO DAS COLUNAS DE CONT.SE, VALOR DE PECÚLIO E SOMA NO LANÇAR
         # ==============================================================================
@@ -710,15 +708,14 @@ class IGEPREV_GOVTO:
         front_para_lancamento['Lançar'] = pd.to_numeric(front_para_lancamento['Lançar'], errors='coerce').fillna(0.0)
 
         # Soma o valor do pecúlio com o que já existia na coluna 'Lançar'
-        front_para_lancamento['Lançar'] = front_para_lancamento['Lançar'] + front_para_lancamento['VALOR_PECULIO']
+        # front_para_lancamento['Lançar com Pecúlio'] = 0
+        front_para_lancamento['Lançar com Pecúlio'] = front_para_lancamento['Lançar'] + front_para_lancamento['VALOR_PECULIO']
 
 
         # ==============================================================================
         # 4. EXPORTAÇÃO PARA DUAS ABAS NO MESMO EXCEL (SE APLICÁVEL)
         # ==============================================================================
-        # with pd.ExcelWriter('Resultado_Final.xlsx', engine='openpyxl') as writer:
-        #     front_tratado.to_excel(writer, sheet_name='Front Tratado', index=False)
-        #     front_para_lancamento.to_excel(writer, sheet_name='Front para Lançamento', index=False)
+        front_para_lancamento.to_excel(fr'{self.caminho}\FRONT PARA LANÇAMENTO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         return front_para_lancamento
 
@@ -737,11 +734,8 @@ class IGEPREV_GOVTO:
         gov_to_averbado_unificado = gov_to_averbado_unificado[gov_to_averbado_unificado['PRAZO'].isin(['INDETERMINADO'])]
 
         # RUBRICA_CODIGO
-        gov_to_averbado_unificado = gov_to_averbado_unificado[gov_to_averbado_unificado['RUBRICA_CODIGO'].str.contains('CC|CCI|CCB')]
+        gov_to_averbado_unificado = gov_to_averbado_unificado[gov_to_averbado_unificado['RUBRICA_CODIGO'].isin(['3186CC', '3337CC', '3186CCI', '3296CCI', '3337CCI', '3636CBC'])]
 
-
-        # Vamos gerar o arquivo para averiguar melhor
-        gov_to_averbado_unificado.to_excel(fr'{self.caminho}\AVERBADOS DE GOV TO UNIFICADOS {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # 1. Resolver os casos de valores iguais (remover duplicados exatos)
         # Isso remove as linhas onde MATRICULA, Consignataria e VALOR_PARCELA são idênticos,
@@ -800,13 +794,15 @@ class IGEPREV_GOVTO:
         gov_to_averbado_unificado_resultado = gov_to_averbado_unificado_resultado[(gov_to_averbado_unificado_resultado['PRAZO'].isin(['INDETERMINADO'])) & (gov_to_averbado_unificado_resultado['STATUS_ADF'].isin(['CONSOLIDADO', 'INSERIDO']))]
 
         # Mapeamento novo
-        mapeamento = ['MATRICULA', 'CPF', 'NOME', 'PRAZO', 'VALOR_PARCELA', 'RUBRICA_DESCRICAO', 'RUBRICA_CODIGO', 'Convenio', 'Consignataria']
+        mapeamento = ['MATRICULA', 'CPF', 'NOME', 'PRAZO', 'VALOR_PARCELA', 'STATUS_ADF', 'RUBRICA_DESCRICAO', 'RUBRICA_CODIGO', 'Convenio', 'Consignataria']
 
         gov_to_remapeado = gov_to_averbado_unificado_resultado[mapeamento]
 
-        gov_to_cartao_sem_peculios = self.remove_peculios_indesejados(gov_to_remapeado, self.front_tratado)
+        # gov_to_cartao_sem_peculios = self.remove_peculios_indesejados(gov_to_remapeado, self.front_tratado)
 
-        return gov_to_cartao_sem_peculios
+        gov_to_remapeado.to_excel(fr'{self.caminho}\AVERBADOS DE GOV TO CARTAO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+
+        return gov_to_remapeado
 
     def unifica_igeprev_averbados(self):
         # Unifica averbações de IGEPREV
@@ -836,7 +832,13 @@ class IGEPREV_GOVTO:
             igeprev_remapeado['VALOR_PARCELA'] = igeprev_remapeado['VALOR_PARCELA'].str.replace(",", '.')
             igeprev_remapeado['VALOR_PARCELA'] = pd.to_numeric(igeprev_remapeado['VALOR_PARCELA'], errors='coerce')
 
-        igeprev_remapeado = igeprev_remapeado[igeprev_remapeado['VALOR_PARCELA'] >= 20]
+        # igeprev_remapeado = igeprev_remapeado[igeprev_remapeado['VALOR_PARCELA'] >= 20]
+
+        # REMOVER - RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG
+        igeprev_remapeado = igeprev_remapeado[~igeprev_remapeado['RUBRICA_DESCRICAO'].isin(['RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG'])]
+        
+        # VAMOS SEPARAR RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG
+        igeprev_remapeado_adiantamento = igeprev_remapeado[igeprev_remapeado['RUBRICA_DESCRICAO'].isin(['RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG'])]
 
         return igeprev_remapeado
 
@@ -857,7 +859,7 @@ class IGEPREV_GOVTO:
         # Unifica averbações de GOV TO
         # gov_to_averbado_unificado = pd.concat([gov_to_capital_averbado, gov_to_ciasprev_averbado, gov_to_hp_averbado], ignore_index=True)
 
-        if gov_to_averbado_unificado['VALOR_PARCELA'].dtype != "float64":
+        '''if gov_to_averbado_unificado['VALOR_PARCELA'].dtype != "float64":
             gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado['VALOR_PARCELA'].astype(str).str.replace(".", "")
             gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado['VALOR_PARCELA'].astype(str).str.replace(",", ".")
             gov_to_averbado_unificado['VALOR_PARCELA'] = pd.to_numeric(gov_to_averbado_unificado['VALOR_PARCELA'], errors='coerce')
@@ -873,21 +875,21 @@ class IGEPREV_GOVTO:
 
 
         # Vamos gerar o arquivo para averiguar melhor
-        gov_to_averbado_unificado.to_excel(fr'{self.caminho}\AVERBADOS DE GOV TO UNIFICADOS {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        gov_to_averbado_unificado.to_excel(fr'{self.caminho}\AVERBADOS DE GOV TO UNIFICADOS {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)'''
 
         # 1. Resolver os casos de valores iguais (remover duplicados exatos)
         # Isso remove as linhas onde MATRICULA, Consignataria e VALOR_PARCELA são idênticos,
         # mantendo apenas a primeira ocorrência.
-        total_duplicados_anterior = gov_to_averbado_unificado.duplicated(subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA']).sum()
+        total_duplicados_anterior = averbado_separado_gov_to.duplicated(subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA']).sum()
         # print(f'Quantos duplicados de MATRICULA, CONSIGNATARIA E PARCELA foram removidos antes da soma: {total_duplicados_anterior}')
 
         '''gov_to_averbado_unificado = gov_to_averbado_unificado.drop_duplicates(
             subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
             keep='first'
-        )
+        )'''
 
 
-
+        '''
         # Ele calcula a soma por grupo e "espalha" o resultado nas linhas originais
         gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado.groupby(['MATRICULA', 'RUBRICA_CODIGO', 'Consignataria'])['VALOR_PARCELA'].transform('sum')
         
@@ -905,12 +907,12 @@ class IGEPREV_GOVTO:
         )'''
 
         # 1. Garantir que a coluna de valor seja numérica para ordenação correta
-        gov_to_averbado_unificado['VALOR_PARCELA'] = pd.to_numeric(gov_to_averbado_unificado['VALOR_PARCELA'], errors='coerce').fillna(0)
+        averbado_separado_gov_to['VALOR_PARCELA'] = pd.to_numeric(averbado_separado_gov_to['VALOR_PARCELA'], errors='coerce').fillna(0)
 
         # 2. ORDENAÇÃO É A CHAVE: 
         # Colocamos as colunas de agrupamento e o VALOR_PARCELA em ordem DECRESCENTE (ascending=False)
         # Isso coloca o maior valor de cada grupo no topo da lista.
-        gov_to_averbado_unificado_sorted = gov_to_averbado_unificado.sort_values(
+        gov_to_averbado_unificado_sorted = averbado_separado_gov_to.sort_values(
             by=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
             ascending=[True, True, True, False]
         )
@@ -937,12 +939,13 @@ class IGEPREV_GOVTO:
 
         resultado = gov_to_averbado_unificado_sorted[
             (~gov_to_averbado_unificado_sorted['is_duplicate_group']) |      # Caso 1: Linha única
-            (gov_to_averbado_unificado_sorted['is_value_match']) |           # Caso 2: Valores iguais permanecem
+            (~gov_to_averbado_unificado_sorted['is_value_match']) |           # Caso 2: Valores iguais permanecem
             (~gov_to_averbado_unificado_sorted.duplicated(subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO'], keep='first')) # Caso 3: Maior valor
         ].copy()
 
         # Limpeza final
-        gov_to_averbado_unificado_resultado = resultado.drop(columns=['is_duplicate_group', 'is_value_match'])
+        # gov_to_averbado_unificado_resultado = resultado.drop(columns=['is_duplicate_group', 'is_value_match'])
+        gov_to_averbado_unificado_resultado = resultado
 
         # Adiciona ponto e traço
         cpf_tratado = gov_to_averbado_unificado_resultado['CPF'].astype(str).str.zfill(11).str.replace(r'(\d{3})(\d{3})(\d{3})(\d{2})',  r'\1.\2.\3-\4', regex=True)
@@ -973,10 +976,8 @@ class IGEPREV_GOVTO:
         igeprev_averbado_unificado.insert(7, "PRAZO", 1, True)
         igeprev_averbado_unificado.insert(8, "RUBRICA_CODIGO", 1, True)
 
-        # Divide a coluna de SERVIDOR que vem matricula e o nome dos clientes, em duas colunas distintas
-        igeprev_averbado_unificado[["MATRICULA", "SERVIDOR"]] = igeprev_averbado_unificado['SERVIDOR + MATRICULA'].str.split(" - ", n=1, expand=True)
-
-        igeprev_averbado_unificado.to_excel(fr'{self.caminho}\IGEPREV AVERBADO TESTE {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        print(f'Como está o "igeprev_averbado_unificado"?\n {igeprev_averbado_unificado}\n')
+        print(f'Qual o tipo de "igeprev_averbado_unificado"?\n {type(igeprev_averbado_unificado)}\n')
 
         # Renomeia as colunas de GOV TO
         igeprev_averbado_unificado.rename(columns={'SERVIDOR': 'NOME', 'ÓRGÃO': 'Convenio', 'SERVIÇO': 'RUBRICA_DESCRICAO', 'VLR RESERV.': 'VALOR_PARCELA'}, inplace=True)
@@ -996,7 +997,7 @@ class IGEPREV_GOVTO:
         
         # print(f'COLUNAS DE GOV TO REMAPEADO {gov_to_remapeado.columns}\n')
         # print(f'COLUNAS DE IGEPREV REMAPEADO {igeprev_remapeado.columns}')
-        to_igeprev_unificado = pd.concat([averbado_separado_gov_to, averbado_separado_igeprev], ignore_index=True)
+        to_igeprev_unificado = pd.concat([gov_to_remapeado, averbado_separado_igeprev], ignore_index=True)
         # print(f'VALOR_PARCELA TERCEIRO:\n{gov_to_remapeado['VALOR_PARCELA']}')
 
         # CRIAÇÃO DE COLUNAS QUE SERÃO USADAS NO PRÓXIMO MÓDULO
