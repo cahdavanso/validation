@@ -337,22 +337,23 @@ class IGEPREV_GOVTO:
         d8_valor_num = pd.to_numeric(d8_unificado[col_valor_d8], errors='coerce')
         front_valor_num = pd.to_numeric(front['Prestacao'], errors='coerce')
 
-        # --- 2. GERAÇÃO DAS CHAVES COM SEQUENCIAL (CUMCOUNT) NO D8 ---
+        # --- 2. GERAÇÃO DAS CHAVES COM CONTSE NO D8 ---
         mask_d8 = d8_valor_num.isin(valores_peculio)
         d8_unificado['CONTSE'] = ""
         d8_unificado['CONCAT CPF PARCELA'] = ""
 
         if mask_d8.any():
             # Equivalente exato ao CONT.SES do Excel (mantém o índice original das linhas!)
-            contse_d8 = d8_unificado[mask_d8].groupby(['CPF', col_valor_d8]).transform('size')
-            d8_unificado.loc[mask_d8, 'CONTSE'] = contse_d8.astype(str)
+            '''contse_d8 = d8_unificado[mask_d8].groupby(['CPF', col_valor_d8]).transform('size')
+            d8_unificado.loc[mask_d8, 'CONTSE'] = contse_d8.astype(str)'''
             
             # Concatenação da chave
             d8_unificado.loc[mask_d8, 'CONCAT CPF PARCELA'] = (
                 d8_unificado.loc[mask_d8, 'CPF'].astype(str) + "_" +
-                d8_unificado.loc[mask_d8, col_valor_d8].astype(str) + "_" +
-                d8_unificado.loc[mask_d8, 'CONTSE'].astype(str)
+                d8_unificado.loc[mask_d8, col_valor_d8].astype(str)
             )
+
+            # d8_unificado['CONCAT CPF PARCELA'] = d8_unificado['CONCAT CPF PARCELA'].astype(str).str.replace(".0_")
 
         # --- 3. GERAÇÃO DAS CHAVES COM SEQUENCIAL (CUMCOUNT) NO FRONT ---
         mask_front = front_valor_num.isin(valores_peculio)
@@ -361,20 +362,19 @@ class IGEPREV_GOVTO:
 
         if mask_front.any():
             # Equivalente exato ao CONT.SES do Excel (mantém o índice original das linhas!)
-            contse_d8 = d8_unificado[mask_d8].groupby(['CPF', col_valor_d8]).transform('size')
-            d8_unificado.loc[mask_d8, 'CONTSE'] = contse_d8.astype(str)
+            '''contse_front = front[mask_front].groupby(['CPF', 'Prestacao']).transform('size')
+            front.loc[mask_front, 'CONTSE'] = contse_front.astype(str)'''
             
             front.loc[mask_front, 'CONCAT CPF PARCELA'] = (
                 front.loc[mask_front, 'CPF'].astype(str) + "_" +
-                front.loc[mask_front, 'Prestacao'].astype(str) + "_" +
-                front.loc[mask_front, 'CONTSE'].astype(str)
+                front.loc[mask_front, 'Prestacao'].astype(str)
             )
 
         # --- 4. FILTRAGEM: ELIMINAÇÃO DOS EXCEDENTES NO D8 ---
         # Conjunto de chaves válidas que existem no Front (usando set para busca instantânea O(1))
         chaves_validas_front = set(front.loc[mask_front, 'CONCAT CPF PARCELA'])
 
-        # Condição para manter a linha no d8_unificado:
+        # Condição para manter a linha no ANDAMENTO_unificado:
         # 1. OU a linha NÃO é pecúlio (~mask_d8) -> mantemos intacta
         # 2. OU a linha é pecúlio E sua chave com sequencial existe no Front
         linhas_para_manter = (~mask_d8) | (d8_unificado['CONCAT CPF PARCELA'].isin(chaves_validas_front))
@@ -488,7 +488,6 @@ class IGEPREV_GOVTO:
             averbados_gov_to['VALOR_PARCELA'] = averbados_gov_to['VALOR_PARCELA'].astype(str).str.replace(",", ".")
             averbados_gov_to['VALOR_PARCELA'] = pd.to_numeric(averbados_gov_to['VALOR_PARCELA'], errors='coerce')
 
-        averbados_gov_to = averbados_gov_to[averbados_gov_to['VALOR_PARCELA'] >= 20]
 
         # --------------------------------------------- TESTE DA ABA DE RECUSADOS ---------------------------------------------
         # ADFs para remover do arquivo de averbado
@@ -517,6 +516,8 @@ class IGEPREV_GOVTO:
         averbados_gov_to_teste_removidos.loc[linhas_para_atualizar, 'VALOR_PARCELA'] = (
             averbados_gov_to_teste_removidos.loc[linhas_para_atualizar, 'CODIGOADF'].map(mapa_cortes)
         )
+
+        averbados_gov_to_teste_removidos = averbados_gov_to_teste_removidos[averbados_gov_to_teste_removidos['VALOR_PARCELA'] >= 20]
 
         averbados_gov_to_teste_removidos.to_excel(f'{self.caminho}\TESTE AVERBADO COM PRAZO SEM OS CASOS REMOVIDOS E COM AS PARCELAS PARCIAIS.xlsx', index=False)
 

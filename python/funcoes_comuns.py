@@ -21,6 +21,12 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
             if self.andamento_funcao['Valor da Parcela'].dtype == 'float64':
                 self.andamento_funcao['Valor da Parcela'] = self.andamento_funcao['Valor da Parcela'].astype(str).str.replace(".", ",")
 
+        # JÁ REMOVE IV PROMOTORA PRA NÃO DAR BO
+        self.funcao = self.funcao[~self.funcao['ORIGEM_3'].str.contains('IV PROMOTORA')]
+        self.andamento_funcao = self.andamento_funcao[~self.andamento_funcao['Descrição PROMOTORA'].str.contains('IV PROMOTORA')]
+
+
+
 
         self.mapeamento_convenio = {
                                     'GOV. ALAGOAS': ['GOV AL CC', 'GOV AL EMP', 'GOV AL CB'],
@@ -118,8 +124,11 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         
         #  Separar no andamento do função somente o convenio que vamos juntar
         if self.andamento_funcao is not None:
+            # REMOVE IV PROMOTORA
+            self.andamento_funcao = self.andamento_funcao[~self.andamento_funcao['Descrição PROMOTORA'].str.contains('IV PROMOTORA')]
+
             colunas = ['Proposta', 'Operação', 'CPF/CNPJ', 'MatrÍcula', 'Cliente', 'Quantidade de Parcelas', 'Data Base', 'Valor da Parcela', 'Descrição do Produto',
-                                   'Descrição da Atividade', 'Descrição EMPREGADOR']
+                       'Descrição da Atividade', 'Descrição EMPREGADOR']
 
             # Remover duplicatas
             andamento_funcao = self.andamento_funcao.drop_duplicates(subset=colunas, keep='first')
@@ -164,6 +173,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
             'Valor da Parcela': 'Prestacao',
             'Descrição do Produto': 'Tipo Operacao',
             'Descrição da Atividade': 'Esteira',
+            'Descrição da Tabela': 'Tabela',
             'Descrição EMPREGADOR': 'Convenio'
         }
         return self._processar_unificacao_front(
@@ -179,6 +189,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
     # =====================================================================
     def _processar_unificacao_front(self, base_adicional, coluna_contrato, mapeamento, verificar_ccb=False, atualizar_esteira_integrado=False):
         front = self.front
+        
 
         if base_adicional is None or base_adicional.empty:
             print('\nDEBUG -> Base adicional é nula ou vazia. Retornando "front" sem tratamento.\n')
@@ -248,7 +259,36 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
         # Preenche INSPFEM ONDE DEVE
         front_unif.loc[front_unif['Convenio'].str.contains('INSPFEM'), 'Consignataria'] = 'INSPFEM - CARD' 
 
-        front_unif['Consignataria'] = front_unif['Consignataria'].fillna("CAPITAL CONSIG") if self.consignataria is None else front_unif['Consignataria'].fillna(self.consignataria)
+        map_tabela =  {'CCC': 'CAPITAL CONSIG',
+                       'CCB': 'CLICKBANK',
+                       'CHP': 'HOJE PREVIDÊNCIA PRIVADA',
+                       'CAC': 'BEM CARTÕES',
+                       'ABC CARD': 'ABCCARD CARTOES LTDA'}
+
+        # 2. Cria uma Regex segura com base nas chaves do dicionário
+        # \b garante que busque a palavra inteira (evita casar partes de outras palavras)
+        # sorted() por tamanho decrescente garante que termos compostos (ex: 'ABC CARD') venham antes
+        chaves_ordenadas = sorted(map_tabela.keys(), key=len, reverse=True)
+        padrao_regex = r'\b(' + '|'.join(re.escape(k) for k in chaves_ordenadas) + r')\b'
+
+        # 3. Extrai o código encontrado na coluna 'Tabela' (converte para string e busca em maiúsculas para garantir match)
+        codigo_encontrado = (
+            front['Tabela']
+            .astype(str)
+            .str.extract(f'({padrao_regex})', flags=re.IGNORECASE, expand=False)[0]
+            .str.upper()
+        )
+
+        # 4. Traduz os códigos extraídos usando o dicionário map_tabela
+        consignataria_mapeada = codigo_encontrado.map(map_tabela)
+
+        # 5. Preenche APENAS as células que estão vazias (ou nulas) na coluna 'Consignataria'
+        # Garantimos que strings vazias '' ou espaços em branco ' ' sejam tratados como nulos
+        front['Consignataria'] = front['Consignataria'].replace(r'^\s*$', pd.NA, regex=True)
+
+        front['Consignataria'] = front['Consignataria'].fillna(consignataria_mapeada)        
+
+
         front_unif['Status'] = front_unif['Status'].fillna("INTEGRADO")
         front_unif['Acao Judicial'] = front_unif['Acao Judicial'].fillna("NAO")
         front_unif['Obito'] = front_unif['Obito'].fillna("NAO")

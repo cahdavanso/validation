@@ -418,12 +418,14 @@ class TratadorIgeprevTo(TratadorFrontBase):
         df.loc[df['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
         df.loc[df['Tabela'].str.contains('ADTO', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
 
+        df.loc[df['Tipo Operacao'].str.contains('GOVERNOS AKRK|PASSIVO RETROATIVO TO|GOV PARAIBA COMPRA', na=False), 'OBS'] = 'NÃO LANÇAR - DUPLICADO ESCONDIDO'
+
         # CONTSEs de CPF e Consignataria
         filtro_previdencia = df['Consignataria'] == "HOJE PREVIDÊNCIA PRIVADA"
         df['CONTSES'] = filtro_previdencia.groupby(df['CPF']).transform('sum')
         df['CONTSES'] = df['CONTSES'].fillna(0)
 
 
-        df['Peculio'] = df['CONTSES'] * 20
+        # df['Peculio'] = df['CONTSES'] * 20
 
         return df
