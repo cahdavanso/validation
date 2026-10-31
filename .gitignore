@@ -10,3 +10,4 @@ ASCC024_Gerado.xml
 .venv/Lib/site-packages/rarfile.py
 .venv/Lib/site-packages/six.py
 .venv/Lib/site-packages/typing_extensions.py
+.vscode/settings.json
