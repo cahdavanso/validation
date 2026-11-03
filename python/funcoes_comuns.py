@@ -489,6 +489,24 @@ class TRATA_CONTRATOS:
         data_averbados = data_averbados.drop(columns=['Soma_Calculada'])
 
         return data_averbados
+
+    def limpar_moeda_universal(valor):
+        valor_str = str(valor).strip()
+        
+        # Ignora nulos
+        if valor_str.lower() in ['nan', 'none', '']:
+            return 0.00 
+            
+        # Se tiver vírgula (Padrão BR: 1.000,00 ou 50,45)
+        if ',' in valor_str:
+            # Remove o ponto de milhar e converte a vírgula decimal para ponto
+            valor_str = valor_str.replace('.', '').replace(',', '.')
+        
+        # Converte para float de forma segura
+        try:
+            return float(valor_str)
+        except ValueError:
+            return 0.00
     
     def adiciona_contratos_faltando(self, averbado_contratos_faltantes, front_semi):
         # 0. TRAVA DE SEGURANÇA: Remove colunas duplicadas
@@ -508,9 +526,8 @@ class TRATA_CONTRATOS:
 
         # --- A CORREÇÃO ENTRA AQUI ---
         # Garante que a Prestação do Front seja float64 para o merge não quebrar
-        if front_semi_base['Prestacao_front'].dtype != 'float64':
-            front_semi_base['Prestacao_front'] = front_semi_base['Prestacao_front'].astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
-            front_semi_base['Prestacao_front'] = pd.to_numeric(front_semi_base['Prestacao_front'], errors='coerce').fillna(0)
+        front_semi_base['Prestacao_front'] = front_semi_base['Prestacao_front'].apply(self.limpar_moeda_universal)
+        front_semi_base['Prestacao_front'] = pd.to_numeric(front_semi_base['Prestacao_front'], errors='coerce').fillna(0)
         # -----------------------------
         
         # Cria um ID sequencial para CPFs com valores de prestação repetidos no Front
@@ -519,9 +536,8 @@ class TRATA_CONTRATOS:
         # =====================================================================
         # 2. Prepara os dados de entrada
         # =====================================================================
-        if averbado_contratos_faltantes[self.nome_coluna_parcela].dtype != 'float64':
-            averbado_contratos_faltantes[self.nome_coluna_parcela] = averbado_contratos_faltantes[self.nome_coluna_parcela].astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
-            averbado_contratos_faltantes[self.nome_coluna_parcela] = pd.to_numeric(averbado_contratos_faltantes[self.nome_coluna_parcela], errors='coerce')
+        averbado_contratos_faltantes[self.nome_coluna_parcela] = averbado_contratos_faltantes[self.nome_coluna_parcela].apply(self.limpar_moeda_universal)
+        # averbado_contratos_faltantes[self.nome_coluna_parcela] = pd.to_numeric(averbado_contratos_faltantes[self.nome_coluna_parcela], errors='coerce')
 
         # =====================================================================
         # 3. Execução dos Merges no DataFrame A

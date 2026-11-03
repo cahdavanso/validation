@@ -471,7 +471,7 @@ class IGEPREV_GOVTO:
         # d8_govto_prazo.to_excel(fr'{self.caminho}\D8 UNIFICADO DE GOV TO COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
 
         # return d8_govto_prazo, andamento_igeprev_prazo
-        andamento_igeprev_prazo.to_excel(fr'{self.caminho}\ANDAMENTO UNIFICADO DE IGEPREV COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
+        andamento_igeprev_peculios_tratados.to_excel(fr'{self.caminho}\ANDAMENTO UNIFICADO DE IGEPREV COM PRAZO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)
         return andamento_igeprev_peculios_tratados
     
     def averbados_com_prazo(self):

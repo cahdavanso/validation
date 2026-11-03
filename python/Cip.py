@@ -56,7 +56,8 @@ class CIP:
                     front=self.front, 
                     convenio=self.convenio, 
                     funcao=self.funcao, 
-                    andamento_funcao=self.andamento_funcao, caminho=self.caminho
+                    andamento_funcao=self.andamento_funcao, 
+                    caminho=self.caminho
                 )
         
         # 2. Chama a primeira unificação (Função pura)
@@ -1178,6 +1179,9 @@ class CIP:
         colunas_alancar = ['CPF', 'Número da Averbação', 'Lançar', 'Número do Contrato']
         a_lancar = pd.DataFrame(temp[colunas_alancar])
         a_lancar = a_lancar.rename(columns={'Número da Averbação': 'Nº AVERBAÇÃO SCC', 'Lançar': 'VALOR AVERBADO', 'Número do Contrato': 'Nº CONTRATO'})
+
+        # Tirar Ponto e traço de CPF
+        a_lancar['CPF'] = a_lancar['CPF'].astype(str).str.replace('.', '', regex=False).str.replace('-', '', regex=False)
 
 
         # Calcule a SOMASE para cada categoria no Averbacoes Trabalhadas

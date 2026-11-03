@@ -21,6 +21,24 @@ class TratadorFrontBase:
         self.extra_judicial = extra_judicial
         self.andamento = andamento
 
+    def limpar_moeda_universal(self, valor):
+        valor_str = str(valor).strip()
+        
+        # Ignora nulos
+        if valor_str.lower() in ['nan', 'none', '']:
+            return 0.00 
+            
+        # Se tiver vírgula (Padrão BR: 1.000,00 ou 50,45)
+        if ',' in valor_str:
+            # Remove o ponto de milhar e converte a vírgula decimal para ponto
+            valor_str = valor_str.replace('.', '').replace(',', '.')
+        
+        # Converte para float de forma segura
+        try:
+            return float(valor_str)
+        except ValueError:
+            return 0.00
+
     def preparar_colunas(self, df):
         """Insere as colunas padrão que todos os convênios utilizam"""
         colunas_necessarias = {
@@ -82,9 +100,9 @@ class TratadorFrontBase:
 
     def normalizar_valores_prestacao(self, df):
         """Padroniza a coluna Prestacao para float64 (evitando o bug da vírgula da Orbital)"""
-        if 'Prestacao' in df.columns and df['Prestacao'].dtype != "float64":
-            df['Prestacao'] = df['Prestacao'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-            df['Prestacao'] = pd.to_numeric(df['Prestacao'], errors='coerce')
+        # if 'Prestacao' in df.columns and df['Prestacao'].dtype != "float64":
+        df['Prestacao'] = df['Prestacao'].apply(self.limpar_moeda_universal)
+        df['Prestacao'] = pd.to_numeric(df['Prestacao'], errors='coerce')
         return df
 
     def cruzar_tipo_conciliacao(self, df):
@@ -205,10 +223,10 @@ class TratadorFrontBase:
         # front_copy['Saldo'] = pd.to_numeric(front_copy['Saldo'], errors='coerce')
 
         front_copy.rename(columns={'Prestracao': 'Prestacao'}, inplace=True)
-        if front_copy['Prestacao'].dtype != 'float64':
-            front_copy['Prestacao'] = front_copy['Prestacao'].astype(str).str.replace('.', '', regex=False)
-            front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
-            front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
+        # if front_copy['Prestacao'].dtype != 'float64':
+        front_copy['Prestacao'] = front_copy['Prestacao'].apply(self.limpar_moeda_universal)
+        # front_copy['Prestacao'] = front_copy['Prestacao'].str.replace(',', '.', regex=False)
+        front_copy['Prestacao'] = pd.to_numeric(front_copy['Prestacao'], errors='coerce')
 
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)

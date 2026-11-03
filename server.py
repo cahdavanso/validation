@@ -589,6 +589,7 @@ async def validar_planilhas(
             convenio=convenio,
             caminho=CAMINHO_SAIDA,
             funcao=funcao_df,
+            andamento_funcao=xao_df,
             conciliacao=conciliacao_df,
             desconto_inadimplencia=desconto_inadimplencia_df,
             recebimentos=recebimentos_df,
