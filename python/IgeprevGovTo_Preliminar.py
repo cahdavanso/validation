@@ -104,6 +104,13 @@ class IGEPREV_GOVTO:
         self.conciliacao.rename(columns={'TIPO OPERAÇÃO': 'PRODUTO', 'NOVO TIPO DE OPERAÇÃO': 'PRODUTO', 'PRODUTOS PELO D8': 'PRODUTO', 
                                          'PRODUTO D8': 'PRODUTO', 'PRODUTO PELO D8': 'PRODUTO', 'PRODUTO ATUALIZADO': 'PRODUTO',
                                          'TIPO DE OPERAÇÃO': 'PRODUTO'}, inplace=True)
+
+
+        # VERIFICA SE EXISTE A COLUNA BANCO OU CONSIGNATARIA EM "AVERBADOS GOV" TO E "AVERBADOS IGEPREV". SE NÃO, RETORNA ERRO
+        if 'banco' not in self.averbados_to.columns.str.lower() or 'consignataria' not in self.averbados_to.columns.str.lower():
+            raise ValueError("A coluna 'BANCO' ou 'Consignataria' não foi encontrada em 'AVERBADOS GOV TO'.")
+        if 'banco' not in self.averbados_igeprev.columns.str.lower() or 'consignataria' not in self.averbados_igeprev.columns.str.lower():
+            raise ValueError("A coluna 'BANCO' ou 'Consignataria' não foi encontrada em 'AVERBADOS IGEPREV'.")
         
         self.condicoes_1 = load_esteiras()
 
@@ -127,11 +134,14 @@ class IGEPREV_GOVTO:
         # Isso vai processar a segunda base com verificar_ccb=False
         self.front_final_consig = unificador.unifica_front_funcao_esteiras_andamento()
 
-        front_semi_trabalhado_preliminar = TratadorIgeprevTo(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
+        front_semi_trabalhado_preliminar= TratadorIgeprevTo(front=self.front_final_consig, conciliacao=self.conciliacao, convenio=self.convenio,
                                                                     caminho=self.caminho, condicoes_1=self.condicoes_1,
                                                                     recebimentos=self.recebimentos, desconto_inadimplencia=desconto_inadimplencia)
         self.front_semi_trabalhado = front_semi_trabalhado_preliminar.tratamento_front_preliminar_base()
         self.front_tratado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].isin([pd.NA, np.nan, ''])]
+
+        self.front_adiantamento_trabalhado = self.front_semi_trabalhado[self.front_semi_trabalhado['OBS'].str.contains('NÃO LANÇAR - ADIANTAMENTO SALARIAL', na=False)]
+        self.front_adiantamento_trabalhado.to_excel(fr'{self.caminho}\FRONT ADIANTAMENTO SALARIAL {datetime.now().strftime("%m-%Y")}.xlsx', index=False)
 
         self.unifica_averbados()
 
@@ -431,6 +441,9 @@ class IGEPREV_GOVTO:
 
         # REMOVE ADIANTAMENTO SALARIAL
         andamento_igeprev_unificado = andamento_igeprev_unificado.loc[~andamento_igeprev_unificado['SERVIÇO'].isin(['4073', 4073])]
+
+        # VAMOS SEPARAR O QUE É ADIANTAMENTO SALARIAL
+        andamento_igeprev_adiantamento = andamento_igeprev_unificado.loc[andamento_igeprev_unificado['SERVIÇO'].isin(['4073', 4073])]
 
         # REMOVE LINHAS COM VALOR MENOR QUE 20
         andamento_igeprev_unificado = andamento_igeprev_unificado.loc[andamento_igeprev_unificado['VLR.  ADE'] >= 20]
@@ -739,9 +752,9 @@ class IGEPREV_GOVTO:
 
 
         # 1. Resolver os casos de valores iguais (remover duplicados exatos)
-        # Isso remove as linhas onde MATRICULA, Consignataria e VALOR_PARCELA são idênticos,
+        # Isso remove as linhas onde MATRICULA, BANCO e VALOR_PARCELA são idênticos,
         # mantendo apenas a primeira ocorrência.
-        total_duplicados_anterior = gov_to_averbado_unificado.duplicated(subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA']).sum()
+        # total_duplicados_anterior = gov_to_averbado_unificado.duplicated(subset=['MATRICULA', 'BANCO', 'VALOR_PARCELA']).sum()
 
         # 1. Garantir que a coluna de valor seja numérica para ordenação correta
         gov_to_averbado_unificado['VALOR_PARCELA'] = pd.to_numeric(gov_to_averbado_unificado['VALOR_PARCELA'], errors='coerce').fillna(0)
@@ -750,21 +763,21 @@ class IGEPREV_GOVTO:
         # Colocamos as colunas de agrupamento e o VALOR_PARCELA em ordem DECRESCENTE (ascending=False)
         # Isso coloca o maior valor de cada grupo no topo da lista.
         gov_to_averbado_unificado_sorted = gov_to_averbado_unificado.sort_values(
-            by=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
+            by=['MATRICULA', 'BANCO', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
             ascending=[True, True, True, False]
         )
 
         # 3. IDENTIFICAÇÃO DAS DUPLICATAS DE GRUPO
         # Marcamos todas as linhas que têm o mesmo grupo (sem olhar o valor ainda)
         gov_to_averbado_unificado_sorted['is_duplicate_group'] = gov_to_averbado_unificado_sorted.duplicated(
-            subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO'], 
+            subset=['MATRICULA', 'BANCO', 'RUBRICA_CODIGO'], 
             keep=False
         )
 
         # 4. IDENTIFICAÇÃO DE VALORES IGUAIS
         # Marcamos se o valor da parcela é idêntico dentro do grupo
         gov_to_averbado_unificado_sorted['is_value_match'] = gov_to_averbado_unificado_sorted.duplicated(
-            subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
+            subset=['MATRICULA', 'BANCO', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
             keep=False
         )
 
@@ -777,7 +790,7 @@ class IGEPREV_GOVTO:
         resultado = gov_to_averbado_unificado_sorted[
             (~gov_to_averbado_unificado_sorted['is_duplicate_group']) |      # Caso 1: Linha única
             (gov_to_averbado_unificado_sorted['is_value_match']) |           # Caso 2: Valores iguais permanecem
-            (~gov_to_averbado_unificado_sorted.duplicated(subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO'], keep='first')) # Caso 3: Maior valor
+            (~gov_to_averbado_unificado_sorted.duplicated(subset=['MATRICULA', 'BANCO', 'RUBRICA_CODIGO'], keep='first')) # Caso 3: Maior valor
         ].copy()
 
         # Limpeza final
@@ -795,7 +808,7 @@ class IGEPREV_GOVTO:
         gov_to_averbado_unificado_resultado = gov_to_averbado_unificado_resultado[(gov_to_averbado_unificado_resultado['PRAZO'].isin(['INDETERMINADO'])) & (gov_to_averbado_unificado_resultado['STATUS_ADF'].isin(['CONSOLIDADO', 'INSERIDO']))]
 
         # Mapeamento novo
-        mapeamento = ['MATRICULA', 'CPF', 'NOME', 'PRAZO', 'VALOR_PARCELA', 'STATUS_ADF', 'RUBRICA_DESCRICAO', 'RUBRICA_CODIGO', 'Convenio', 'Consignataria']
+        mapeamento = ['MATRICULA', 'CPF', 'NOME', 'PRAZO', 'VALOR_PARCELA', 'STATUS_ADF', 'RUBRICA_DESCRICAO', 'RUBRICA_CODIGO', 'Convenio', 'BANCO']
 
         gov_to_remapeado = gov_to_averbado_unificado_resultado[mapeamento]
 
@@ -824,7 +837,7 @@ class IGEPREV_GOVTO:
         igeprev_averbado_unificado.rename(columns={'SERVIDOR': 'NOME', 'ÓRGÃO': 'Convenio', 'SERVIÇO': 'RUBRICA_DESCRICAO', 'VLR RESERV.': 'VALOR_PARCELA'}, inplace=True)
         
         # Mapeamento novo
-        mapeamento = ['MATRICULA', 'CPF', 'NOME', 'PRAZO', 'VALOR_PARCELA', 'RUBRICA_DESCRICAO', 'RUBRICA_CODIGO', 'Convenio', 'Consignataria']
+        mapeamento = ['MATRICULA', 'CPF', 'NOME', 'PRAZO', 'VALOR_PARCELA', 'RUBRICA_DESCRICAO', 'RUBRICA_CODIGO', 'Convenio', 'BANCO']
 
 
         igeprev_remapeado = igeprev_averbado_unificado[mapeamento]
@@ -841,71 +854,31 @@ class IGEPREV_GOVTO:
         # VAMOS SEPARAR RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG
         igeprev_remapeado_adiantamento = igeprev_remapeado[igeprev_remapeado['RUBRICA_DESCRICAO'].isin(['RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG'])]
 
-        return igeprev_remapeado
+        return igeprev_remapeado, igeprev_remapeado_adiantamento
 
     def unifica_averbados(self):
-        gov_to_averbado_unificado = self.averbados_to
-        '''gov_to_capital_averbado = averbado_gov_to_capital
-        gov_to_ciasprev_averbado = averbado_gov_to_ciasprev
-        gov_to_hp_averbado = averbado_gov_to_hp
-        gov_to_capital_averbado['Consignataria'] = 'CAPITAL'
-        gov_to_ciasprev_averbado['Consignataria'] = 'CIASPREV'
-        gov_to_hp_averbado['Consignataria'] = "HP"'''
 
         front_trabalhado = self.front_final()
+        front_trabalhado_adiantamento = self.front_adiantamento_trabalhado
 
         averbado_separado_gov_to = self.unifica_gov_to_averbados()
-        averbado_separado_igeprev = self.unifica_igeprev_averbados()
+        averbado_separado_igeprev, averbado_adiantamento_igeprev = self.unifica_igeprev_averbados()
+
+        # IGEPREV CAPITAL SERÁ SEPARADO DE IGEPREV CIASPREV
+        averbado_separado_igeprev_capital = averbado_separado_igeprev[averbado_separado_igeprev['BANCO'].isin(['CAPITAL'])]
+        averbado_separado_igeprev_ciasprev = averbado_separado_igeprev[~averbado_separado_igeprev['BANCO'].isin(['CIASPREV'])]
 
         # Unifica averbações de GOV TO
         # gov_to_averbado_unificado = pd.concat([gov_to_capital_averbado, gov_to_ciasprev_averbado, gov_to_hp_averbado], ignore_index=True)
 
-        '''if gov_to_averbado_unificado['VALOR_PARCELA'].dtype != "float64":
-            gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado['VALOR_PARCELA'].astype(str).str.replace(".", "")
-            gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado['VALOR_PARCELA'].astype(str).str.replace(",", ".")
-            gov_to_averbado_unificado['VALOR_PARCELA'] = pd.to_numeric(gov_to_averbado_unificado['VALOR_PARCELA'], errors='coerce')
-
-        # Status ADF
-        gov_to_averbado_unificado = gov_to_averbado_unificado[gov_to_averbado_unificado['STATUS_ADF'].isin(['CONSOLIDADO', 'INSERIDO'])]
-
-        # PRAZo
-        gov_to_averbado_unificado = gov_to_averbado_unificado[gov_to_averbado_unificado['PRAZO'].isin(['INDETERMINADO'])]
-
-        # RUBRICA_CODIGO
-        gov_to_averbado_unificado = gov_to_averbado_unificado[gov_to_averbado_unificado['RUBRICA_CODIGO'].str.contains('CC|CCI|CCB')]
-
-
-        # Vamos gerar o arquivo para averiguar melhor
-        gov_to_averbado_unificado.to_excel(fr'{self.caminho}\AVERBADOS DE GOV TO UNIFICADOS {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx', index=False)'''
+        
 
         # 1. Resolver os casos de valores iguais (remover duplicados exatos)
         # Isso remove as linhas onde MATRICULA, Consignataria e VALOR_PARCELA são idênticos,
         # mantendo apenas a primeira ocorrência.
-        total_duplicados_anterior = averbado_separado_gov_to.duplicated(subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA']).sum()
+        # total_duplicados_anterior = averbado_separado_gov_to.duplicated(subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA']).sum()
         # print(f'Quantos duplicados de MATRICULA, CONSIGNATARIA E PARCELA foram removidos antes da soma: {total_duplicados_anterior}')
 
-        '''gov_to_averbado_unificado = gov_to_averbado_unificado.drop_duplicates(
-            subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
-            keep='first'
-        )'''
-
-
-        '''
-        # Ele calcula a soma por grupo e "espalha" o resultado nas linhas originais
-        gov_to_averbado_unificado['VALOR_PARCELA'] = gov_to_averbado_unificado.groupby(['MATRICULA', 'RUBRICA_CODIGO', 'Consignataria'])['VALOR_PARCELA'].transform('sum')
-        
-        total_duplicados_posterior = gov_to_averbado_unificado.duplicated(subset=['MATRICULA', 'Consignataria', 'VALOR_PARCELA']).sum()
-        # print(f'Quantos duplicados de MATRICULA, CONSIGNATARIA E PARCELA foram removidos depois da soma: {total_duplicados_posterior}')
-
-        gov_to_averbado_unificado = gov_to_averbado_unificado.drop_duplicates(
-            subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
-            keep='first'
-        )'''
-
-        # 1. Identificamos os grupos e contamos quantos valores únicos de 'VALOR_PARCELA' existem em cada um
-        '''gov_to_averbado_unificado = gov_to_averbado_unificado.groupby(['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO']).filter(
-            lambda x: x['VALOR_PARCELA'].nunique() == 1 or len(x) == 1
-        )'''
 
         # 1. Garantir que a coluna de valor seja numérica para ordenação correta
         averbado_separado_gov_to['VALOR_PARCELA'] = pd.to_numeric(averbado_separado_gov_to['VALOR_PARCELA'], errors='coerce').fillna(0)
@@ -914,21 +887,21 @@ class IGEPREV_GOVTO:
         # Colocamos as colunas de agrupamento e o VALOR_PARCELA em ordem DECRESCENTE (ascending=False)
         # Isso coloca o maior valor de cada grupo no topo da lista.
         gov_to_averbado_unificado_sorted = averbado_separado_gov_to.sort_values(
-            by=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
+            by=['MATRICULA', 'BANCO', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
             ascending=[True, True, True, False]
         )
 
         # 3. IDENTIFICAÇÃO DAS DUPLICATAS DE GRUPO
         # Marcamos todas as linhas que têm o mesmo grupo (sem olhar o valor ainda)
         gov_to_averbado_unificado_sorted['is_duplicate_group'] = gov_to_averbado_unificado_sorted.duplicated(
-            subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO'], 
+            subset=['MATRICULA', 'BANCO', 'RUBRICA_CODIGO'], 
             keep=False
         )
 
         # 4. IDENTIFICAÇÃO DE VALORES IGUAIS
         # Marcamos se o valor da parcela é idêntico dentro do grupo
         gov_to_averbado_unificado_sorted['is_value_match'] = gov_to_averbado_unificado_sorted.duplicated(
-            subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
+            subset=['MATRICULA', 'BANCO', 'RUBRICA_CODIGO', 'VALOR_PARCELA'], 
             keep=False
         )
 
@@ -941,7 +914,7 @@ class IGEPREV_GOVTO:
         resultado = gov_to_averbado_unificado_sorted[
             (~gov_to_averbado_unificado_sorted['is_duplicate_group']) |      # Caso 1: Linha única
             (~gov_to_averbado_unificado_sorted['is_value_match']) |           # Caso 2: Valores iguais permanecem
-            (~gov_to_averbado_unificado_sorted.duplicated(subset=['MATRICULA', 'Consignataria', 'RUBRICA_CODIGO'], keep='first')) # Caso 3: Maior valor
+            (~gov_to_averbado_unificado_sorted.duplicated(subset=['MATRICULA', 'BANCO', 'RUBRICA_CODIGO'], keep='first')) # Caso 3: Maior valor
         ].copy()
 
         # Limpeza final
@@ -984,7 +957,7 @@ class IGEPREV_GOVTO:
         igeprev_averbado_unificado.rename(columns={'SERVIDOR': 'NOME', 'ÓRGÃO': 'Convenio', 'SERVIÇO': 'RUBRICA_DESCRICAO', 'VLR RESERV.': 'VALOR_PARCELA'}, inplace=True)
 
         # Mapeamento novo
-        mapeamento = ['MATRICULA', 'CPF', 'NOME', 'PRAZO', 'VALOR_PARCELA', 'RUBRICA_DESCRICAO', 'RUBRICA_CODIGO', 'Convenio', 'Consignataria']
+        mapeamento = ['MATRICULA', 'CPF', 'NOME', 'PRAZO', 'VALOR_PARCELA', 'RUBRICA_DESCRICAO', 'RUBRICA_CODIGO', 'Convenio', 'BANCO']
 
         gov_to_remapeado = gov_to_averbado_unificado_resultado[mapeamento]
         
@@ -998,7 +971,11 @@ class IGEPREV_GOVTO:
         
         # print(f'COLUNAS DE GOV TO REMAPEADO {gov_to_remapeado.columns}\n')
         # print(f'COLUNAS DE IGEPREV REMAPEADO {igeprev_remapeado.columns}')
-        to_igeprev_unificado = pd.concat([gov_to_remapeado, averbado_separado_igeprev], ignore_index=True)
+
+        # Reordenar os bancos da coluna BANCO do gov_to_remapeado na seguinte ordem: CLICKBANK, CAPITAL, CIASPREV, HOJE PREVIDÊNCIA PRIVADA, CIASPREV
+        gov_to_remapeado['BANCO'] = pd.Categorical(gov_to_remapeado['BANCO'], categories=['CLICKBANK', 'CAPITAL', 'CIASPREV', 'HOJE PREVIDÊNCIA PRIVADA', 'CIASPREV'], ordered=True)
+
+        to_igeprev_unificado = pd.concat([averbado_separado_igeprev_capital, gov_to_remapeado, averbado_separado_igeprev_ciasprev], ignore_index=True)
         # print(f'VALOR_PARCELA TERCEIRO:\n{gov_to_remapeado['VALOR_PARCELA']}')
 
         # CRIAÇÃO DE COLUNAS QUE SERÃO USADAS NO PRÓXIMO MÓDULO
@@ -1008,10 +985,21 @@ class IGEPREV_GOVTO:
         to_igeprev_unificado['SOMASE CRED'] = ''
         to_igeprev_unificado['OBS'] = ''
 
+        # CRIAÇÃO DE COLUNAS QUE SERÃO USADOS NO IGEPREV ADIANTAMENTO SALARIAL
+        averbado_adiantamento_igeprev['CONTSE CPF'] = ''
+        averbado_adiantamento_igeprev['CONTSE SEQ'] = ''
+        averbado_adiantamento_igeprev['PARCELA FRONT'] = ''
+        averbado_adiantamento_igeprev['SOMASE CRED'] = ''
+        averbado_adiantamento_igeprev['OBS'] = ''
+
+        somase_cred_adiantamento = front_trabalhado_adiantamento.groupby('CPF')['Valor a lançar'].sum().to_dict()
+        averbado_adiantamento_igeprev['SOMASE CRED'] = averbado_adiantamento_igeprev['CPF'].map(somase_cred_adiantamento).fillna(0)
+
         somase_cred = front_trabalhado.groupby('CPF')['Lançar'].sum().to_dict()
         # print(f'TIPO SOMASE_CRED:\n{somase_cred}')
 
         to_igeprev_unificado['SOMASE CRED'] = to_igeprev_unificado['CPF'].map(somase_cred).fillna(0)
+
 
         def distribuicao_valores(averbado_para_distribuir):
             # IMPORTANTE: Garanta que as colunas de valores são numéricas, não texto.
@@ -1061,11 +1049,19 @@ class IGEPREV_GOVTO:
 
         to_igeprev_finalizado = distribuicao_valores(to_igeprev_unificado)
 
+        igeprev_adiantamento_finalizado = distribuicao_valores(averbado_adiantamento_igeprev)
+
         print('DEBUG: Averbados após cálculo vetorizado:')
         try:
             to_igeprev_finalizado.to_excel(os.path.join(self.caminho, f"GOV TO E IGEPREV TRABALHADO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx"), index=False)
         except Exception as e:
             print(f"DEBUG: ERRO AO SALVAR AVERBADOS TRABALHADO: {e}")
+
+        try:
+            igeprev_adiantamento_finalizado.to_excel(os.path.join(self.caminho, f"IGEPREV ADIANTAMENTO TRABALHADO {str(datetime.now().month).zfill(2)}-{datetime.now().year}.xlsx"), index=False)
+        except Exception as e:
+            print(f"DEBUG: ERRO AO SALVAR IGEPREV ADIANTAMENTO TRABALHADO: {e}")
+            
 
 '''teste = IGEPREV_GOVTO(front, funcao, conciliacao_df, recebimentos_df)
 
