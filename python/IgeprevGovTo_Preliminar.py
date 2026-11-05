@@ -972,8 +972,18 @@ class IGEPREV_GOVTO:
         # print(f'COLUNAS DE GOV TO REMAPEADO {gov_to_remapeado.columns}\n')
         # print(f'COLUNAS DE IGEPREV REMAPEADO {igeprev_remapeado.columns}')
 
-        # Reordenar os bancos da coluna BANCO do gov_to_remapeado na seguinte ordem: CLICKBANK, CAPITAL, CIASPREV, HOJE PREVIDÊNCIA PRIVADA, CIASPREV
-        gov_to_remapeado['BANCO'] = pd.Categorical(gov_to_remapeado['BANCO'], categories=['CLICKBANK', 'CAPITAL', 'CIASPREV', 'HOJE PREVIDÊNCIA PRIVADA', 'CIASPREV'], ordered=True)
+        # 1. Primeiro, define a coluna BANCO como Categorical com a ordem desejada
+        gov_to_remapeado['BANCO'] = pd.Categorical(
+            gov_to_remapeado['BANCO'], 
+            categories=['CLICKBANK', 'CAPITAL', 'HOJE PREVIDÊNCIA PRIVADA', 'CIASPREV'], 
+            ordered=True
+        )
+
+        # 2. Segundo, ordena o DataFrame completo com base nessa coluna recém-categorizada
+        gov_to_remapeado = gov_to_remapeado.sort_values('BANCO').reset_index(drop=True)
+
+        # 3. Agora sim, o print vai mostrar as linhas alinhadas e ordenadas conforme a sua regra
+        print("como está gov_to_remapeado['BANCO'] depois de ordenar:\n", gov_to_remapeado['BANCO'])
 
         to_igeprev_unificado = pd.concat([averbado_separado_igeprev_capital, gov_to_remapeado, averbado_separado_igeprev_ciasprev], ignore_index=True)
         # print(f'VALOR_PARCELA TERCEIRO:\n{gov_to_remapeado['VALOR_PARCELA']}')
