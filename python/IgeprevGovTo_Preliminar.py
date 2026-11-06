@@ -322,9 +322,9 @@ class IGEPREV_GOVTO:
 
         # Valor que vai ser lançado
         # Substitui NaN em "Saldo" por um valor muito alto (para que "Parcela" seja escolhida)
-        valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['Prestacao'])
+        # valor_a_lancar = np.minimum(np.abs(front_copy['Saldo']).fillna(float('inf')), front_copy['Prestacao'])
 
-        front_copy['Valor a lançar'] = valor_a_lancar
+        front_copy['Valor a lançar'] = front_copy['Prestacao']
 
         return front_copy
     
