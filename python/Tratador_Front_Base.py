@@ -433,8 +433,11 @@ class TratadorRF1(TratadorFrontBase):
 class TratadorIgeprevTo(TratadorFrontBase):
     def aplicar_regras_especificas(self, df):
         print(f'TratadorIgeprevTo ativado')
-        df.loc[df['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
-        df.loc[df['Tabela'].str.contains('ADTO', na=False), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
+        df['OBS'] = df['OBS'].fillna('')
+
+        # Vamos colocar NÃO LANÇAR - ADIANTAMENTO SALARIAL apenas linhas onde OBS é vazio, para não sobrescrever outras marcações
+        df.loc[(df['Tipo Operacao'].str.contains('ADIANTAMENTO SALARIAL', na=False)) & (df['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
+        df.loc[(df['Tabela'].str.contains('ADTO', na=False)) & (df['OBS'] == ''), 'OBS'] = 'NÃO LANÇAR - ADIANTAMENTO SALARIAL'
 
 
         df.loc[df['Tipo Operacao'].str.contains('GOVERNOS AKRK|PASSIVO RETROATIVO TO|GOV PARAIBA COMPRA', na=False), 'OBS'] = 'NÃO LANÇAR - DUPLICADO ESCONDIDO'

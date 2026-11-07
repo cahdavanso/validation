@@ -442,9 +442,6 @@ class IGEPREV_GOVTO:
         # REMOVE ADIANTAMENTO SALARIAL
         andamento_igeprev_unificado = andamento_igeprev_unificado.loc[~andamento_igeprev_unificado['SERVIÇO'].isin(['4073', 4073])]
 
-        # VAMOS SEPARAR O QUE É ADIANTAMENTO SALARIAL
-        andamento_igeprev_adiantamento = andamento_igeprev_unificado.loc[andamento_igeprev_unificado['SERVIÇO'].isin(['4073', 4073])]
-
         # REMOVE LINHAS COM VALOR MENOR QUE 20
         andamento_igeprev_unificado = andamento_igeprev_unificado.loc[andamento_igeprev_unificado['VLR.  ADE'] >= 20]
 
@@ -849,12 +846,12 @@ class IGEPREV_GOVTO:
         # igeprev_remapeado = igeprev_remapeado[igeprev_remapeado['VALOR_PARCELA'] >= 20]
 
         # REMOVER - RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG
-        igeprev_remapeado = igeprev_remapeado[~igeprev_remapeado['RUBRICA_DESCRICAO'].isin(['RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG'])]
+        igeprev_remapeado_sem_adiantamento = igeprev_remapeado[~igeprev_remapeado['RUBRICA_DESCRICAO'].isin(['RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG'])]
         
         # VAMOS SEPARAR RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG
         igeprev_remapeado_adiantamento = igeprev_remapeado[igeprev_remapeado['RUBRICA_DESCRICAO'].isin(['RESERVA ADIANTAMENTO SALARIAL - CAPITAL CONSIG'])]
 
-        return igeprev_remapeado, igeprev_remapeado_adiantamento
+        return igeprev_remapeado_sem_adiantamento, igeprev_remapeado_adiantamento
 
     def unifica_averbados(self):
 
@@ -866,7 +863,7 @@ class IGEPREV_GOVTO:
 
         # IGEPREV CAPITAL SERÁ SEPARADO DE IGEPREV CIASPREV
         averbado_separado_igeprev_capital = averbado_separado_igeprev[averbado_separado_igeprev['BANCO'].isin(['CAPITAL'])]
-        averbado_separado_igeprev_ciasprev = averbado_separado_igeprev[~averbado_separado_igeprev['BANCO'].isin(['CIASPREV'])]
+        averbado_separado_igeprev_ciasprev = averbado_separado_igeprev[averbado_separado_igeprev['BANCO'].isin(['CIASPREV'])]
 
         # Unifica averbações de GOV TO
         # gov_to_averbado_unificado = pd.concat([gov_to_capital_averbado, gov_to_ciasprev_averbado, gov_to_hp_averbado], ignore_index=True)
@@ -950,9 +947,6 @@ class IGEPREV_GOVTO:
         igeprev_averbado_unificado.insert(7, "PRAZO", 1, True)
         igeprev_averbado_unificado.insert(8, "RUBRICA_CODIGO", 1, True)
 
-        print(f'Como está o "igeprev_averbado_unificado"?\n {igeprev_averbado_unificado}\n')
-        print(f'Qual o tipo de "igeprev_averbado_unificado"?\n {type(igeprev_averbado_unificado)}\n')
-
         # Renomeia as colunas de GOV TO
         igeprev_averbado_unificado.rename(columns={'SERVIDOR': 'NOME', 'ÓRGÃO': 'Convenio', 'SERVIÇO': 'RUBRICA_DESCRICAO', 'VLR RESERV.': 'VALOR_PARCELA'}, inplace=True)
 
@@ -983,8 +977,6 @@ class IGEPREV_GOVTO:
         gov_to_remapeado = gov_to_remapeado.sort_values('BANCO').reset_index(drop=True)
 
         # 3. Agora sim, o print vai mostrar as linhas alinhadas e ordenadas conforme a sua regra
-        print("como está gov_to_remapeado['BANCO'] depois de ordenar:\n", gov_to_remapeado['BANCO'])
-
         to_igeprev_unificado = pd.concat([averbado_separado_igeprev_capital, gov_to_remapeado, averbado_separado_igeprev_ciasprev], ignore_index=True)
         # print(f'VALOR_PARCELA TERCEIRO:\n{gov_to_remapeado['VALOR_PARCELA']}')
 
@@ -1005,7 +997,7 @@ class IGEPREV_GOVTO:
         somase_cred_adiantamento = front_trabalhado_adiantamento.groupby('CPF')['Valor a lançar'].sum().to_dict()
         averbado_adiantamento_igeprev['SOMASE CRED'] = averbado_adiantamento_igeprev['CPF'].map(somase_cred_adiantamento).fillna(0)
 
-        somase_cred = front_trabalhado.groupby('CPF')['Lançar'].sum().to_dict()
+        somase_cred = front_trabalhado.groupby('CPF')['Lançar com Pecúlio'].sum().to_dict()
         # print(f'TIPO SOMASE_CRED:\n{somase_cred}')
 
         to_igeprev_unificado['SOMASE CRED'] = to_igeprev_unificado['CPF'].map(somase_cred).fillna(0)

@@ -22,8 +22,10 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
                 self.andamento_funcao['Valor da Parcela'] = self.andamento_funcao['Valor da Parcela'].astype(str).str.replace(".", ",")
 
         # JÁ REMOVE IV PROMOTORA PRA NÃO DAR BO
-        self.funcao = self.funcao[~self.funcao['ORIGEM_3'].str.contains('IV PROMOTORA')]
-        self.andamento_funcao = self.andamento_funcao[~self.andamento_funcao['Descrição PROMOTORA'].str.contains('IV PROMOTORA')]
+        if self.funcao is not None:
+            self.funcao = self.funcao[~self.funcao['ORIGEM_3'].str.contains('IV PROMOTORA')]
+        if self.andamento_funcao is not None:
+            self.andamento_funcao = self.andamento_funcao[~self.andamento_funcao['Descrição PROMOTORA'].str.contains('IV PROMOTORA')]
 
 
 
@@ -50,7 +52,7 @@ class UNIFICA_FRONT_FUNC_ESTEIRAS:
                                     'GOV. SANTA CATARINA': ['GOV S. CATARINA', 'GOV SC SEG', 'GOV SC CPL', 'GOV SC S FL', 'GOV SC CAP', 'GOV SC DG', 'GOV SC DG SEG'],
                                     'GOV. SÃO PAULO': ['GOV SPPREV', 'GOV SÃO PAULO'],
                                     'GOV. TOCANTINS': ['GOV TOCANTINS'],
-                                    'GOV. TOCANTINS e IGEPREV': ['IGEPREV'],
+                                    'GOV. TOCANTINS e IGEPREV': ['GOV TOCANTINS', 'IGEPREV'],
                                     'INSS': ['INSS BENEFICIO', 'INSS RMC', 'INSS RMC SEG', 'INSS BENEF SEG', 'INSS RMC S FL', 'INSS BEN S FL', 'INSS BENEF CPL', 'INSS RMC CPL'],
                                     'PREF. ALAGOINHAS': ['PM ALAGOINHAS'],
                                     'PREF. ANAJATUBA': ['PM ANAJ EMP', 'PM ANAJATUBA CC', 'PM ANAJATUBA CB'],
