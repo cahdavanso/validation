@@ -112,6 +112,8 @@ document.addEventListener("DOMContentLoaded", () => {
     "PREF. CAUCAIA",
   ];
 
+  const CONVENIOS_CONSIGNET = ["PREF. ARAPONGAS"];
+
   const CONVENIOS_LINECONSIG = ["PREF. PICOS", "PREV. PICOS"];
 
   const ALL_CONVENIOS = [
@@ -131,6 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ...CONVENIOS_QUANTUM,
     ...CONVENIOS_SAFECONSIG,
     ...CONVENIOS_LINECONSIG,
+    ...CONVENIOS_CONSIGNET,
   ].sort();
 
   const FIELDS_CONSIGFACIL = [
@@ -140,7 +143,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "ANDAMENTO",
     "AVERBADOS",
     "ORBITAL",
@@ -152,7 +154,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "AVERBADOS",
     "ORBITAL",
   ];
@@ -163,7 +164,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "ANDAMENTO",
     "AVERBADOS",
     "ORBITAL",
@@ -174,7 +174,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "AVERBADOS",
     "CASOS_CAPITAL",
     "ORBITAL",
@@ -187,7 +186,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "AVERBADOS",
     "TRABALHADO_ANTERIOR",
     "COMPLEMENTAR",
@@ -200,7 +198,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "AVERBADOS",
     "HISTORICO",
     "ORBITAL",
@@ -212,7 +209,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "AVERBADOS",
     "ORBITAL",
   ];
@@ -223,7 +219,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "AVERBADOS",
     "ORBITAL",
   ];
@@ -239,7 +234,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
   ];
   const FIELDS_RF1 = [
     "FRONT",
@@ -249,7 +243,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
   ];
   const FIELDS_CIP = [
     "FRONT",
@@ -259,7 +252,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "ORBITAL",
   ];
   const FIELDS_SIGRH = [
@@ -273,7 +265,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "ORBITAL",
   ];
   const FIELDS_CONSIG_KONEXIA = [
@@ -283,7 +274,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "AVERBADOS",
     "ORBITAL",
   ];
@@ -294,7 +284,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "AVERBADOS",
     "ORBITAL",
   ];
@@ -305,7 +294,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
     "AVERBADOS",
     "ORBITAL",
   ];
@@ -316,7 +304,17 @@ document.addEventListener("DOMContentLoaded", () => {
     "CONCILIACAO",
     "RECEBIMENTOS",
     "DESCONTO_INADIMPLENCIA",
-    "EXTRA-JUDICIAL",
+    "AVERBADOS",
+    "ORBITAL",
+  ];
+
+  const FIELDS_CONSIGNET = [
+    "FRONT",
+    "FUNCAO",
+    "XAO",
+    "CONCILIACAO",
+    "RECEBIMENTOS",
+    "DESCONTO_INADIMPLENCIA",
     "AVERBADOS",
     "ORBITAL",
   ];
@@ -565,6 +563,9 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (CONVENIOS_LINECONSIG.includes(convenio)) {
       consignatariaArea.classList.remove("hidden");
       currentFields = FIELDS_LINECONSIG;
+    } else if (CONVENIOS_CONSIGNET.includes(convenio)) {
+      consignatariaArea.classList.remove("hidden");
+      currentFields = FIELDS_CONSIGNET;
     }
 
     uploadForm.classList.remove("hidden");
@@ -695,6 +696,11 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (
       selectedConvenio &&
       CONVENIOS_LINECONSIG.includes(selectedConvenio)
+    ) {
+      if (!selectedConsignataria) valid = false;
+    } else if (
+      selectedConvenio &&
+      CONVENIOS_CONSIGNET.includes(selectedConvenio)
     ) {
       if (!selectedConsignataria) valid = false;
     }

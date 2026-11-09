@@ -35,6 +35,7 @@ from python.Infoconsig import INFOCONSIG
 from python.Rf1 import RF1
 from python.Sigrh import SIGRH
 from python.Cip import CIP
+from python.Consignet import CONSIGNET
 from python.Quantum import QUANTUM
 from python.Safeconsig import SAFECONSIG
 from python.Lineconsig import LINECONSIG
@@ -129,6 +130,8 @@ QUANTUM_CONVENIO = ["PREF. SÃO JOSÉ DO RIO PRETO", "PREVIDÊNCIA SÃO JOSÉ DO
 LINECONSIG_CONVENIO = ["PREF. PICOS", "PREV. PICOS"]
 
 SAFECONSIG_CONVENIO = ["PREF. TAUBATÉ", "PREF. SANTOS", "GOV. CEARÁ", "GOV. ALAGOAS", "PREF. CAUCAIA", "PREF. ARARAQUARA"]
+
+CONSIGNET_CONVENIOS = ["PREF. ARAPONGAS"]
 
 # Todos os outros são Consigfacil
 CONSIGFACIL_CONVENIOS = [
@@ -227,6 +230,8 @@ async def read_and_unify_files(file_list: List[UploadFile], convenio=None):
 
             elif "averbados" in name and convenio in ['PREF. SÃO PAULO', 'GOV. SÃO PAULO']:
                 df = pd.read_excel(file_obj, header=3)
+            elif "averbados" in name and convenio in ['PREF. ARAPONGAS']:
+                df = pd.read_excel(file_obj, header=6)
             elif "averbados" in name and convenio in SAFECONSIG_CONVENIO:
                 df = pd.read_excel(file_obj, header=1)
             elif "averbados_to" in name:
@@ -461,7 +466,7 @@ async def validar_planilhas(
             consignataria=consignataria, 
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
+            
             desconto_inadimplencia=desconto_inadimplencia_df,
             andamento_list=andamento_df,
             orbital=orbital_df,
@@ -476,7 +481,7 @@ async def validar_planilhas(
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
+            
             desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA,
             casos_capital=casoscapital_df,
@@ -491,7 +496,7 @@ async def validar_planilhas(
             front=front_df,
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
+            
             desconto_inadimplencia=desconto_inadimplencia_df,
             funcao=funcao_df,
             andamento_funcao = xao_df,
@@ -510,7 +515,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
+            
             andamento_funcao=xao_df,
             funcao=funcao_df,
             desconto_inadimplencia=desconto_inadimplencia_df,
@@ -526,7 +531,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
+            
             desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA,
             andamento_funcao=xao_df,
@@ -542,7 +547,7 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
+            
             desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA,
             rubrica=rubrica,
@@ -560,7 +565,7 @@ async def validar_planilhas(
             andamento_funcao=xao_df,
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
+            
             desconto_inadimplencia=desconto_inadimplencia_df,
             consignataria=consignataria,
             caminho=CAMINHO_SAIDA,
@@ -578,7 +583,7 @@ async def validar_planilhas(
             funcao=funcao_df,
             conciliacao=conciliacao_df,
             desconto_inadimplencia=desconto_inadimplencia_df,
-            extra_judicial=extra_judicial_df,
+            
             recebimentos=recebimentos_df
         )
     elif convenio in CIP_CONVENIO:
@@ -593,7 +598,7 @@ async def validar_planilhas(
             conciliacao=conciliacao_df,
             desconto_inadimplencia=desconto_inadimplencia_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
+            
             orbital=orbital_df
         )
     elif convenio in TO_IGEPREV_CONVENIO:
@@ -610,7 +615,7 @@ async def validar_planilhas(
             andamento_funcao=xao_df,
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
+            
             desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA
         )
@@ -628,7 +633,7 @@ async def validar_planilhas(
                           orbital=orbital_df,
                           conciliacao=conciliacao_df,
                           recebimentos=recebimentos_df,
-                          extra_judicial=extra_judicial_df,
+                          
                           desconto_inadimplencia=desconto_inadimplencia_df)
         
     elif convenio in NEOCONSIG_CONVENIO:
@@ -640,7 +645,6 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
             andamento_funcao=xao_df,
             funcao=funcao_df,
             desconto_inadimplencia=desconto_inadimplencia_df,
@@ -656,7 +660,6 @@ async def validar_planilhas(
             consignataria=consignataria,
             conciliacao=conciliacao_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
             desconto_inadimplencia=desconto_inadimplencia_df,
             caminho=CAMINHO_SAIDA,
             andamento_funcao=xao_df,
@@ -677,7 +680,6 @@ async def validar_planilhas(
             orbital=orbital_df,
             desconto_inadimplencia=desconto_inadimplencia_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
             caminho=CAMINHO_SAIDA,
         )
     elif convenio in LINECONSIG_CONVENIO:
@@ -689,7 +691,6 @@ async def validar_planilhas(
                 consignataria=consignataria,
                 conciliacao=conciliacao_df,
                 recebimentos=recebimentos_df,
-                extra_judicial=extra_judicial_df,
                 desconto_inadimplencia=desconto_inadimplencia_df,
                 caminho=CAMINHO_SAIDA,
                 andamento_funcao=xao_df,
@@ -710,10 +711,25 @@ async def validar_planilhas(
             orbital=orbital_df,
             desconto_inadimplencia=desconto_inadimplencia_df,
             recebimentos=recebimentos_df,
-            extra_judicial=extra_judicial_df,
             andamento_list=andamento_df,
             caminho=CAMINHO_SAIDA,
         )
+    elif convenio in CONSIGNET_CONVENIOS:
+            # Padrão para todos os outros (Consignet)
+            logging.info("Usando validador: CONSGINET")
+            validador = CONSIGNET(
+                portal_file_list=averbados_df, 
+                convenio=convenio,
+                front=front_df,
+                consignataria=consignataria,
+                andamento_funcao=xao_df,
+                funcao=funcao_df,
+                conciliacao=conciliacao_df,
+                orbital=orbital_df,
+                desconto_inadimplencia=desconto_inadimplencia_df,
+                recebimentos=recebimentos_df,
+                caminho=CAMINHO_SAIDA,
+                )
     else:
         raise Exception ('O convênio selecionado está fora dos parâmetros.')
     

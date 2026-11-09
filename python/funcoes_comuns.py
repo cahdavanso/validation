@@ -5,7 +5,26 @@ from thefuzz import fuzz
 from python.ESTEIRAS import load_esteiras
 import os
 
+def limpar_moeda_universal(valor_series: pd.Series) -> pd.Series:
+        valor_str = str(valor_series).strip()
 
+        valor_str = valor_str.replace('R$', '').replace(' ', '')
+        
+        # Ignora nulos
+        if valor_str.lower() in ['nan', 'none', '']:
+            return 0.00 
+            
+        # Se tiver vírgula (Padrão BR: 1.000,00 ou 50,45)
+        if ',' in valor_str:
+            # Remove o ponto de milhar e converte a vírgula decimal para ponto
+            valor_str = valor_str.replace('.', '').replace(',', '.')
+        
+        # Converte para float de forma segura
+        try:
+            return float(valor_str)
+        except ValueError:
+            return 0.00
+        
 class UNIFICA_FRONT_FUNC_ESTEIRAS:
     def __init__(self, front, convenio, consignataria=None, funcao=None, andamento_funcao=None, caminho=None):
         self.front = front
